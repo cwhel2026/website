@@ -9,6 +9,7 @@ from app.models.pricing import PricingProfile, PricingRule, PricingRuleType
 from app.models.service import Service, ServiceCategory
 from app.models.service import SurfaceType
 from app.models.agents import AgentActionPermission, AgentProfile, OperatingMode
+from app.models.marketing import AdPlatform, IntegrationState, MarketingIntegration
 from app.models.communications import MessageCategory, MessageChannel, MessageTemplate
 from app.models.scheduling import SchedulingSettings
 from app.models.territory import PostcodeDistrict, Territory, TerritoryLocality
@@ -233,6 +234,7 @@ async def seed_database(session: AsyncSession) -> None:
     await _seed_product_profiles(session)
     await _seed_agents(session)
     await _seed_message_templates(session)
+    await _seed_marketing_integrations(session)
     await session.commit()
 
 
@@ -427,5 +429,19 @@ async def _seed_message_templates(session: AsyncSession) -> None:
                 category=category,
                 subject_template=subject,
                 body_template=body,
+            )
+        )
+
+
+async def _seed_marketing_integrations(session: AsyncSession) -> None:
+    result = await session.execute(select(MarketingIntegration).limit(1))
+    if result.scalar_one_or_none():
+        return
+    for platform in (AdPlatform.META, AdPlatform.GOOGLE):
+        session.add(
+            MarketingIntegration(
+                platform=platform,
+                state=IntegrationState.NOT_CONFIGURED,
+                config_note="No credentials configured — simulation mode only",
             )
         )

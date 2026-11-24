@@ -14,6 +14,8 @@ from app.routers import (
     calendar,
     communications,
     crm,
+    marketing,
+    marketing_public,
     jobs,
     quotations,
     regional_ops,
@@ -38,8 +40,8 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(
     title="Revive My Drive API",
-    version="0.3.0",
-    description="Regional business operating system — Phase 3 assistant layer",
+    version="0.4.0",
+    description="Regional business operating system — Phase 4 marketing layer",
     lifespan=lifespan,
 )
 
@@ -67,6 +69,8 @@ app.include_router(briefings.router, prefix=prefix)
 app.include_router(automations.router, prefix=prefix)
 app.include_router(communications.router, prefix=prefix)
 app.include_router(telegram.router, prefix=prefix)
+app.include_router(marketing.router, prefix=prefix)
+app.include_router(marketing_public.router, prefix=prefix)
 
 
 @app.get("/health")

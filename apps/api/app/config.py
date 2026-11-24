@@ -23,6 +23,11 @@ class Settings(BaseSettings):
     telegram_bot_token: str | None = None
     telegram_admin_ids: str = ""
     global_emergency_stop: bool = False
+    meta_access_token: str | None = None
+    meta_ad_account_id: str | None = None
+    google_ads_customer_id: str | None = None
+    google_ads_developer_token: str | None = None
+    marketing_simulation_default: bool = True
 
     @property
     def telegram_admin_id_list(self) -> list[int]:

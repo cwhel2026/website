@@ -38,9 +38,19 @@ Aligned with the master specification phases.
 | Automated scheduled briefings (Celery) | Not started |
 | Live email/SMS send | Not started |
 
-## Phase 4 — Regional marketing
+## Phase 4 — Regional marketing (in progress)
 
-Ads adapters (supervised), commercial leads, flyers, attribution.
+| Item | Status |
+|------|--------|
+| Diary-driven territory recommendations | Done |
+| Regional campaigns + budget limits | Done |
+| Meta/Google adapters (simulation only) | Done |
+| Ad spend → approval centre | Done |
+| Commercial leads + scoring | Done |
+| Flyer campaigns + QR landing pages | Done |
+| Attribution events | Done |
+| Live Meta/Google API calls | Not implemented |
+| Automated ad creative / posting | Not started |
 
 ## Phase 5 — Finance
 
