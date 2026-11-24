@@ -13,6 +13,7 @@ const nav = [
   { href: "/dashboard/briefings", label: "Briefings" },
   { href: "/dashboard/automations", label: "Automations" },
   { href: "/dashboard/marketing", label: "Marketing" },
+  { href: "/dashboard/website", label: "Website" },
   { href: "/dashboard/advertising", label: "Advertising" },
   { href: "/dashboard/commercial-leads", label: "Commercial leads" },
   { href: "/dashboard/flyers", label: "Flyers" },
