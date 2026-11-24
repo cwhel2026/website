@@ -1,0 +1,43 @@
+{
+  "license": "Unsplash License (https://unsplash.com/license) — stock photography for illustration only; not Revive My Drive completed projects.",
+  "assets": [
+  {
+    "id": "hero-home",
+    "path": "/media/stock/hero-home.jpg",
+    "credit": "Unsplash",
+    "purpose": "Homepage hero atmosphere"
+  },
+  {
+    "id": "before-tarmac",
+    "path": "/media/stock/tarmac-worn.jpg",
+    "credit": "Unsplash",
+    "purpose": "Illustrative worn surface (before)"
+  },
+  {
+    "id": "after-driveway",
+    "path": "/media/stock/driveway-refreshed.jpg",
+    "credit": "Unsplash",
+    "purpose": "Illustrative refreshed residential drive (after)"
+  },
+  {
+    "id": "block-paving",
+    "path": "/media/stock/block-paving.jpg",
+    "credit": "Unsplash"
+  },
+  {
+    "id": "pattern-concrete",
+    "path": "/media/stock/pattern-concrete.jpg",
+    "credit": "Unsplash"
+  },
+  {
+    "id": "commercial-lot",
+    "path": "/media/stock/commercial-lot.jpg",
+    "credit": "Unsplash"
+  }
+],
+  "required_owned_assets": [
+    "Verified before-and-after pairs from completed jobs (territory + consent on file)",
+    "Service-specific hero images per catalogue slug",
+    "Regional landing photography where used on /areas pages"
+  ]
+}

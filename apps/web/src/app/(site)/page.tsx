@@ -2,13 +2,24 @@ import Link from "next/link";
 import { BeforeAfterSlider } from "@/components/site/before-after-slider";
 import { HeroPostcode } from "@/components/home/hero-postcode";
 import { CoverageChecker } from "@/components/home/coverage-checker";
+import { StockImage } from "@/components/site/stock-image";
 import { FAQ_ITEMS, SERVICE_CARDS } from "@/lib/site-content";
+import { MEDIA, serviceMedia } from "@/lib/media-assets";
 
 export default function HomePage() {
   return (
     <>
       <section className="relative overflow-hidden bg-asphalt text-stone-wash">
-        <div className="absolute inset-0 bg-[linear-gradient(120deg,rgba(61,143,108,0.15)_0%,transparent_50%)]" />
+        <div className="absolute inset-0">
+          <StockImage
+            asset={MEDIA.hero}
+            priority
+            aspect=""
+            className="absolute inset-0 opacity-35"
+            sizes="100vw"
+          />
+        </div>
+        <div className="absolute inset-0 bg-gradient-to-r from-asphalt via-asphalt/92 to-asphalt/70" />
         <div className="site-container relative grid gap-12 py-16 md:grid-cols-2 md:items-center md:py-24 lg:py-28">
           <div className="animate-fade-up">
             <p className="section-eyebrow text-restore-green">North West surface specialists</p>
@@ -24,7 +35,9 @@ export default function HomePage() {
           </div>
           <div className="relative">
             <BeforeAfterSlider
-              caption="Illustrative transformation — not a Revive My Drive completed project. Authentic before/after photography will replace this when available."
+              before={MEDIA.beforeAfter.before}
+              after={MEDIA.beforeAfter.after}
+              caption={MEDIA.beforeAfter.caption}
             />
           </div>
         </div>
@@ -41,11 +54,14 @@ export default function HomePage() {
               key={s.slug}
               className="group flex flex-col overflow-hidden rounded-lg border border-stone-line bg-white shadow-sm transition hover:shadow-lift"
             >
-              <div
-                className="aspect-[4/3] bg-gradient-to-br from-asphalt-800 to-asphalt-950"
-                role="img"
-                aria-label={`Illustrative image for ${s.name}`}
-              />
+              {(() => {
+                const img = serviceMedia(s.slug);
+                return img ? (
+                  <StockImage asset={img} className="rounded-t-lg" sizes="(max-width: 640px) 100vw, 33vw" />
+                ) : (
+                  <div className="aspect-[4/3] bg-asphalt-900" role="img" aria-label={`${s.name} — image pending`} />
+                );
+              })()}
               <div className="flex flex-1 flex-col p-6">
                 <h3 className="font-display text-xl font-semibold text-asphalt">{s.name}</h3>
                 <p className="mt-2 flex-1 text-sm leading-relaxed text-asphalt/70">{s.blurb}</p>
@@ -109,7 +125,11 @@ function WhyRestore() {
             ))}
           </ul>
         </div>
-        <BeforeAfterSlider caption="Drag to compare illustrative before and after surfaces." />
+        <BeforeAfterSlider
+          before={MEDIA.beforeAfter.before}
+          after={MEDIA.beforeAfter.after}
+          caption={MEDIA.beforeAfter.caption}
+        />
       </div>
     </section>
   );
