@@ -8,8 +8,10 @@ from app.config import get_settings
 from app.models.pricing import PricingProfile, PricingRule, PricingRuleType
 from app.models.service import Service, ServiceCategory
 from app.models.service import SurfaceType
+from app.models.scheduling import SchedulingSettings
 from app.models.territory import PostcodeDistrict, Territory, TerritoryLocality
 from app.models.user import User, UserRole
+from app.models.weather import ProductProfile
 
 settings = get_settings()
 
@@ -225,6 +227,8 @@ async def seed_database(session: AsyncSession) -> None:
     await _seed_territories(session)
     await _seed_services(session)
     await _seed_pricing(session)
+    await _seed_scheduling(session)
+    await _seed_product_profiles(session)
     await session.commit()
 
 
@@ -307,3 +311,32 @@ async def _seed_pricing(session: AsyncSession) -> None:
                 amount_gbp=amount,
             )
         )
+
+
+async def _seed_scheduling(session: AsyncSession) -> None:
+    result = await session.execute(select(SchedulingSettings).limit(1))
+    if result.scalar_one_or_none():
+        return
+    session.add(SchedulingSettings())
+
+
+async def _seed_product_profiles(session: AsyncSession) -> None:
+    result = await session.execute(select(ProductProfile).limit(1))
+    if result.scalar_one_or_none():
+        return
+    session.add(
+        ProductProfile(
+            name="Default restoration coating (configure per manufacturer)",
+            slug="default-restoration-coating",
+            min_application_temp_c=Decimal("10"),
+            max_application_temp_c=Decimal("28"),
+            min_drying_hours=24,
+            rain_free_window_hours=4,
+            max_wind_mph=20,
+            documentation_note=(
+                "Placeholder profile for development. Replace with verified manufacturer "
+                "datasheet values before production coating scheduling."
+            ),
+            is_active=True,
+        )
+    )

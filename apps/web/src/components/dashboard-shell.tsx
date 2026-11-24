@@ -8,9 +8,14 @@ import { clearToken, getToken } from "@/lib/auth-client";
 
 const nav = [
   { href: "/dashboard", label: "Overview" },
+  { href: "/dashboard/calendar", label: "Calendar" },
+  { href: "/dashboard/jobs", label: "Jobs" },
+  { href: "/dashboard/wash-pending", label: "Awaiting coating" },
+  { href: "/dashboard/weather", label: "Weather" },
   { href: "/dashboard/territories", label: "Territories" },
   { href: "/dashboard/customers", label: "Customers" },
   { href: "/dashboard/quotations", label: "Quotations" },
+  { href: "/dashboard/field", label: "Field (mobile)" },
 ];
 
 export function DashboardShell({ children }: { children: React.ReactNode }) {

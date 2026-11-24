@@ -1,6 +1,6 @@
 # Implementation status
 
-Last updated: 2025-11-24 (agent run).
+Last updated: 2025-11-24 (Phase 2 agent run).
 
 ## Completed and tested
 
@@ -15,7 +15,11 @@ Last updated: 2025-11-24 (agent run).
 | Public Next.js pages | `apps/web/src/app/(site)/*` |
 | Dashboard pages | `apps/web/src/app/dashboard/*` |
 
-**Test result (local)**: `7 passed` in `apps/web` API pytest (2025-11-24).
+| Phase 2 jobs, appointments, scheduling, weather simulation | API + dashboard pages |
+| Seven-day coating risk assessment | `two_stage_workflow.py` + tests |
+| Regional workload API | `/regional/workload` |
+
+**Test result (local)**: `15 passed` API pytest (2025-11-24).
 
 ## Partial / scaffold
 

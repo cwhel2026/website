@@ -2,27 +2,26 @@
 
 Aligned with the master specification phases.
 
-## Phase 1 — Foundation (in progress)
+## Phase 1 — Foundation
 
 | Item | Status |
 |------|--------|
-| Monorepo + Docker compose | Done |
-| DB models + seeds | Done |
-| Territory configuration API | Done |
-| JWT auth | Done |
-| CRM + pipeline enums | Done |
-| Pricing profile + quotation engine | Done |
-| Instant quotation API | Done |
-| Public website foundation | Done |
-| Dashboard foundation | Done |
-| Unit tests (pricing, postcodes) | Done |
-| Alembic scaffold | Scaffold only |
+| Monorepo, DB, territories, CRM, pricing, quotes, website, dashboard | Done (see PR #1) |
 
-**Acceptance**: Customer can submit instant quote; owner can log in and see territories/customers/quotes when API+DB running.
+## Phase 2 — Regional operations (in progress)
 
-## Phase 2 — Regional operations
+| Item | Status |
+|------|--------|
+| Job + appointment models | Done |
+| Two-stage workflow + seven-day monitoring | Done (core) |
+| Scheduling proposals + conflict detection | Done (v1) |
+| Weather simulation + suitability scores | Done (not live API) |
+| Regional workload endpoint | Done |
+| Calendar + field mobile UI | Done (shell) |
+| OR-Tools / Google Calendar / live weather | Not started |
+| PostGIS routing clusters | Not started |
 
-Jobs, calendar, two-stage restoration workflow, weather, geographic scheduling, mobile job UI.
+**Acceptance**: Owner can create a job from a quotation, propose wash/coat slots with weather checks, view calendar and wash-pending queue, and use the field today list.
 
 ## Phase 3 — Personal assistant
 
