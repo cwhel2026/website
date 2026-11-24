@@ -1,0 +1,9 @@
+# In Railway: set this service Root Directory to apps/api, then redeploy.
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+healthcheckPath = "/health"
+restartPolicyType = "ON_FAILURE"

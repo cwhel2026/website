@@ -26,12 +26,24 @@ docker compose -f docker-compose.prod.yml up -d
 
 ## Railway service layout
 
-| Service | Build | Start |
-|---------|-------|--------|
-| `api` | `apps/api/Dockerfile` | `uvicorn app.main:app --host 0.0.0.0 --port $PORT` |
-| `web` | `apps/web/Dockerfile` | `node server.js` (standalone Next output) |
-| `postgres` | Plugin | Enable PostGIS manually if required |
-| `redis` | Plugin | Optional until Celery |
+Create **two** services from the same GitHub repo (`cwhel2026/website`), branch **main**.
+
+| Service | Root directory (required) | Build |
+|---------|---------------------------|--------|
+| `web` | `apps/web` | Dockerfile → `node server.js` |
+| `api` | `apps/api` | Dockerfile → uvicorn on `$PORT` |
+| `postgres` | (plugin) | Enable PostGIS when needed |
+
+### Fix “repo only contains README.md” (Railpack)
+
+That error means Railway is building from the **repository root** before the monorepo layout is visible, or the service has no **Root Directory** set.
+
+1. Open the failing service → **Settings** → **Source** → **Root Directory**.
+2. Set `apps/web` for the frontend service (or `apps/api` for the API).
+3. **Settings** → **Build** → Builder: **Dockerfile** (each app has `railway.toml` + `Dockerfile`).
+4. **Redeploy** (Deployments → three dots → Redeploy). `main` now contains `apps/web/package.json` and Dockerfiles — not README-only.
+
+For the web image build, set variable **`NEXT_PUBLIC_API_URL`** to your public API URL (e.g. `https://<api-service>.up.railway.app`) before deploy.
 
 ### Required variables
 
