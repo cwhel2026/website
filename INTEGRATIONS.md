@@ -16,5 +16,6 @@
 | OpenAI | Not connected | Optional future layer on tools |
 | SMS / WhatsApp | Not connected | Phase 3 |
 | Object storage (S3) | Not connected | Phase 2+ for uploads |
+| Business Director orchestration | **Local only** | Deterministic scan → task queue; no LLM or Celery worker |
 
 No integration is marked “connected” until a successful verified test is recorded here with date and environment.

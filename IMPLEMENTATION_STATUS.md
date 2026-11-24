@@ -1,6 +1,6 @@
 # Implementation status
 
-Last updated: 2025-11-24 (Phase 5 agent run).
+Last updated: 2025-11-24 (Phase 6 agent run).
 
 ## Completed and tested
 
@@ -32,7 +32,12 @@ Last updated: 2025-11-24 (Phase 5 agent run).
 | Tax reserve estimate | Configurable tax year settings |
 | Territory/job profitability | Quotation contribution − expenses |
 
-**Test result (local)**: `24 passed` API pytest (2025-11-24).
+| Stock + coating forecast + low stock | `/inventory/*` |
+| Analytics KPI snapshot | `/analytics/overview` |
+| Business Director scan + task queue | `/business-director/*` |
+| Dashboard: analytics, inventory, system health | `apps/web/src/app/dashboard/*` |
+
+**Test result (local)**: see CI after push — includes `test_materials_forecast.py`.
 
 ## Partial / scaffold
 
@@ -46,7 +51,7 @@ Last updated: 2025-11-24 (Phase 5 agent run).
 
 ## Not started (remaining Phases 2–8)
 
-OR-Tools, Google Calendar, live weather providers, Telegram, marketing APIs, FreeAgent, Mettle, inventory, AI agents, field photo uploads and offline queue, E2E DB tests, production deploy.
+OR-Tools, Google Calendar, live weather providers, Telegram, marketing APIs, FreeAgent, Mettle, Celery agent workers, field photo uploads and offline queue, E2E DB tests, production deploy.
 
 ## Known defects / tech debt
 

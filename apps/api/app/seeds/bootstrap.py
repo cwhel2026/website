@@ -10,6 +10,7 @@ from app.models.service import Service, ServiceCategory
 from app.models.service import SurfaceType
 from app.models.agents import AgentActionPermission, AgentProfile, OperatingMode
 from app.models.finance import FreeAgentConnection, FreeAgentConnectionState, TaxYearSettings
+from app.models.inventory import StockCategory, StockItem, Supplier
 from app.models.marketing import AdPlatform, IntegrationState, MarketingIntegration
 from app.models.communications import MessageCategory, MessageChannel, MessageTemplate
 from app.models.scheduling import SchedulingSettings
@@ -237,6 +238,7 @@ async def seed_database(session: AsyncSession) -> None:
     await _seed_message_templates(session)
     await _seed_marketing_integrations(session)
     await _seed_finance(session)
+    await _seed_inventory(session)
     await session.commit()
 
 
@@ -433,6 +435,42 @@ async def _seed_message_templates(session: AsyncSession) -> None:
                 body_template=body,
             )
         )
+
+
+async def _seed_inventory(session: AsyncSession) -> None:
+    result = await session.execute(select(StockItem).limit(1))
+    if result.scalar_one_or_none():
+        return
+    supplier = Supplier(name="Regional coatings supplier")
+    session.add(supplier)
+    await session.flush()
+    session.add(
+        StockItem(
+            sku="COAT-TARMAC-20L",
+            name="Tarmac restoration coating (20L)",
+            category=StockCategory.COATING,
+            unit="litre",
+            quantity_on_hand=Decimal("40"),
+            reorder_level=Decimal("15"),
+            coverage_sqm_per_unit=Decimal("35"),
+            wastage_allowance_pct=Decimal("10"),
+            last_purchase_price_gbp=Decimal("185"),
+            supplier_id=supplier.id,
+        )
+    )
+    session.add(
+        StockItem(
+            sku="CHEM-ALGAE-5L",
+            name="Algae remover concentrate (5L)",
+            category=StockCategory.CHEMICAL,
+            unit="litre",
+            quantity_on_hand=Decimal("12"),
+            reorder_level=Decimal("4"),
+            coverage_sqm_per_unit=Decimal("80"),
+            last_purchase_price_gbp=Decimal("42"),
+            supplier_id=supplier.id,
+        )
+    )
 
 
 async def _seed_finance(session: AsyncSession) -> None:

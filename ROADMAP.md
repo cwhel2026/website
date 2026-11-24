@@ -66,7 +66,14 @@ Aligned with the master specification phases.
 
 ## Phase 6 — Business intelligence
 
-Inventory, analytics, Business Director orchestration.
+| Item | Status |
+|------|--------|
+| Stock items + low stock alerts | Done |
+| Coating forecast from diary | Done |
+| Analytics overview + regional | Done |
+| Business Director task queue | Done |
+| Celery workers / LLM director | Not started |
+| Continuous learning models | Not started |
 
 ## Phase 7 — Production readiness
 
