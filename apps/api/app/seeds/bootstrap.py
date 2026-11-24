@@ -1,0 +1,309 @@
+from decimal import Decimal
+
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.auth import hash_password
+from app.config import get_settings
+from app.models.pricing import PricingProfile, PricingRule, PricingRuleType
+from app.models.service import Service, ServiceCategory
+from app.models.service import SurfaceType
+from app.models.territory import PostcodeDistrict, Territory, TerritoryLocality
+from app.models.user import User, UserRole
+
+settings = get_settings()
+
+TERRITORIES = [
+    {
+        "code": "A",
+        "name": "West Lancashire",
+        "localities": [
+            "Burscough",
+            "Ormskirk",
+            "Aughton",
+            "Rufford",
+            "Tarleton",
+            "Hesketh Bank",
+            "Parbold",
+            "Skelmersdale",
+            "Banks",
+        ],
+        "districts": ["L39", "L40", "WN8", "PR9", "PR26"],
+    },
+    {
+        "code": "B",
+        "name": "Sefton and Southport",
+        "localities": [
+            "Southport",
+            "Ainsdale",
+            "Birkdale",
+            "Formby",
+            "Freshfield",
+            "Crosby",
+            "Maghull",
+            "Aintree",
+        ],
+        "districts": ["PR8", "PR9", "L23", "L31", "L22", "L21"],
+    },
+    {
+        "code": "C",
+        "name": "Liverpool and Merseyside",
+        "localities": [
+            "Liverpool",
+            "Bootle",
+            "West Derby",
+            "Woolton",
+            "Allerton",
+            "Speke",
+            "Kirkby",
+            "Prescot",
+            "Huyton",
+            "St Helens",
+        ],
+        "districts": ["L1", "L2", "L3", "L4", "L5", "L6", "L7", "L8", "L9", "L10", "L11", "L12", "L13", "L14", "L15", "L16", "L17", "L18", "L19", "L20", "L21", "L22", "L23", "L24", "L25", "L26", "L27", "L28", "L29", "L30", "L31", "L32", "L33", "L34", "L35", "L36", "WA10", "WA11", "WA12"],
+    },
+    {
+        "code": "D",
+        "name": "Preston and Central Lancashire",
+        "localities": [
+            "Preston",
+            "Penwortham",
+            "Longton",
+            "Leyland",
+            "Bamber Bridge",
+            "Lostock Hall",
+            "Fulwood",
+            "Garstang",
+        ],
+        "districts": ["PR1", "PR2", "PR3", "PR4", "PR5", "FY6"],
+    },
+    {
+        "code": "E",
+        "name": "Blackpool and Fylde Coast",
+        "localities": [
+            "Blackpool",
+            "Lytham",
+            "St Annes",
+            "Poulton-le-Fylde",
+            "Thornton-Cleveleys",
+            "Fleetwood",
+            "Kirkham",
+            "Freckleton",
+        ],
+        "districts": ["FY1", "FY2", "FY3", "FY4", "FY5", "FY6", "FY7", "FY8"],
+    },
+    {
+        "code": "F",
+        "name": "Chorley and Wigan",
+        "localities": [
+            "Chorley",
+            "Euxton",
+            "Adlington",
+            "Coppull",
+            "Buckshaw Village",
+            "Wigan",
+            "Standish",
+            "Shevington",
+            "Orrell",
+            "Ashton-in-Makerfield",
+        ],
+        "districts": ["PR6", "PR7", "WN1", "WN2", "WN3", "WN4", "WN5", "WN6"],
+    },
+    {
+        "code": "G",
+        "name": "Blackburn and East Lancashire",
+        "localities": [
+            "Blackburn",
+            "Darwen",
+            "Accrington",
+            "Oswaldtwistle",
+            "Great Harwood",
+            "Rishton",
+            "Clayton-le-Moors",
+            "Clitheroe",
+            "Whalley",
+            "Burnley",
+            "Padiham",
+        ],
+        "districts": ["BB1", "BB2", "BB3", "BB4", "BB5", "BB6", "BB7", "BB8", "BB9", "BB10", "BB11", "BB12"],
+    },
+    {
+        "code": "H",
+        "name": "Bolton and Greater Manchester",
+        "localities": [
+            "Bolton",
+            "Horwich",
+            "Westhoughton",
+            "Farnworth",
+            "Bury",
+            "Manchester",
+            "Salford",
+            "Prestwich",
+            "Trafford",
+            "Eccles",
+            "Worsley",
+            "Swinton",
+            "Sale",
+            "Altrincham",
+            "Stockport",
+            "Rochdale",
+            "Oldham",
+        ],
+        "districts": ["BL1", "BL2", "BL3", "BL4", "BL5", "BL6", "BL7", "BL8", "BL9", "M1", "M2", "M3", "M4", "M5", "M6", "M7", "M8", "M9", "M11", "M12", "M13", "M14", "M15", "M16", "M17", "M18", "M19", "M20", "M21", "M22", "M23", "M24", "M25", "M26", "M27", "M28", "M29", "M30", "M31", "M32", "M33", "M34", "M35", "M38", "M40", "M41", "M43", "M44", "M45", "M46", "M50", "M60", "M61", "M90", "SK1", "SK2", "SK3", "SK4", "SK5", "SK6", "SK7", "SK8", "OL1", "OL2", "OL3", "OL4", "OL5", "OL6", "OL7", "OL8", "OL9", "OL10", "OL11", "OL12", "OL13", "OL14", "OL15", "OL16"],
+    },
+    {
+        "code": "I",
+        "name": "Warrington and surrounding areas",
+        "localities": [
+            "Warrington",
+            "Newton-le-Willows",
+            "Culcheth",
+            "Lymm",
+            "Widnes",
+            "Runcorn",
+        ],
+        "districts": ["WA1", "WA2", "WA3", "WA4", "WA5", "WA6", "WA7", "WA8", "WA9", "WA13", "WA14", "WA15", "WA16"],
+    },
+]
+
+SERVICES = [
+    {
+        "slug": "tarmac-driveway-restoration",
+        "name": "Tarmac driveway restoration",
+        "category": ServiceCategory.RESTORATION,
+        "requires_washing": True,
+        "requires_coating": True,
+    },
+    {
+        "slug": "tarmac-recolouring",
+        "name": "Tarmac recolouring",
+        "category": ServiceCategory.RESTORATION,
+        "requires_washing": True,
+        "requires_coating": True,
+    },
+    {
+        "slug": "block-paving-cleaning-sealing",
+        "name": "Block paving cleaning, sanding and sealing",
+        "category": ServiceCategory.RESTORATION,
+        "requires_washing": True,
+        "requires_coating": True,
+    },
+    {
+        "slug": "imprinted-concrete-restoration",
+        "name": "Pattern imprinted concrete restoration",
+        "category": ServiceCategory.RESTORATION,
+        "requires_washing": True,
+        "requires_coating": True,
+    },
+    {
+        "slug": "pressure-washing",
+        "name": "Pressure washing",
+        "category": ServiceCategory.CLEANING,
+        "requires_washing": True,
+        "requires_coating": False,
+    },
+    {
+        "slug": "commercial-car-park-restoration",
+        "name": "Commercial car park restoration",
+        "category": ServiceCategory.COMMERCIAL,
+        "requires_washing": True,
+        "requires_coating": True,
+        "is_commercial": True,
+    },
+    {
+        "slug": "minor-tarmac-repairs",
+        "name": "Minor tarmac repairs",
+        "category": ServiceCategory.REPAIR,
+        "requires_washing": False,
+        "requires_coating": False,
+    },
+]
+
+
+async def seed_database(session: AsyncSession) -> None:
+    await _seed_admin(session)
+    await _seed_territories(session)
+    await _seed_services(session)
+    await _seed_pricing(session)
+    await session.commit()
+
+
+async def _seed_admin(session: AsyncSession) -> None:
+    result = await session.execute(select(User).where(User.email == settings.default_admin_email))
+    if result.scalar_one_or_none():
+        return
+    session.add(
+        User(
+            email=settings.default_admin_email,
+            password_hash=hash_password(settings.default_admin_password),
+            full_name="Revive My Drive Owner",
+            role=UserRole.OWNER,
+        )
+    )
+
+
+async def _seed_territories(session: AsyncSession) -> None:
+    count = await session.scalar(select(func.count()).select_from(Territory))
+    if count and count > 0:
+        return
+    for item in TERRITORIES:
+        territory = Territory(
+            code=item["code"],
+            name=item["name"],
+            description=f"Operating territory {item['code']} — {item['name']}",
+            minimum_job_value_gbp=Decimal("275.00") if item["code"] in ("H", "C") else Decimal("250.00"),
+        )
+        session.add(territory)
+        await session.flush()
+        for loc in item["localities"]:
+            session.add(TerritoryLocality(territory_id=territory.id, name=loc))
+        for district in item["districts"]:
+            session.add(PostcodeDistrict(territory_id=territory.id, district=district))
+
+
+async def _seed_services(session: AsyncSession) -> None:
+    count = await session.scalar(select(func.count()).select_from(Service))
+    if count and count > 0:
+        return
+    for idx, svc in enumerate(SERVICES):
+        session.add(
+            Service(
+                slug=svc["slug"],
+                name=svc["name"],
+                description=f"Professional {svc['name'].lower()} across North West England.",
+                category=svc["category"],
+                requires_washing=svc.get("requires_washing", False),
+                requires_coating=svc.get("requires_coating", False),
+                is_commercial=svc.get("is_commercial", False),
+                sort_order=idx,
+            )
+        )
+
+
+async def _seed_pricing(session: AsyncSession) -> None:
+    result = await session.execute(select(PricingProfile).limit(1))
+    if result.scalar_one_or_none():
+        return
+    profile = PricingProfile(name="default", version=1, is_active=True)
+    session.add(profile)
+    await session.flush()
+    rules = [
+        (PricingRuleType.PER_SQM, SurfaceType.TARMAC, Decimal("16.50")),
+        (PricingRuleType.PER_SQM, SurfaceType.BLOCK_PAVING, Decimal("14.00")),
+        (PricingRuleType.PER_SQM, SurfaceType.IMPRINTED_CONCRETE, Decimal("17.50")),
+        (PricingRuleType.MINIMUM_JOB, None, Decimal("250.00")),
+        (PricingRuleType.WASHING_SURCHARGE, None, Decimal("2.50")),
+        (PricingRuleType.COATING_SURCHARGE, None, Decimal("4.25")),
+        (PricingRuleType.VAT_RATE, None, Decimal("20.00")),
+        (PricingRuleType.MIN_CONTRIBUTION_MARGIN, None, Decimal("35.00")),
+        (PricingRuleType.COMMERCIAL_MULTIPLIER, None, Decimal("1.30")),
+    ]
+    for rule_type, surface, amount in rules:
+        session.add(
+            PricingRule(
+                profile_id=profile.id,
+                rule_type=rule_type,
+                surface_type=surface,
+                amount_gbp=amount,
+            )
+        )
