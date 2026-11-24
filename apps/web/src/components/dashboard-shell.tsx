@@ -8,6 +8,10 @@ import { clearToken, getToken } from "@/lib/auth-client";
 
 const nav = [
   { href: "/dashboard", label: "Overview" },
+  { href: "/dashboard/assistant", label: "AI Assistant" },
+  { href: "/dashboard/approvals", label: "Approvals" },
+  { href: "/dashboard/briefings", label: "Briefings" },
+  { href: "/dashboard/automations", label: "Automations" },
   { href: "/dashboard/calendar", label: "Calendar" },
   { href: "/dashboard/jobs", label: "Jobs" },
   { href: "/dashboard/wash-pending", label: "Awaiting coating" },

@@ -23,9 +23,20 @@ Aligned with the master specification phases.
 
 **Acceptance**: Owner can create a job from a quotation, propose wash/coat slots with weather checks, view calendar and wash-pending queue, and use the field today list.
 
-## Phase 3 — Personal assistant
+## Phase 3 — Personal assistant (in progress)
 
-AI assistant, Telegram, briefings, communications, approval centre.
+| Item | Status |
+|------|--------|
+| Typed assistant tools + deterministic Q&A | Done |
+| Audit log | Done |
+| Approval centre + auto queue for complex quotes | Done |
+| Morning/evening briefing generation | Done |
+| Agent profiles, permissions, emergency stop | Done |
+| Message templates + supervised outbound queue | Done |
+| Telegram webhook (authorise admin IDs only) | Stub when not configured |
+| OpenAI / LLM provider | Not connected |
+| Automated scheduled briefings (Celery) | Not started |
+| Live email/SMS send | Not started |
 
 ## Phase 4 — Regional marketing
 

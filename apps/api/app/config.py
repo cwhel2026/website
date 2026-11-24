@@ -19,6 +19,16 @@ class Settings(BaseSettings):
     environment: str = "development"
     default_admin_email: str = "admin@revivemydrive.co.uk"
     default_admin_password: str = "ChangeMe-RMD-2025!"
+    openai_api_key: str | None = None
+    telegram_bot_token: str | None = None
+    telegram_admin_ids: str = ""
+    global_emergency_stop: bool = False
+
+    @property
+    def telegram_admin_id_list(self) -> list[int]:
+        if not self.telegram_admin_ids.strip():
+            return []
+        return [int(x.strip()) for x in self.telegram_admin_ids.split(",") if x.strip().isdigit()]
 
     @property
     def cors_origin_list(self) -> list[str]:

@@ -6,13 +6,19 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import get_settings
 from app.database import Base, SessionLocal, engine
 from app.routers import (
+    approvals,
+    assistant,
     auth,
+    automations,
+    briefings,
     calendar,
+    communications,
     crm,
     jobs,
     quotations,
     regional_ops,
     services,
+    telegram,
     territories,
     weather,
 )
@@ -32,8 +38,8 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(
     title="Revive My Drive API",
-    version="0.2.0",
-    description="Regional business operating system — Phase 2 regional operations (in progress)",
+    version="0.3.0",
+    description="Regional business operating system — Phase 3 assistant layer",
     lifespan=lifespan,
 )
 
@@ -55,6 +61,12 @@ app.include_router(jobs.router, prefix=prefix)
 app.include_router(calendar.router, prefix=prefix)
 app.include_router(weather.router, prefix=prefix)
 app.include_router(regional_ops.router, prefix=prefix)
+app.include_router(assistant.router, prefix=prefix)
+app.include_router(approvals.router, prefix=prefix)
+app.include_router(briefings.router, prefix=prefix)
+app.include_router(automations.router, prefix=prefix)
+app.include_router(communications.router, prefix=prefix)
+app.include_router(telegram.router, prefix=prefix)
 
 
 @app.get("/health")

@@ -11,7 +11,8 @@
 | FreeAgent | **Unverified** | OAuth/docs not completed |
 | Mettle | **Unverified** | Via FreeAgent feed only |
 | Meta / Google Ads | Not connected | Supervised mode Phase 4 |
-| Telegram | Not connected | Phase 3 |
+| Telegram | Webhook stub (503 if unset) | Admin ID allowlist in env |
+| OpenAI | Not connected | Optional future layer on tools |
 | SMS / WhatsApp | Not connected | Phase 3 |
 | Object storage (S3) | Not connected | Phase 2+ for uploads |
 

@@ -1,6 +1,6 @@
 # Implementation status
 
-Last updated: 2025-11-24 (Phase 2 agent run).
+Last updated: 2025-11-24 (Phase 3 agent run).
 
 ## Completed and tested
 
@@ -19,7 +19,12 @@ Last updated: 2025-11-24 (Phase 2 agent run).
 | Seven-day coating risk assessment | `two_stage_workflow.py` + tests |
 | Regional workload API | `/regional/workload` |
 
-**Test result (local)**: `15 passed` API pytest (2025-11-24).
+| Personal assistant (tool-backed chat) | `/assistant/chat` + dashboard |
+| Approval centre | Quotations + outbound messages |
+| Briefings | `/briefings/generate/*` |
+| Agents / emergency stop | `/automations/*` |
+
+**Test result (local)**: `18 passed` API pytest (2025-11-24).
 
 ## Partial / scaffold
 

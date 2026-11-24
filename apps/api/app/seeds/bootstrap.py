@@ -8,6 +8,8 @@ from app.config import get_settings
 from app.models.pricing import PricingProfile, PricingRule, PricingRuleType
 from app.models.service import Service, ServiceCategory
 from app.models.service import SurfaceType
+from app.models.agents import AgentActionPermission, AgentProfile, OperatingMode
+from app.models.communications import MessageCategory, MessageChannel, MessageTemplate
 from app.models.scheduling import SchedulingSettings
 from app.models.territory import PostcodeDistrict, Territory, TerritoryLocality
 from app.models.user import User, UserRole
@@ -229,6 +231,8 @@ async def seed_database(session: AsyncSession) -> None:
     await _seed_pricing(session)
     await _seed_scheduling(session)
     await _seed_product_profiles(session)
+    await _seed_agents(session)
+    await _seed_message_templates(session)
     await session.commit()
 
 
@@ -340,3 +344,88 @@ async def _seed_product_profiles(session: AsyncSession) -> None:
             is_active=True,
         )
     )
+
+
+async def _seed_agents(session: AsyncSession) -> None:
+    result = await session.execute(select(AgentProfile).limit(1))
+    if result.scalar_one_or_none():
+        return
+    agents = [
+        ("personal_assistant", "Personal Assistant"),
+        ("scheduling", "Scheduling Agent"),
+        ("weather", "Weather Intelligence Agent"),
+        ("customer_service", "Customer Service Agent"),
+        ("marketing", "Marketing Director"),
+        ("finance", "Finance Agent"),
+        ("business_director", "Business Director"),
+    ]
+    for slug, name in agents:
+        session.add(
+            AgentProfile(
+                slug=slug,
+                name=name,
+                operating_mode=OperatingMode.SUPERVISED,
+            )
+        )
+    permissions = [
+        ("personal_assistant", "read_schedule", False, False),
+        ("personal_assistant", "send_customer_message", False, True),
+        ("customer_service", "send_enquiry_ack", True, False),
+        ("customer_service", "send_customer_message", False, True),
+        ("marketing", "ad_spend", False, True),
+        ("finance", "sync_freeagent", False, True),
+    ]
+    for slug, action, controlled, approval in permissions:
+        session.add(
+            AgentActionPermission(
+                agent_slug=slug,
+                action_key=action,
+                allowed_in_controlled=controlled,
+                requires_approval=approval,
+            )
+        )
+
+
+async def _seed_message_templates(session: AsyncSession) -> None:
+    result = await session.execute(select(MessageTemplate).limit(1))
+    if result.scalar_one_or_none():
+        return
+    templates = [
+        (
+            "enquiry_acknowledgement",
+            "Enquiry acknowledgement",
+            MessageChannel.EMAIL,
+            MessageCategory.TRANSACTIONAL,
+            "We received your enquiry — Revive My Drive",
+            "Hello {{name}},\n\nThank you for contacting Revive My Drive about your {{surface}} driveway. "
+            "We will review your details and respond shortly.\n\nRevive My Drive",
+        ),
+        (
+            "quote_delivery",
+            "Quotation delivery",
+            MessageChannel.EMAIL,
+            MessageCategory.TRANSACTIONAL,
+            "Your provisional quotation {{reference}}",
+            "Hello {{name}},\n\nYour provisional quotation {{reference}} is {{total}} inc. VAT. "
+            "This remains subject to on-site verification.\n\nRevive My Drive",
+        ),
+        (
+            "appointment_reminder",
+            "Appointment reminder",
+            MessageChannel.EMAIL,
+            MessageCategory.TRANSACTIONAL,
+            "Reminder: appointment on {{date}}",
+            "Hello {{name}},\n\nThis is a reminder for your {{visit_type}} visit on {{date}}.\n\nRevive My Drive",
+        ),
+    ]
+    for slug, name, channel, category, subject, body in templates:
+        session.add(
+            MessageTemplate(
+                slug=slug,
+                name=name,
+                channel=channel,
+                category=category,
+                subject_template=subject,
+                body_template=body,
+            )
+        )

@@ -24,6 +24,7 @@ from app.models.user import User
 from app.routers.crm import upsert_customer
 from app.schemas.quotation import InstantQuotationRequest, QuotationOut
 from app.services.pricing_engine import PricingInput, QuotationSectionInput, calculate_quotation
+from app.services.approval_service import ensure_quotation_approval
 from app.services.territory_lookup import resolve_territory_for_postcode
 
 router = APIRouter(prefix="/quotations", tags=["quotations"])
@@ -158,6 +159,7 @@ async def create_instant_quotation(
             breakdown_json=json.dumps(pricing.breakdown),
         )
     )
+    await ensure_quotation_approval(db, quotation)
     await db.commit()
 
     result = await db.execute(
