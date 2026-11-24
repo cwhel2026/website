@@ -1,6 +1,6 @@
 # Implementation status
 
-Last updated: 2025-11-24 (Phase 4 agent run).
+Last updated: 2025-11-24 (Phase 5 agent run).
 
 ## Completed and tested
 
@@ -28,7 +28,11 @@ Last updated: 2025-11-24 (Phase 4 agent run).
 | Regional campaigns, flyers, commercial leads | `/marketing/*` |
 | QR attribution landing | `/c/[slug]` |
 
-**Test result (local)**: `22 passed` API pytest (2025-11-24).
+| Invoices, expenses, CSV bank import | `/finance/*` |
+| Tax reserve estimate | Configurable tax year settings |
+| Territory/job profitability | Quotation contribution − expenses |
+
+**Test result (local)**: `24 passed` API pytest (2025-11-24).
 
 ## Partial / scaffold
 

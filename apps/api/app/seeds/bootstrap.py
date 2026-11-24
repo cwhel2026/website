@@ -9,6 +9,7 @@ from app.models.pricing import PricingProfile, PricingRule, PricingRuleType
 from app.models.service import Service, ServiceCategory
 from app.models.service import SurfaceType
 from app.models.agents import AgentActionPermission, AgentProfile, OperatingMode
+from app.models.finance import FreeAgentConnection, FreeAgentConnectionState, TaxYearSettings
 from app.models.marketing import AdPlatform, IntegrationState, MarketingIntegration
 from app.models.communications import MessageCategory, MessageChannel, MessageTemplate
 from app.models.scheduling import SchedulingSettings
@@ -235,6 +236,7 @@ async def seed_database(session: AsyncSession) -> None:
     await _seed_agents(session)
     await _seed_message_templates(session)
     await _seed_marketing_integrations(session)
+    await _seed_finance(session)
     await session.commit()
 
 
@@ -429,6 +431,23 @@ async def _seed_message_templates(session: AsyncSession) -> None:
                 category=category,
                 subject_template=subject,
                 body_template=body,
+            )
+        )
+
+
+async def _seed_finance(session: AsyncSession) -> None:
+    result = await session.execute(select(TaxYearSettings).limit(1))
+    if result.scalar_one_or_none() is None:
+        session.add(
+            TaxYearSettings(
+                notes="Update allowances/rates from official HMRC publications when tax year changes.",
+            )
+        )
+    fa = await session.execute(select(FreeAgentConnection).limit(1))
+    if fa.scalar_one_or_none() is None:
+        session.add(
+            FreeAgentConnection(
+                state=FreeAgentConnectionState.NOT_CONFIGURED,
             )
         )
 

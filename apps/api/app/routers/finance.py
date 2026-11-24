@@ -1,0 +1,256 @@
+from datetime import UTC, datetime
+from decimal import Decimal
+from typing import Annotated
+from uuid import UUID
+
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from pydantic import BaseModel
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.auth import get_current_admin
+from app.database import get_db
+from app.models.finance import (
+    BankTransaction,
+    Expense,
+    ExpenseCategory,
+    Invoice,
+    InvoiceStatus,
+    Payment,
+    Receipt,
+    SyncSource,
+)
+from app.models.quotation import Quotation
+from app.models.user import User
+from app.services.audit import record_audit
+from app.services.finance.csv_import import import_bank_csv
+from app.services.finance.freeagent_adapter import freeagent_status, sync_invoices_from_freeagent
+from app.services.finance.invoicing import create_invoice_from_quotation
+from app.services.finance.profitability import job_profitability, territory_profitability
+from app.services.finance.tax_estimates import estimate_personal_tax
+
+router = APIRouter(prefix="/finance", tags=["finance"])
+
+
+class ExpenseIn(BaseModel):
+    description: str
+    category: ExpenseCategory
+    amount_gbp: Decimal
+    vat_gbp: Decimal = Decimal("0")
+    job_id: UUID | None = None
+    territory_id: UUID | None = None
+
+
+class PaymentIn(BaseModel):
+    amount_gbp: Decimal
+    method: str = "bank_transfer"
+    reference: str | None = None
+
+
+@router.get("/status")
+async def finance_status(
+    _: Annotated[User, Depends(get_current_admin)],
+) -> dict:
+    fa = freeagent_status()
+    return {
+        "freeagent": {"state": fa.state.value, "message": fa.message, "can_sync": fa.can_sync},
+        "mettle_feed": "Via FreeAgent when connected — not verified in this build",
+        "csv_import": True,
+    }
+
+
+@router.post("/import/csv")
+async def import_csv(
+    file: UploadFile = File(...),
+    db: Annotated[AsyncSession, Depends(get_db)] = ...,
+    user: Annotated[User, Depends(get_current_admin)] = ...,
+) -> dict:
+    content = (await file.read()).decode("utf-8", errors="replace")
+    result = await import_bank_csv(db, content)
+    await record_audit(
+        db,
+        actor_type="user",
+        actor_id=str(user.id),
+        action="finance.csv_import",
+        detail={"imported": result.imported, "skipped": result.skipped_duplicates},
+    )
+    await db.commit()
+    return {
+        "imported": result.imported,
+        "skipped_duplicates": result.skipped_duplicates,
+        "errors": result.errors,
+    }
+
+
+@router.get("/invoices")
+async def list_invoices(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[User, Depends(get_current_admin)],
+) -> list[dict]:
+    result = await db.execute(select(Invoice).order_by(Invoice.created_at.desc()).limit(100))
+    return [
+        {
+            "id": str(i.id),
+            "invoice_number": i.invoice_number,
+            "status": i.status.value,
+            "total_inc_vat_gbp": float(i.total_inc_vat_gbp),
+            "amount_paid_gbp": float(i.amount_paid_gbp),
+        }
+        for i in result.scalars().all()
+    ]
+
+
+@router.post("/invoices/from-quotation/{quotation_id}")
+async def invoice_from_quote(
+    quotation_id: UUID,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    user: Annotated[User, Depends(get_current_admin)],
+) -> dict:
+    q = await db.get(Quotation, quotation_id)
+    if q is None:
+        raise HTTPException(404, "Quotation not found")
+    inv = await create_invoice_from_quotation(db, q, q.customer_id)
+    await record_audit(
+        db, actor_type="user", actor_id=str(user.id), action="finance.create_invoice", entity_id=inv.id
+    )
+    await db.commit()
+    return {"invoice_number": inv.invoice_number, "id": str(inv.id)}
+
+
+@router.post("/invoices/{invoice_id}/payments")
+async def record_payment(
+    invoice_id: UUID,
+    body: PaymentIn,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    user: Annotated[User, Depends(get_current_admin)],
+) -> dict:
+    inv = await db.get(Invoice, invoice_id)
+    if inv is None:
+        raise HTTPException(404)
+    db.add(
+        Payment(
+            invoice_id=invoice_id,
+            amount_gbp=body.amount_gbp,
+            paid_at=datetime.now(UTC),
+            method=body.method,
+            reference=body.reference,
+            source=SyncSource.MANUAL,
+        )
+    )
+    inv.amount_paid_gbp += body.amount_gbp
+    if inv.amount_paid_gbp >= inv.total_inc_vat_gbp:
+        inv.status = InvoiceStatus.PAID
+    elif inv.amount_paid_gbp > 0:
+        inv.status = InvoiceStatus.PART_PAID
+    await db.commit()
+    return {"status": inv.status.value, "amount_paid_gbp": float(inv.amount_paid_gbp)}
+
+
+@router.get("/expenses")
+async def list_expenses(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[User, Depends(get_current_admin)],
+) -> list[dict]:
+    result = await db.execute(select(Expense).order_by(Expense.expense_date.desc()).limit(200))
+    return [
+        {
+            "id": str(e.id),
+            "description": e.description,
+            "category": e.category.value,
+            "amount_gbp": float(e.amount_gbp),
+            "expense_date": e.expense_date.isoformat(),
+        }
+        for e in result.scalars().all()
+    ]
+
+
+@router.post("/expenses")
+async def create_expense(
+    body: ExpenseIn,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    user: Annotated[User, Depends(get_current_admin)],
+) -> dict:
+    from datetime import date
+
+    exp = Expense(
+        description=body.description,
+        category=body.category,
+        amount_gbp=body.amount_gbp,
+        vat_gbp=body.vat_gbp,
+        expense_date=date.today(),
+        job_id=body.job_id,
+        territory_id=body.territory_id,
+        source=SyncSource.MANUAL,
+    )
+    db.add(exp)
+    await db.commit()
+    return {"id": str(exp.id)}
+
+
+@router.post("/receipts")
+async def upload_receipt_metadata(
+    filename: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    user: Annotated[User, Depends(get_current_admin)],
+) -> dict:
+    """Receipt file storage not connected — records metadata only."""
+    r = Receipt(filename=filename, ocr_status="awaiting_storage_integration")
+    db.add(r)
+    await db.commit()
+    return {"id": str(r.id), "note": "Object storage integration required for file upload"}
+
+
+@router.get("/transactions")
+async def list_transactions(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[User, Depends(get_current_admin)],
+) -> list[dict]:
+    result = await db.execute(
+        select(BankTransaction).order_by(BankTransaction.transacted_at.desc()).limit(200)
+    )
+    return [
+        {
+            "description": t.description,
+            "amount_gbp": float(t.amount_gbp),
+            "date": t.transacted_at.isoformat(),
+            "source": t.source.value,
+        }
+        for t in result.scalars().all()
+    ]
+
+
+@router.get("/tax-estimate")
+async def tax_estimate(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[User, Depends(get_current_admin)],
+) -> dict:
+    est = await estimate_personal_tax(db)
+    return est.__dict__
+
+
+@router.get("/profitability/territories")
+async def profitability_territories(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[User, Depends(get_current_admin)],
+) -> list[dict]:
+    rows = await territory_profitability(db)
+    return [r.__dict__ for r in rows]
+
+
+@router.get("/profitability/jobs/{job_id}")
+async def profitability_job(
+    job_id: UUID,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[User, Depends(get_current_admin)],
+) -> dict:
+    row = await job_profitability(db, job_id)
+    if row is None:
+        raise HTTPException(404)
+    return row.__dict__
+
+
+@router.post("/freeagent/sync")
+async def freeagent_sync(
+    _: Annotated[User, Depends(get_current_admin)],
+) -> dict:
+    return await sync_invoices_from_freeagent()

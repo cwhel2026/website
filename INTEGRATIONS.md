@@ -8,8 +8,9 @@
 | Weather API | Not connected | Phase 2 |
 | Google Maps / routing | Not connected | Phase 2 |
 | Address lookup | Not connected | Licensed provider TBD |
-| FreeAgent | **Unverified** | OAuth/docs not completed |
-| Mettle | **Unverified** | Via FreeAgent feed only |
+| FreeAgent | **Unverified** — CSV fallback active | OAuth env vars; sync endpoint stub |
+| Mettle | **Unverified** | Bank feed via FreeAgent when connected |
+| Bank CSV import | **Working** (local) | Mettle/FreeAgent export column aliases |
 | Meta / Google Ads | Simulation only (not configured) | Ad spend requires approval; no live API calls |
 | Telegram | Webhook stub (503 if unset) | Admin ID allowlist in env |
 | OpenAI | Not connected | Optional future layer on tools |

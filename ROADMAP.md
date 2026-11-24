@@ -52,9 +52,17 @@ Aligned with the master specification phases.
 | Live Meta/Google API calls | Not implemented |
 | Automated ad creative / posting | Not started |
 
-## Phase 5 — Finance
+## Phase 5 — Finance (in progress)
 
-FreeAgent/Mettle verification, invoices, CSV fallback.
+| Item | Status |
+|------|--------|
+| Invoices from quotations + payments | Done |
+| Expenses + bank CSV import | Done |
+| Tax reserve estimate (configurable rates) | Done |
+| Job/territory profitability | Done |
+| FreeAgent OAuth + live sync | Not verified / stub |
+| Receipt OCR + S3 storage | Not started |
+| Mettle direct API | Not available — document via FreeAgent |
 
 ## Phase 6 — Business intelligence
 
