@@ -192,6 +192,11 @@ class FreeAgentConnection(Base):
     last_sync_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     organisation_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    access_token: Mapped[str | None] = mapped_column(Text, nullable=True)
+    refresh_token: Mapped[str | None] = mapped_column(Text, nullable=True)
+    token_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    oauth_state: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    freeagent_company_url: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
 
 class TaxYearSettings(Base):

@@ -8,7 +8,7 @@
 | Weather API | Not connected | Phase 2 |
 | Google Maps / routing | Not connected | Phase 2 |
 | Address lookup | Not connected | Licensed provider TBD |
-| FreeAgent | **Unverified** — CSV fallback active | OAuth env vars; sync endpoint stub |
+| FreeAgent | **Implemented** — OAuth + sync when connected | Env vars + dashboard connect; CSV fallback if not connected |
 | Mettle | **Unverified** | Bank feed via FreeAgent when connected |
 | Bank CSV import | **Working** (local) | Mettle/FreeAgent export column aliases |
 | Meta / Google Ads | Simulation only (not configured) | Ad spend requires approval; no live API calls |

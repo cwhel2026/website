@@ -44,6 +44,9 @@ class Settings(BaseSettings):
     weather_provider: str = "openmeteo"
     weather_simulation_fallback: bool = True
     weather_allow_simulation_for_booking: bool = False
+    freeagent_api_base: str = "https://api.freeagent.com"
+    rate_limit_storage_redis: bool = False
+    database_migrations_managed: bool = False
 
     @property
     def telegram_admin_id_list(self) -> list[int]:

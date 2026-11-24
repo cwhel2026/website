@@ -45,8 +45,9 @@ settings = get_settings()
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     validate_production_settings(settings)
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    if not settings.database_migrations_managed:
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
     async with SessionLocal() as session:
         await seed_database(session)
     yield
