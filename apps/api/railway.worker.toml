@@ -1,0 +1,11 @@
+# Duplicate your API service in Railway, set Root Directory to apps/api,
+# then point this service at this config file OR paste the start command in the UI.
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+startCommand = "celery -A app.worker.celery_app worker --beat --loglevel=info"
+restartPolicyType = "ON_FAILURE"
+# No HTTP healthcheck — this process does not serve HTTP.
