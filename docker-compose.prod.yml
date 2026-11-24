@@ -1,0 +1,53 @@
+# Production-shaped local stack (not a public deployment by itself).
+# Set strong JWT_SECRET and DEFAULT_ADMIN_PASSWORD in .env before use.
+
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_USER: rmd
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-rmd_dev_password}
+      POSTGRES_DB: revive_my_drive
+    volumes:
+      - rmd_pgdata_prod:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rmd -d revive_my_drive"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  api:
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: postgresql+asyncpg://rmd:${POSTGRES_PASSWORD:-rmd_dev_password}@db:5432/revive_my_drive
+      SYNC_DATABASE_URL: postgresql://rmd:${POSTGRES_PASSWORD:-rmd_dev_password}@db:5432/revive_my_drive
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
+      ENVIRONMENT: ${ENVIRONMENT:-production}
+      DEFAULT_ADMIN_PASSWORD: ${DEFAULT_ADMIN_PASSWORD:?set DEFAULT_ADMIN_PASSWORD}
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ./apps/web
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+    environment:
+      PORT: "3000"
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+    restart: unless-stopped
+
+volumes:
+  rmd_pgdata_prod:
