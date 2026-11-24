@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import Link from "next/link";
 import { apiGet, apiPost } from "@/lib/api";
 import { trackFunnel, getStoredUtm } from "@/lib/analytics";
 
@@ -30,16 +29,25 @@ type QuoteState = {
   address_line1: string;
   address_line2: string;
   consent_marketing: boolean;
+  consent_service_messages: boolean;
 };
 
-type QuotationResult = {
-  reference: string;
-  total_inc_vat_gbp: string | number;
-  subtotal_ex_vat_gbp: string | number;
-  requires_approval: boolean;
+type ProvisionalQuotation = {
+  input_fingerprint: string;
+  total_inc_vat_gbp: string | number | null;
+  subtotal_ex_vat_gbp: string | number | null;
+  vat_gbp?: string | number | null;
+  requires_approval: boolean | null;
   provisional_disclaimer: string;
+  surface_supported: boolean;
+  unsupported_reason?: string | null;
+  total_area_sqm?: string | number | null;
+  breakdown?: { lines?: { label: string; amount_gbp?: number }[] };
+};
+
+type SavedQuotation = ProvisionalQuotation & {
+  reference: string;
   status: string;
-  total_area_sqm?: string | number;
 };
 
 const SURFACE_TYPES = [
@@ -76,8 +84,11 @@ function defaultState(postcode = ""): QuoteState {
     address_line1: "",
     address_line2: "",
     consent_marketing: false,
+    consent_service_messages: true,
   };
 }
+
+const IDEMPOTENCY_KEY = "rmd_quote_idempotency";
 
 export function QuoteWizard() {
   const searchParams = useSearchParams();
@@ -86,8 +97,33 @@ export function QuoteWizard() {
   const [services, setServices] = useState<Service[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<QuotationResult | null>(null);
-  const [submitted, setSubmitted] = useState(false);
+  const [provisional, setProvisional] = useState<ProvisionalQuotation | null>(null);
+  const [saved, setSaved] = useState<SavedQuotation | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  const pricingInputKey = useMemo(
+    () =>
+      JSON.stringify({
+        postcode: state.postcode,
+        town: state.town,
+        service_slug: state.service_slug,
+        surface_type: state.surface_type,
+        surface_condition: state.surface_condition,
+        sections: state.sections,
+        requires_washing: state.requires_washing,
+        customer_washed_already: state.customer_washed_already,
+      }),
+    [
+      state.postcode,
+      state.town,
+      state.service_slug,
+      state.surface_type,
+      state.surface_condition,
+      state.sections,
+      state.requires_washing,
+      state.customer_washed_already,
+    ],
+  );
 
   useEffect(() => {
     try {
@@ -105,6 +141,11 @@ export function QuoteWizard() {
   useEffect(() => {
     sessionStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   }, [state]);
+
+  useEffect(() => {
+    setProvisional(null);
+    setSaved(null);
+  }, [pricingInputKey]);
 
   const totalSqm = useMemo(() => {
     return state.sections.reduce((sum, s) => {
@@ -138,41 +179,44 @@ export function QuoteWizard() {
     }
   }
 
-  async function calculateQuote() {
-    if (submitted) return;
-    setLoading(true);
-    setError(null);
-    const utm = getStoredUtm();
-    const payload = {
-      full_name: state.full_name || "Provisional Guest",
-      email: state.email || "provisional.quote@example.com",
-      phone: state.phone || null,
-      address_line1: state.address_line1 || "To be confirmed",
-      address_line2: state.address_line2 || null,
-      town: state.town || "To be confirmed",
+  function buildSectionsPayload() {
+    return state.sections.map((s) => ({
+      label: s.label,
+      length_m: s.length_m ? Number(s.length_m) : null,
+      width_m: s.width_m ? Number(s.width_m) : null,
+      area_sqm: s.area_sqm ? Number(s.area_sqm) : null,
+    }));
+  }
+
+  function buildPricingPayload() {
+    return {
       postcode: state.postcode,
+      town: state.town || null,
       service_slug: state.service_slug,
       surface_type: state.surface_type,
       surface_condition: state.surface_condition,
       requires_washing: state.requires_washing,
       customer_washed_already: state.customer_washed_already,
-      visible_damage: state.visible_damage || null,
-      consent_service_messages: true,
-      consent_marketing: state.consent_marketing,
-      sections: state.sections.map((s) => ({
-        label: s.label,
-        length_m: s.length_m ? Number(s.length_m) : null,
-        width_m: s.width_m ? Number(s.width_m) : null,
-        area_sqm: s.area_sqm ? Number(s.area_sqm) : null,
-      })),
-      source: utm.source ?? "website",
-      campaign: utm.campaign ?? null,
+      sections: buildSectionsPayload(),
     };
+  }
+
+  async function calculateProvisional() {
+    setLoading(true);
+    setError(null);
     try {
-      const data = await apiPost<QuotationResult>("/api/v1/quotations/instant", payload);
-      setResult(data);
-      setSubmitted(true);
-      void trackFunnel("quote_complete", 5);
+      const data = await apiPost<ProvisionalQuotation>("/api/v1/quotations/provisional", buildPricingPayload());
+      if (!data.surface_supported) {
+        setError(data.unsupported_reason ?? "This surface is not supported for the selected service.");
+        setProvisional(null);
+        return;
+      }
+      if (data.total_inc_vat_gbp == null) {
+        setError("Unable to calculate a price for these inputs.");
+        return;
+      }
+      setProvisional(data);
+      void trackFunnel("quote_estimate", 5);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Quotation could not be calculated.");
     } finally {
@@ -180,9 +224,54 @@ export function QuoteWizard() {
     }
   }
 
+  async function submitQuotation() {
+    if (!provisional?.input_fingerprint) {
+      setError("Calculate your estimate before submitting your details.");
+      return;
+    }
+    setSubmitting(true);
+    setError(null);
+    const utm = getStoredUtm();
+    let idempotencyKey = sessionStorage.getItem(IDEMPOTENCY_KEY);
+    if (!idempotencyKey) {
+      idempotencyKey = crypto.randomUUID();
+      sessionStorage.setItem(IDEMPOTENCY_KEY, idempotencyKey);
+    }
+    const payload = {
+      ...buildPricingPayload(),
+      town: state.town || "Pending",
+      full_name: state.full_name.trim(),
+      email: state.email.trim(),
+      phone: state.phone?.trim() || null,
+      address_line1: state.address_line1.trim(),
+      address_line2: state.address_line2?.trim() || null,
+      visible_damage: state.visible_damage || null,
+      consent_service_messages: state.consent_service_messages,
+      consent_marketing: state.consent_marketing,
+      input_fingerprint: provisional.input_fingerprint,
+      idempotency_key: idempotencyKey,
+      source: utm.source ?? "website",
+      campaign: utm.campaign ?? null,
+    };
+    try {
+      const data = await apiPost<SavedQuotation>("/api/v1/quotations/submit", payload);
+      setSaved({ ...provisional, reference: data.reference, status: data.status });
+      sessionStorage.removeItem(STORAGE_KEY);
+      void trackFunnel("quote_complete", 6);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save your quotation.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   function next() {
     void trackFunnel("quote_step", step);
-    if (step === 5 && !result) void calculateQuote();
+    if (step === 4 && totalSqm <= 0) {
+      setError("Enter at least one measurement section before continuing.");
+      return;
+    }
+    if (step === 5 && !provisional) void calculateProvisional();
     else setStep((s) => Math.min(s + 1, STEPS.length - 1));
   }
 
@@ -228,9 +317,24 @@ export function QuoteWizard() {
           {step === 3 && <StepCondition state={state} patch={patch} />}
           {step === 4 && <StepPrep state={state} patch={patch} />}
           {step === 5 && (
-            <StepQuote result={result} loading={loading} error={error} onRecalc={() => void calculateQuote()} />
+            <StepQuote
+              result={provisional}
+              loading={loading}
+              error={error}
+              onRecalc={() => void calculateProvisional()}
+            />
           )}
-          {step === 6 && <StepContact state={state} patch={patch} result={result} />}
+          {step === 6 && (
+            <StepContact
+              state={state}
+              patch={patch}
+              provisional={provisional}
+              saved={saved}
+              submitting={submitting}
+              error={error}
+              onSubmit={() => void submitQuotation()}
+            />
+          )}
 
           <div className="mt-10 flex flex-wrap justify-between gap-3 border-t border-stone-line pt-6">
             <button type="button" onClick={back} disabled={step === 0} className="btn-secondary disabled:opacity-40">
@@ -243,13 +347,8 @@ export function QuoteWizard() {
                 disabled={step === 0 && !state.postcode.trim()}
                 className="btn-primary"
               >
-                {step === 5 && !result ? "Calculate quote" : "Continue"}
+                {step === 5 && !provisional ? "Calculate estimate" : "Continue"}
               </button>
-            )}
-            {step === 6 && result && (
-              <p className="text-sm text-restore-dark">
-                Quotation {result.reference} saved. Our team will follow up using your contact details.
-              </p>
             )}
           </div>
         </div>
@@ -371,6 +470,16 @@ function StepMeasurements({
         Add rectangular sections or enter total m². Total estimate:{" "}
         <strong>{totalSqm > 0 ? `${totalSqm.toFixed(1)} m²` : "—"}</strong>
       </p>
+      <div className="mt-4 rounded-lg border border-stone-line bg-stone-wash p-4 text-sm text-asphalt/75">
+        <p className="font-semibold text-asphalt">Measurement guide</p>
+        <p className="mt-1">
+          Measure in metres along the longest edges. For L-shaped drives, split into separate rectangles.
+          Final pricing may be adjusted after on-site verification.
+        </p>
+        <div className="mt-3 max-w-xs rounded border border-dashed border-asphalt/30 bg-white px-4 py-6 text-center text-xs text-asphalt/60">
+          Length (m) × width (m) = area (m²)
+        </div>
+      </div>
       {state.sections.map((section, i) => (
         <div key={i} className="mt-4 grid gap-2 rounded-lg border border-stone-line p-4 md:grid-cols-4">
           <input
@@ -506,12 +615,12 @@ function StepQuote({
   error,
   onRecalc,
 }: {
-  result: QuotationResult | null;
+  result: ProvisionalQuotation | null;
   loading: boolean;
   error: string | null;
   onRecalc: () => void;
 }) {
-  if (loading) return <p className="text-center py-12 text-asphalt/70">Calculating your provisional quotation…</p>;
+  if (loading) return <p className="text-center py-12 text-asphalt/70">Calculating your provisional estimate…</p>;
   if (error) return (
     <div>
       <p className="text-sm text-red-700">{error}</p>
@@ -524,17 +633,32 @@ function StepQuote({
   return <QuoteResultCard result={result} />;
 }
 
-function QuoteResultCard({ result }: { result: QuotationResult }) {
+function QuoteResultCard({ result }: { result: ProvisionalQuotation }) {
+  const lines = result.breakdown?.lines?.filter((l) => typeof l.amount_gbp === "number") ?? [];
   return (
     <div className="text-center">
-      <p className="text-sm text-asphalt/60">Provisional quotation</p>
+      <p className="text-sm text-asphalt/60">Provisional estimate (not saved yet)</p>
       <p className="mt-2 font-display text-4xl font-semibold text-asphalt">
         £{Number(result.total_inc_vat_gbp).toFixed(2)}
         <span className="text-base font-normal text-asphalt/60"> inc. VAT</span>
       </p>
-      <p className="mt-2 text-sm">Reference {result.reference}</p>
+      {result.subtotal_ex_vat_gbp != null && result.vat_gbp != null && (
+        <p className="mt-1 text-xs text-asphalt/55">
+          Ex VAT £{Number(result.subtotal_ex_vat_gbp).toFixed(2)} · VAT £{Number(result.vat_gbp).toFixed(2)}
+        </p>
+      )}
       {result.requires_approval && (
-        <p className="mt-2 text-sm text-amber-800">This quote requires owner verification before booking.</p>
+        <p className="mt-2 text-sm text-amber-800">This estimate requires owner verification before booking.</p>
+      )}
+      {lines.length > 0 && (
+        <ul className="mx-auto mt-6 max-w-sm space-y-1 text-left text-sm text-asphalt/75">
+          {lines.map((line) => (
+            <li key={line.label} className="flex justify-between gap-4 border-b border-stone-line py-1">
+              <span>{line.label}</span>
+              {line.amount_gbp != null && <span>£{line.amount_gbp.toFixed(2)}</span>}
+            </li>
+          ))}
+        </ul>
       )}
       <p className="mx-auto mt-6 max-w-md text-sm leading-relaxed text-asphalt/75">{result.provisional_disclaimer}</p>
     </div>
@@ -544,19 +668,36 @@ function QuoteResultCard({ result }: { result: QuotationResult }) {
 function StepContact({
   state,
   patch,
-  result,
+  provisional,
+  saved,
+  submitting,
+  error,
+  onSubmit,
 }: {
   state: QuoteState;
   patch: (p: Partial<QuoteState>) => void;
-  result: QuotationResult | null;
+  provisional: ProvisionalQuotation | null;
+  saved: SavedQuotation | null;
+  submitting: boolean;
+  error: string | null;
+  onSubmit: () => void;
 }) {
+  const formValid =
+    provisional &&
+    state.full_name.trim().length >= 2 &&
+    state.email.includes("@") &&
+    state.address_line1.trim().length >= 3 &&
+    state.consent_service_messages;
+
   return (
     <div>
       <h2 className="font-display text-xl font-semibold">Your details</h2>
       <p className="mt-2 text-sm text-asphalt/70">
-        {result
-          ? "Update your details so we can confirm your quotation and arrange visits."
-          : "Complete your quotation on the previous step first."}
+        {provisional
+          ? saved
+            ? `Quotation ${saved.reference} saved. We will follow up using your contact details.`
+            : "Save your estimate with genuine contact details — nothing is stored until you submit."
+          : "Calculate your estimate on the previous step first."}
       </p>
       <div className="mt-6 grid gap-4 md:grid-cols-2">
         <label className="text-sm">
@@ -595,16 +736,34 @@ function StepContact({
           />
         </label>
       </div>
-      <label className="mt-4 flex items-center gap-2 text-sm">
-        <input type="checkbox" checked={state.consent_marketing} onChange={(e) => patch({ consent_marketing: e.target.checked })} />
-        Email me occasional offers
+      <label className="mt-4 flex items-start gap-2 text-sm">
+        <input
+          type="checkbox"
+          checked={state.consent_service_messages}
+          onChange={(e) => patch({ consent_service_messages: e.target.checked })}
+        />
+        <span>I agree to service messages about this quotation (required)</span>
       </label>
-      {!result && (
-        <Link href="/quote" className="mt-4 inline-block text-sm text-restore-dark underline">
-          Return to quotation step
-        </Link>
+      <label className="mt-3 flex items-center gap-2 text-sm">
+        <input type="checkbox" checked={state.consent_marketing} onChange={(e) => patch({ consent_marketing: e.target.checked })} />
+        Email me occasional offers (optional)
+      </label>
+      {error && <p className="mt-4 text-sm text-red-700">{error}</p>}
+      {provisional && !saved && (
+        <button
+          type="button"
+          className="btn-primary mt-6"
+          disabled={!formValid || submitting}
+          onClick={onSubmit}
+        >
+          {submitting ? "Saving…" : "Save quotation & request follow-up"}
+        </button>
+      )}
+      {!provisional && (
+        <button type="button" className="btn-secondary mt-4" onClick={() => window.history.back()}>
+          Back to estimate
+        </button>
       )}
     </div>
   );
 }
-// end StepContact

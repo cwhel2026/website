@@ -8,12 +8,12 @@ from sqlalchemy.orm import selectinload
 from app.models.approvals import ApprovalRequest, ApprovalStatus
 from app.models.jobs import Appointment, AppointmentType, Job, JobStatus
 from app.models.quotation import Quotation
+from app.services.analytics_service import build_analytics_snapshot
+from app.services.marketing.capacity_engine import global_capacity_snapshot, territory_demand_insights
+from app.services.uk_time import uk_date_label, uk_now, uk_today, utc_range_for_uk_day
 
 
-async def tool_jobs_tomorrow(db: AsyncSession) -> dict[str, Any]:
-    tomorrow = datetime.now(UTC).date() + timedelta(days=1)
-    start = datetime.combine(tomorrow, datetime.min.time()).replace(tzinfo=UTC)
-    end = start + timedelta(days=1)
+async def _appointments_between(db: AsyncSession, start: datetime, end: datetime) -> list[dict]:
     result = await db.execute(
         select(Appointment, Job)
         .join(Job)
@@ -27,14 +27,74 @@ async def tool_jobs_tomorrow(db: AsyncSession) -> dict[str, Any]:
                 "job_reference": job.reference,
                 "type": appt.appointment_type.value,
                 "start": appt.scheduled_start.isoformat(),
+                "start_uk": appt.scheduled_start.astimezone(uk_now().tzinfo).isoformat(),
                 "postcode": appt.postcode,
             }
         )
-    return {"date": tomorrow.isoformat(), "appointments": items, "count": len(items)}
+    return items
+
+
+async def tool_jobs_today(db: AsyncSession) -> dict[str, Any]:
+    today = uk_today()
+    start, end = utc_range_for_uk_day(today)
+    items = await _appointments_between(db, start, end)
+    return {
+        "date": today.isoformat(),
+        "date_label": uk_date_label(today),
+        "timezone": "Europe/London",
+        "appointments": items,
+        "count": len(items),
+    }
+
+
+async def tool_jobs_tomorrow(db: AsyncSession) -> dict[str, Any]:
+    tomorrow = uk_today() + timedelta(days=1)
+    start, end = utc_range_for_uk_day(tomorrow)
+    items = await _appointments_between(db, start, end)
+    return {
+        "date": tomorrow.isoformat(),
+        "date_label": uk_date_label(tomorrow),
+        "timezone": "Europe/London",
+        "appointments": items,
+        "count": len(items),
+    }
+
+
+async def tool_analytics_snapshot(db: AsyncSession) -> dict[str, Any]:
+    snap = await build_analytics_snapshot(db, days=30)
+    return {
+        "period_days": snap.period_days,
+        "enquiries": snap.enquiries,
+        "quotations": snap.quotations,
+        "quotes_accepted": snap.quotes_accepted,
+        "revenue_collected_gbp": float(snap.revenue_collected_gbp),
+        "quoted_revenue_gbp": float(snap.quoted_revenue_gbp),
+        "quote_conversion_rate": snap.quote_conversion_rate,
+    }
+
+
+def _jsonable(obj: dict[str, Any]) -> dict[str, Any]:
+    out: dict[str, Any] = {}
+    for k, v in obj.items():
+        if hasattr(v, "as_tuple"):
+            out[k] = float(v)
+        else:
+            out[k] = v
+    return out
+
+
+async def tool_marketing_capacity(db: AsyncSession) -> dict[str, Any]:
+    global_cap, territories = await territory_demand_insights(db)
+    return {
+        "global": _jsonable(global_cap.__dict__),
+        "territories": [_jsonable(t.__dict__) for t in territories if t.recommend_advertising][:5],
+        "spare_slots": global_cap.spare_slots,
+        "recommend_advertising": global_cap.recommend_advertising,
+    }
 
 
 async def tool_jobs_next_week(db: AsyncSession) -> dict[str, Any]:
-    start = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+    start, _ = utc_range_for_uk_day(uk_today())
     end = start + timedelta(days=7)
     result = await db.execute(
         select(Appointment, Job)
@@ -132,6 +192,7 @@ async def tool_new_enquiries_count(db: AsyncSession) -> dict[str, Any]:
 
 
 TOOL_HANDLERS = {
+    "jobs_today": tool_jobs_today,
     "jobs_tomorrow": tool_jobs_tomorrow,
     "jobs_next_week": tool_jobs_next_week,
     "wash_pending_coat": tool_wash_pending_coat,
@@ -139,4 +200,6 @@ TOOL_HANDLERS = {
     "quotations_awaiting": tool_quotations_awaiting,
     "rain_risk_coating": tool_rain_risk_appointments,
     "new_enquiries": tool_new_enquiries_count,
+    "analytics_snapshot": tool_analytics_snapshot,
+    "marketing_capacity": tool_marketing_capacity,
 }

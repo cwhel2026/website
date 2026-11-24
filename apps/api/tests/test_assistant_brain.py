@@ -32,3 +32,10 @@ async def test_assistant_tomorrow_question():
     reply, data = await answer_question(FakeSession(), "What jobs have I got tomorrow?")
     assert "Tomorrow" in reply
     assert "jobs_tomorrow" in data
+
+
+@pytest.mark.asyncio
+async def test_assistant_today_uses_jobs_today_not_tomorrow():
+    reply, data = await answer_question(FakeSession(), "What's on today?")
+    assert "jobs_today" in data
+    assert "jobs_tomorrow" not in data or "Today" in reply

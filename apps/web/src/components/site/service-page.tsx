@@ -1,5 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { StockImage } from "@/components/site/stock-image";
+import { serviceMedia } from "@/lib/media-assets";
 
 export function ServicePage({
   title,
@@ -12,13 +14,30 @@ export function ServicePage({
   benefits: string[];
   slug: string;
 }) {
+  const media = serviceMedia(slug);
   return (
     <article className="site-container py-16 md:py-24">
       <p className="section-eyebrow">Service</p>
       <h1 className="mt-2 font-display text-4xl font-semibold text-asphalt">{title}</h1>
       <p className="mt-4 max-w-2xl text-lg text-asphalt/75">{intro}</p>
 
-      <SectionImagePlaceholder label={`Illustrative ${title.toLowerCase()} — not a completed project`} />
+      {media ? (
+        <div className="mt-10 overflow-hidden rounded-lg border border-stone-line shadow-sm">
+          <StockImage asset={media} aspect="aspect-[21/9]" sizes="100vw" />
+          <p className="border-t border-stone-line bg-stone-wash px-4 py-2 text-xs text-asphalt/60">
+            {media.kind === "stock"
+              ? "Stock illustration — not a completed Revive My Drive project."
+              : media.caption}
+          </p>
+        </div>
+      ) : (
+        <div
+          className="mt-10 flex aspect-[21/9] items-center justify-center rounded-lg border border-dashed border-stone-line bg-stone-wash text-sm text-asphalt/55"
+          role="status"
+        >
+          Service photography pending — upload via Website &amp; marketing when ready.
+        </div>
+      )}
 
       <h2 className="mt-12 font-display text-2xl font-semibold text-asphalt">Why customers choose this</h2>
       <ul className="mt-4 space-y-3">
@@ -41,16 +60,6 @@ export function ServicePage({
         </Link>
       </div>
     </article>
-  );
-}
-
-function SectionImagePlaceholder({ label }: { label: string }) {
-  return (
-    <div
-      className="mt-10 aspect-[21/9] w-full rounded-lg border border-stone-line bg-gradient-to-r from-asphalt-900 to-asphalt-800"
-      role="img"
-      aria-label={label}
-    />
   );
 }
 

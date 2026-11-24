@@ -16,6 +16,39 @@ class QuotationSectionIn(BaseModel):
     area_sqm: Decimal | None = None
 
 
+class ProvisionalQuotationRequest(BaseModel):
+    """Anonymous price calculation — no customer or CRM records."""
+
+    postcode: str
+    town: str | None = None
+    service_slug: str
+    surface_type: SurfaceType
+    surface_condition: SurfaceCondition = SurfaceCondition.FAIR
+    sections: list[QuotationSectionIn] = Field(..., min_length=1)
+    requires_washing: bool = True
+    customer_washed_already: bool = False
+    distance_km_from_base: Decimal = Decimal("15")
+
+
+class ProvisionalQuotationOut(BaseModel):
+    input_fingerprint: str
+    priced_at: datetime
+    covered: bool
+    territory_id: UUID | None = None
+    territory_name: str | None = None
+    surface_supported: bool
+    unsupported_reason: str | None = None
+    total_area_sqm: Decimal | None = None
+    subtotal_ex_vat_gbp: Decimal | None = None
+    vat_gbp: Decimal | None = None
+    total_inc_vat_gbp: Decimal | None = None
+    estimated_labour_hours: Decimal | None = None
+    meets_minimum_margin: bool | None = None
+    requires_approval: bool | None = None
+    provisional_disclaimer: str
+    breakdown: dict | None = None
+
+
 class InstantQuotationRequest(BaseModel):
     full_name: str
     email: EmailStr
@@ -38,6 +71,13 @@ class InstantQuotationRequest(BaseModel):
     source: str | None = "website"
     campaign: str | None = None
     distance_km_from_base: Decimal = Decimal("15")
+
+
+class QuotationSubmitRequest(InstantQuotationRequest):
+    """Persist quotation and CRM records with genuine customer details."""
+
+    input_fingerprint: str = Field(..., min_length=64, max_length=64)
+    idempotency_key: str | None = Field(default=None, max_length=64)
 
 
 class QuotationSectionOut(ORMModel):

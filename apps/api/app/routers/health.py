@@ -16,7 +16,9 @@ async def health() -> dict[str, str]:
     return {
         "status": "ok",
         "environment": settings.environment,
-        "version": "0.7.0",
+        "version": "0.8.0",
+        "git_commit": settings.git_commit,
+        "build_time": settings.build_time,
     }
 
 

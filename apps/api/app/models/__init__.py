@@ -6,6 +6,10 @@ from app.models.quotation import (
     QuotationSection,
     QuotationStatus,
 )
+from app.models.quotation_idempotency import QuotationSubmissionIdempotency
+from app.models.ai_usage import AiUsageEvent
+from app.models.marketing_research import MarketingResearchFinding
+from app.models.marketing_experiment import MarketingExperiment
 from app.models.service import Service
 from app.models.territory import PostcodeDistrict, Territory, TerritoryLocality
 from app.models.user import User, UserRole
@@ -27,4 +31,8 @@ __all__ = [
     "QuotationSection",
     "QuotationCalculation",
     "QuotationStatus",
+    "QuotationSubmissionIdempotency",
+    "AiUsageEvent",
+    "MarketingResearchFinding",
+    "MarketingExperiment",
 ]

@@ -25,6 +25,11 @@ from app.models.marketing import (
 from app.models.user import User
 from app.services.ad_adapters import integration_state_for, launch_campaign
 from app.services.audit import record_audit
+from app.models.marketing_experiment import MarketingExperiment
+from app.models.marketing_research import MarketingResearchFinding
+from app.services.marketing.capacity_engine import territory_demand_insights
+from app.services.marketing.director import build_weekly_marketing_plan
+from app.services.marketing.integration_registry import integration_snapshot_json
 from app.services.marketing_intelligence import (
     check_budget_headroom,
     commercial_lead_score,
@@ -82,6 +87,95 @@ class FlyerIn(BaseModel):
     quantity: int = Field(gt=0)
     print_cost_gbp: Decimal = Decimal("0")
     distribution_cost_gbp: Decimal = Decimal("0")
+
+
+@router.get("/capacity")
+async def marketing_global_capacity(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[User, Depends(get_current_admin)],
+) -> dict:
+    global_cap, territories = await territory_demand_insights(db)
+    return {
+        "global": {
+            k: float(v) if hasattr(v, "as_tuple") else v for k, v in global_cap.__dict__.items()
+        },
+        "territories": [
+            {
+                **{k: float(v) if hasattr(v, "as_tuple") else v for k, v in t.__dict__.items()},
+            }
+            for t in territories
+        ],
+    }
+
+
+@router.get("/platform-status")
+async def marketing_platform_status(
+    _: Annotated[User, Depends(get_current_admin)],
+) -> dict:
+    return integration_snapshot_json()
+
+
+@router.get("/director/weekly-plan")
+async def marketing_director_weekly_plan(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[User, Depends(get_current_admin)],
+) -> dict:
+    return await build_weekly_marketing_plan(db)
+
+
+class ResearchFindingIn(BaseModel):
+    topic: str
+    category: str = "general"
+    source: str
+    source_url: str | None = None
+    confidence: float = Field(ge=0, le=1, default=0.5)
+    summary: str
+    payload_json: str = "{}"
+
+
+@router.get("/research")
+async def list_research_findings(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[User, Depends(get_current_admin)],
+) -> list[dict]:
+    rows = (
+        await db.execute(
+            select(MarketingResearchFinding).order_by(MarketingResearchFinding.collected_at.desc()).limit(100)
+        )
+    ).scalars().all()
+    return [
+        {
+            "id": str(r.id),
+            "topic": r.topic,
+            "source": r.source,
+            "collected_at": r.collected_at.isoformat(),
+            "confidence": float(r.confidence),
+            "summary": r.summary,
+        }
+        for r in rows
+    ]
+
+
+@router.post("/research")
+async def create_research_finding(
+    body: ResearchFindingIn,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    user: Annotated[User, Depends(get_current_admin)],
+) -> dict:
+    row = MarketingResearchFinding(
+        topic=body.topic,
+        category=body.category,
+        source=body.source,
+        source_url=body.source_url,
+        collected_at=datetime.now(UTC),
+        confidence=body.confidence,
+        summary=body.summary,
+        payload_json=body.payload_json,
+    )
+    db.add(row)
+    await record_audit(db, actor_type="user", actor_id=str(user.id), action="marketing.research_record", entity_id=row.id)
+    await db.commit()
+    return {"id": str(row.id), "message": "Research finding recorded with source metadata."}
 
 
 @router.get("/integrations")

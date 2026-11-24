@@ -1,3 +1,4 @@
+from decimal import Decimal
 from functools import lru_cache
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -20,6 +21,11 @@ class Settings(BaseSettings):
     default_admin_email: str = "admin@revivemydrive.co.uk"
     default_admin_password: str = "ChangeMe-RMD-2025!"
     openai_api_key: str | None = None
+    openai_model: str = "gpt-4o-mini"
+    anthropic_api_key: str | None = None
+    google_ai_api_key: str | None = None
+    ai_provider: str = "auto"
+    ai_daily_spend_limit_gbp: Decimal = Decimal("2.50")
     telegram_bot_token: str | None = None
     telegram_admin_ids: str = ""
     global_emergency_stop: bool = False
@@ -31,6 +37,8 @@ class Settings(BaseSettings):
     freeagent_client_id: str | None = None
     freeagent_client_secret: str | None = None
     freeagent_redirect_uri: str | None = None
+    git_commit: str = "unknown"
+    build_time: str | None = None
 
     @property
     def telegram_admin_id_list(self) -> list[int]:

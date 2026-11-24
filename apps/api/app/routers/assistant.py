@@ -13,7 +13,7 @@ from app.database import get_db
 from app.models.agents import AgentProfile
 from app.models.assistant_chat import AssistantConversation, AssistantMessage
 from app.models.user import User
-from app.services.assistant_brain import answer_question
+from app.services.ai.orchestrator import answer_question
 from app.services.audit import record_audit
 
 router = APIRouter(prefix="/assistant", tags=["assistant"])
@@ -57,7 +57,7 @@ async def chat(
         AssistantMessage(conversation_id=conv_id, role="user", content=body.message)
     )
 
-    reply, tool_data = await answer_question(db, body.message)
+    reply, tool_data, provider = await answer_question(db, body.message)
     db.add(
         AssistantMessage(
             conversation_id=conv_id,
@@ -78,5 +78,5 @@ async def chat(
         conversation_id=conv_id,
         reply=reply,
         tool_data=tool_data,
-        provider="deterministic_tools",
+        provider=provider,
     )
