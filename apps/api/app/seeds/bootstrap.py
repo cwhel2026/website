@@ -260,6 +260,7 @@ async def _seed_territories(session: AsyncSession) -> None:
     count = await session.scalar(select(func.count()).select_from(Territory))
     if count and count > 0:
         return
+    assigned_districts: set[str] = set()
     for item in TERRITORIES:
         territory = Territory(
             code=item["code"],
@@ -272,6 +273,9 @@ async def _seed_territories(session: AsyncSession) -> None:
         for loc in item["localities"]:
             session.add(TerritoryLocality(territory_id=territory.id, name=loc))
         for district in item["districts"]:
+            if district in assigned_districts:
+                continue
+            assigned_districts.add(district)
             session.add(PostcodeDistrict(territory_id=territory.id, district=district))
 
 
