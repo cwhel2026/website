@@ -6,6 +6,7 @@ from app.models.quotation import (
     QuotationSection,
     QuotationStatus,
 )
+from app.models.quotation_idempotency import QuotationSubmissionIdempotency
 from app.models.service import Service
 from app.models.territory import PostcodeDistrict, Territory, TerritoryLocality
 from app.models.user import User, UserRole
@@ -27,4 +28,5 @@ __all__ = [
     "QuotationSection",
     "QuotationCalculation",
     "QuotationStatus",
+    "QuotationSubmissionIdempotency",
 ]

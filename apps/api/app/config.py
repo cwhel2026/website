@@ -31,6 +31,8 @@ class Settings(BaseSettings):
     freeagent_client_id: str | None = None
     freeagent_client_secret: str | None = None
     freeagent_redirect_uri: str | None = None
+    git_commit: str = "unknown"
+    build_time: str | None = None
 
     @property
     def telegram_admin_id_list(self) -> list[int]:

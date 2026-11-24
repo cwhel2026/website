@@ -1,20 +1,53 @@
 "use client";
 
+import Link from "next/link";
+
+const REQUIRED_ASSETS = [
+  { id: "hero-home", detail: "Homepage hero (21:9, ≥1600px wide)", status: "Stock (Unsplash) — replace with owned creative" },
+  { id: "before-after-pair", detail: "Verified before/after pair with customer consent", status: "Stock placeholder slider only" },
+  { id: "per-service", detail: "One hero image per service slug in catalogue", status: "Partial stock coverage" },
+  { id: "regional", detail: "Optional imagery for /areas pages", status: "Not started" },
+];
+
 export default function WebsiteDashboardPage() {
   return (
     <div>
-      <h1 className="text-2xl font-semibold text-asphalt">Website & marketing</h1>
+      <h1 className="text-2xl font-semibold text-asphalt">Website &amp; marketing</h1>
       <p className="mt-2 text-sm text-asphalt/70">
-        CMS, landing page builder, A/B tests and live page management — scaffold for the acquisition engine.
-        Attribution events flow through existing marketing endpoints when analytics consent is granted.
+        Public imagery is configured in <code className="text-xs">apps/web/src/lib/media-assets.ts</code> with
+        committed files under <code className="text-xs">apps/web/public/media/</code>. Stock assets are labelled on the
+        live site and must not be presented as completed projects.
       </p>
+
+      <section className="mt-8 rounded-lg border border-stone-line bg-white p-6">
+        <h2 className="font-semibold text-asphalt">Media requirements</h2>
+        <ul className="mt-4 space-y-3 text-sm">
+          {REQUIRED_ASSETS.map((a) => (
+            <li key={a.id} className="flex flex-wrap justify-between gap-2 border-b border-stone-line pb-2">
+              <span>
+                <strong>{a.id}</strong> — {a.detail}
+              </span>
+              <span className="text-xs font-medium uppercase tracking-wide text-restore-dark">{a.status}</span>
+            </li>
+          ))}
+        </ul>
+        <p className="mt-4 text-xs text-asphalt/60">
+          Upload workflow (S3 or CDN-backed storage) is not yet connected. Until then, add owned JPEG/WEBP files to{" "}
+          <code className="text-xs">public/media/</code>, update <code className="text-xs">media-assets.ts</code>, and
+          redeploy web. Full manifest: <code className="text-xs">public/media/manifest.json</code>.
+        </p>
+        <Link href="/api/version" className="mt-4 inline-block text-sm font-semibold text-restore-dark hover:underline">
+          Check deployed web build version →
+        </Link>
+      </section>
+
       <dl className="mt-8 grid gap-4 text-sm md:grid-cols-2">
-        <Item title="Live public site" detail="Homepage, services, multi-step quote, commercial enquiry" status="Published (code deploy)" />
-        <Item title="Landing page builder" detail="Dashboard editor + approval queue" status="Planned — use /c/[slug] flyers today" />
-        <Item title="Media library" detail="Before/after pairs with publish permissions" status="Not started" />
-        <Item title="Quotation funnel" detail="Session + attribution funnel events" status="Active (consent-gated)" />
+        <Item title="Live public site" detail="Stock photography, quote funnel (provisional + submit)" status="Implemented — verify on Railway" />
+        <Item title="Quotation funnel" detail="No CRM records until customer submit" status="Implemented" />
+        <Item title="Media library" detail="Manifest + dashboard checklist" status="Scaffolded" />
+        <Item title="Landing page builder" detail="Dashboard editor + approval queue" status="Not started" />
         <Item title="A/B experiments" detail="Requires traffic volume + approval" status="Not started" />
-        <Item title="SEO pages" detail="Regional guides + sitemap.xml" status="Partial" />
+        <Item title="SEO pages" detail="Sitemap + regional guides partial" status="Partial" />
       </dl>
     </div>
   );

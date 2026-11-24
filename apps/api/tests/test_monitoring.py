@@ -8,7 +8,8 @@ from app.routers.health import health
 
 def test_health_payload_version():
     payload = __import__("asyncio").run(health())
-    assert payload["version"] == "0.7.0"
+    assert payload["version"] == "0.8.0"
+    assert "git_commit" in payload
     assert payload["status"] == "ok"
 
 

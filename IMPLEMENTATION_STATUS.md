@@ -1,70 +1,38 @@
 # Implementation status
 
-Last updated: 2025-11-24 (Phase 7 agent run).
+Last updated: 2025-11-24 (production quality recovery — stage 1).
 
-## Completed and tested
+Status legend: **Not started** · **Scaffolded** · **Implemented** · **Tested locally** · **Integration verified** · **Production verified** · **Blocked**
 
-| Capability | Evidence |
-|------------|----------|
-| Postcode outward district parsing | `apps/api/tests/test_territory_lookup.py` (3 tests) |
-| Pricing engine (minimum job, condition, margin) | `apps/api/tests/test_pricing_engine.py` (4 tests) |
-| Territory A–I seed data | `apps/api/app/seeds/bootstrap.py` |
-| Services catalogue seed | Same |
-| Default pricing profile rules | Same |
-| REST: territories, services, CRM, quotations, auth | `apps/api/app/routers/*` |
-| Public Next.js pages | `apps/web/src/app/(site)/*` |
-| Dashboard pages | `apps/web/src/app/dashboard/*` |
+## Stage 1 (this run): Public site, quotations, deploy traceability
 
-| Phase 2 jobs, appointments, scheduling, weather simulation | API + dashboard pages |
-| Seven-day coating risk assessment | `two_stage_workflow.py` + tests |
-| Regional workload API | `/regional/workload` |
+| Feature | Status | Evidence / limits |
+|---------|--------|-------------------|
+| Stock driveway photography (labelled, not fake projects) | **Tested locally** | `apps/web/public/media/stock/*`, `src/lib/media-assets.ts`, `BeforeAfterSlider` image comparison |
+| Homepage & service page imagery | **Tested locally** | `(site)/page.tsx`, `service-page.tsx` |
+| Media manifest & requirements | **Implemented** | `public/media/manifest.json`, dashboard checklist `dashboard/website/page.tsx` |
+| Default Next.js SVG template assets | **Implemented** | Removed from `apps/web/public/` |
+| Anonymous provisional quotation API | **Tested locally** | `POST /api/v1/quotations/provisional`, `quotation_workflow.py`; tests `test_quotation_workflow.py` |
+| Customer quotation submit + idempotency | **Implemented** | `POST /api/v1/quotations/submit`, `quotation_persist.py`, `quotation_idempotency` model |
+| Quote wizard (no fake customer on estimate) | **Tested locally** | `quote-wizard.tsx` → provisional then submit |
+| Build version identifiers | **Implemented** | Web `/api/version`, API `/health` `git_commit`; `DEPLOYMENT_VERIFICATION.md` |
+| Railway deploy verification doc | **Implemented** | `DEPLOYMENT_VERIFICATION.md` |
+| Production deploy matches `main` | **Blocked** | Requires owner to confirm Railway root dirs + redeploy; compare `/api/version` SHA |
 
-| Personal assistant (tool-backed chat) | `/assistant/chat` + dashboard |
-| Approval centre | Quotations + outbound messages |
-| Briefings | `/briefings/generate/*` |
-| Agents / emergency stop | `/automations/*` |
+**Tests executed (local):** `pytest apps/api/tests/test_quotation_workflow.py` (3 passed); full API suite pending CI; `npm run build` for web.
 
-| Diary-driven marketing recommendations | `/marketing/recommendations` |
-| Regional campaigns, flyers, commercial leads | `/marketing/*` |
-| QR attribution landing | `/c/[slug]` |
+## Priorities 4–10 (not started in this run)
 
-| Invoices, expenses, CSV bank import | `/finance/*` |
-| Tax reserve estimate | Configurable tax year settings |
-| Territory/job profitability | Quotation contribution − expenses |
+| Area | Status | Notes |
+|------|--------|-------|
+| Genuine AI assistant (OpenAI/tools) | **Scaffolded** | `assistant_brain.py` regex-based |
+| Marketing intelligence (live APIs) | **Scaffolded** | Fixed slot assumptions; adapters not live |
+| Live UK weather provider | **Not started** | `weather_engine.py` simulated |
+| Celery/Redis automation workers | **Not started** | |
+| FreeAgent / Mettle OAuth sync | **Scaffolded** | FreeAgent returns not-implemented |
+| Alembic real migrations | **Scaffolded** | Empty initial revision |
+| E2E production visual verification | **Not started** | Playwright smoke only |
 
-| Stock + coating forecast + low stock | `/inventory/*` |
-| Analytics KPI snapshot | `/analytics/overview` |
-| Business Director scan + task queue | `/business-director/*` |
-| Dashboard: analytics, inventory, system health | `apps/web/src/app/dashboard/*` |
+## Retained working capabilities
 
-| Production gates (JWT/admin password) | `app/security/startup.py` |
-| Rate limits + security headers | `slowapi` + middleware |
-| `/health` + `/ready` | `app/routers/health.py` |
-| Docker images + prod compose | `apps/*/Dockerfile`, `docker-compose.prod.yml` |
-
-**Test result (local)**: 31 passed, 1 skipped (integration); CI runs Postgres smoke job.
-
-## Partial / scaffold
-
-| Item | Notes |
-|------|-------|
-| Alembic | Initial placeholder revision; dev uses `create_all` on startup |
-| PostGIS geometry columns | Not yet on models (postcode/town resolution only) |
-| Address autocomplete | Not integrated — provider TBD |
-| AI photo assessment | Not built |
-| Dashboard overview metrics | Empty until real data; no fabricated stats |
-
-## Not started (remaining Phases 2–8)
-
-OR-Tools, Google Calendar, live weather providers, Telegram, marketing APIs, FreeAgent, Mettle, Celery agent workers, field photo uploads and offline queue, E2E DB tests, production deploy.
-
-## Known defects / tech debt
-
-- Next.js 15.1.0 has known security advisory — upgrade before production.
-- JWT in `localStorage` — migrate to secure cookies.
-- Enum types duplicated across SQLAlchemy models may need Alembic autogenerate cleanup.
-- Docker not available in some cloud agent VMs — CI validates builds instead.
-
-## Required credentials (none verified live)
-
-See `INTEGRATIONS.md`.
+Pricing engine, territories, dashboard routes, finance scaffolds, rate limits, health/readiness — unchanged unless listed above.

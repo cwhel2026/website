@@ -1,7 +1,4 @@
-from datetime import UTC, datetime
 import json
-import secrets
-from decimal import Decimal
 from typing import Annotated
 from uuid import UUID
 
@@ -12,37 +9,87 @@ from sqlalchemy.orm import selectinload
 
 from app.auth import get_current_admin
 from app.database import get_db
-from app.models.crm import Customer, CustomerProperty, Enquiry, PipelineStage
-from app.models.quotation import (
-    Quotation,
-    QuotationCalculation,
-    QuotationSection,
-    QuotationStatus,
-)
-from app.models.service import Service
+from app.models.quotation import Quotation, QuotationCalculation
 from app.models.user import User
-from app.routers.crm import upsert_customer
-from app.schemas.quotation import InstantQuotationRequest, QuotationOut
-from app.services.pricing_engine import PricingInput, QuotationSectionInput, calculate_quotation
-from app.services.approval_service import ensure_quotation_approval
 from app.rate_limit import limiter
-from app.services.territory_lookup import resolve_territory_for_postcode
+from app.schemas.quotation import (
+    InstantQuotationRequest,
+    ProvisionalQuotationOut,
+    ProvisionalQuotationRequest,
+    QuotationOut,
+    QuotationSubmitRequest,
+)
+from app.services.quotation_persist import load_active_service, persist_submitted_quotation
+from app.services.quotation_workflow import PROVISIONAL_DISCLAIMER, priced_at_now, price_quotation_inputs
 
 router = APIRouter(prefix="/quotations", tags=["quotations"])
 
 
-def _reference() -> str:
-    stamp = datetime.now(UTC).strftime("%Y%m%d")
-    suffix = secrets.token_hex(2).upper()
-    return f"RMD-{stamp}-{suffix}"
+@router.post("/provisional", response_model=ProvisionalQuotationOut)
+@limiter.limit("20/minute")
+async def calculate_provisional_quotation(
+    request: Request,
+    body: ProvisionalQuotationRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> ProvisionalQuotationOut:
+    """Anonymous pricing only — does not create customers, properties or quotations."""
+    service = await load_active_service(db, body.service_slug)
+    pricing, fingerprint, supported, unsupported_reason, territory = await price_quotation_inputs(
+        db,
+        service=service,
+        surface_type=body.surface_type,
+        surface_condition=body.surface_condition,
+        sections_raw=body.sections,
+        requires_washing=body.requires_washing,
+        customer_washed_already=body.customer_washed_already,
+        postcode=body.postcode,
+        town=body.town,
+        distance_km_from_base=body.distance_km_from_base,
+    )
+    out = ProvisionalQuotationOut(
+        input_fingerprint=fingerprint,
+        priced_at=priced_at_now(),
+        covered=territory is not None,
+        territory_id=territory.id if territory else None,
+        territory_name=territory.name if territory else None,
+        surface_supported=supported,
+        unsupported_reason=unsupported_reason,
+        provisional_disclaimer=PROVISIONAL_DISCLAIMER,
+    )
+    if pricing is None:
+        return out
+    out.total_area_sqm = pricing.total_area_sqm
+    out.subtotal_ex_vat_gbp = pricing.subtotal_ex_vat_gbp
+    out.vat_gbp = pricing.vat_gbp
+    out.total_inc_vat_gbp = pricing.total_inc_vat_gbp
+    out.estimated_labour_hours = pricing.estimated_labour_hours
+    out.meets_minimum_margin = pricing.meets_minimum_margin
+    out.requires_approval = pricing.requires_approval
+    out.breakdown = pricing.breakdown
+    return out
 
 
-def _section_area(section) -> Decimal:
-    if section.area_sqm is not None and section.area_sqm > 0:
-        return section.area_sqm
-    if section.length_m and section.width_m:
-        return section.length_m * section.width_m
-    raise HTTPException(status_code=400, detail="Each section needs area or length and width")
+@router.post("/submit", response_model=QuotationOut)
+@limiter.limit("12/minute")
+async def submit_quotation(
+    request: Request,
+    body: QuotationSubmitRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> QuotationOut:
+    if not body.consent_service_messages:
+        raise HTTPException(status_code=400, detail="Service communication consent is required")
+    if "@" not in body.email or body.email.endswith("@example.com"):
+        raise HTTPException(status_code=400, detail="A valid customer email is required")
+    if len(body.full_name.strip()) < 2:
+        raise HTTPException(status_code=400, detail="Full name is required")
+    if len(body.address_line1.strip()) < 3:
+        raise HTTPException(status_code=400, detail="Address line 1 is required")
+    return await persist_submitted_quotation(
+        db,
+        body,
+        input_fingerprint=body.input_fingerprint,
+        idempotency_key=body.idempotency_key,
+    )
 
 
 @router.post("/instant", response_model=QuotationOut)
@@ -52,129 +99,30 @@ async def create_instant_quotation(
     body: InstantQuotationRequest,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> QuotationOut:
-    service_result = await db.execute(
-        select(Service).where(Service.slug == body.service_slug, Service.is_active.is_(True))
-    )
-    service = service_result.scalar_one_or_none()
-    if service is None:
-        raise HTTPException(status_code=404, detail="Service not found")
-
-    territory = await resolve_territory_for_postcode(db, body.postcode, body.town)
-    customer = await upsert_customer(
+    """Legacy endpoint — requires full customer details and a fresh input_fingerprint from /provisional."""
+    service = await load_active_service(db, body.service_slug)
+    pricing, fingerprint, supported, unsupported_reason, _territory = await price_quotation_inputs(
         db,
-        email=body.email,
-        phone=body.phone,
-        full_name=body.full_name,
-        consent_marketing=body.consent_marketing,
-        consent_service_messages=body.consent_service_messages,
-        source=body.source,
-        campaign=body.campaign,
-    )
-    prop = CustomerProperty(
-        customer_id=customer.id,
-        address_line1=body.address_line1,
-        address_line2=body.address_line2,
-        town=body.town,
-        postcode=body.postcode.upper(),
-        territory_id=territory.id if territory else None,
-    )
-    db.add(prop)
-
-    enquiry = Enquiry(
-        customer_id=customer.id,
-        surface_type=body.surface_type,
-        message=body.visible_damage,
-        stage=PipelineStage.QUOTE_GENERATED,
-    )
-    db.add(enquiry)
-    await db.flush()
-
-    sections_in = [
-        QuotationSectionInput(
-            label=s.label,
-            length_m=s.length_m,
-            width_m=s.width_m,
-            area_sqm=_section_area(s),
-        )
-        for s in body.sections
-    ]
-
-    pricing = await calculate_quotation(
-        db,
-        PricingInput(
-            service=service,
-            surface_type=body.surface_type,
-            surface_condition=body.surface_condition,
-            sections=sections_in,
-            requires_washing=body.requires_washing,
-            customer_washed_already=body.customer_washed_already,
-            territory=territory,
-            distance_km_from_base=body.distance_km_from_base,
-        ),
-    )
-
-    status = (
-        QuotationStatus.PENDING_APPROVAL
-        if pricing.requires_approval
-        else QuotationStatus.PROVISIONAL
-    )
-
-    quotation = Quotation(
-        reference=_reference(),
-        customer_id=customer.id,
-        enquiry_id=enquiry.id,
-        service_id=service.id,
-        territory_id=territory.id if territory else None,
-        status=status,
+        service=service,
         surface_type=body.surface_type,
         surface_condition=body.surface_condition,
+        sections_raw=body.sections,
         requires_washing=body.requires_washing,
         customer_washed_already=body.customer_washed_already,
-        total_area_sqm=pricing.total_area_sqm,
-        pricing_profile_id=pricing.pricing_profile_id,
-        subtotal_ex_vat_gbp=pricing.subtotal_ex_vat_gbp,
-        vat_gbp=pricing.vat_gbp,
-        total_inc_vat_gbp=pricing.total_inc_vat_gbp,
-        estimated_labour_hours=pricing.estimated_labour_hours,
-        estimated_materials_gbp=pricing.estimated_materials_gbp,
-        estimated_travel_gbp=pricing.estimated_travel_gbp,
-        estimated_contribution_gbp=pricing.estimated_contribution_gbp,
-        meets_minimum_margin=pricing.meets_minimum_margin,
-        requires_approval=pricing.requires_approval,
+        postcode=body.postcode,
+        town=body.town,
+        distance_km_from_base=body.distance_km_from_base,
     )
-    db.add(quotation)
-    await db.flush()
-
-    for s, raw in zip(sections_in, body.sections, strict=True):
-        db.add(
-            QuotationSection(
-                quotation_id=quotation.id,
-                label=s.label,
-                length_m=raw.length_m,
-                width_m=raw.width_m,
-                area_sqm=s.area_sqm,
-            )
-        )
-
-    db.add(
-        QuotationCalculation(
-            quotation_id=quotation.id,
-            version=1,
-            breakdown_json=json.dumps(pricing.breakdown),
-        )
+    if not supported:
+        raise HTTPException(status_code=400, detail=unsupported_reason or "Surface not supported")
+    if pricing is None:
+        raise HTTPException(status_code=400, detail="Unable to price quotation")
+    return await persist_submitted_quotation(
+        db,
+        body,
+        input_fingerprint=fingerprint,
+        idempotency_key=None,
     )
-    await ensure_quotation_approval(db, quotation)
-    await db.commit()
-
-    result = await db.execute(
-        select(Quotation)
-        .options(selectinload(Quotation.sections))
-        .where(Quotation.id == quotation.id)
-    )
-    q = result.scalar_one()
-    out = QuotationOut.model_validate(q)
-    out.breakdown = pricing.breakdown
-    return out
 
 
 @router.get("", response_model=list[QuotationOut])
