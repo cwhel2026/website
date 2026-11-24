@@ -1,23 +1,17 @@
-export const metadata = { title: "Before and after gallery" };
+export const metadata = { title: "Project gallery" };
 
 export default function GalleryPage() {
   return (
-    <div className="mx-auto max-w-6xl px-4 py-12">
-      <h1 className="text-3xl font-semibold text-emerald-950">Before and after gallery</h1>
-      <p className="mt-4 max-w-2xl text-emerald-900/80">
-        Authentic project photography will be added as completed jobs are approved for marketing use.
-        We do not display invented projects or stock images as customer work.
+    <div className="site-container py-16 md:py-24">
+      <p className="section-eyebrow">Gallery</p>
+      <h1 className="mt-2 font-display text-4xl font-semibold text-asphalt">Authentic project photography</h1>
+      <p className="mt-4 max-w-2xl text-asphalt/75">
+        This gallery intentionally stays empty until verified before-and-after photographs are approved for
+        publication. We do not present stock or generated images as completed work.
       </p>
-      <div className="mt-10 grid gap-4 md:grid-cols-3">
-        {[1, 2, 3].map((n) => (
-          <div
-            key={n}
-            className="flex h-48 items-center justify-center rounded-xl border border-dashed border-emerald-300 bg-emerald-50/50 text-sm text-emerald-800/60"
-          >
-            Project slot {n} — awaiting approved imagery
-          </div>
-        ))}
-      </div>
+      <p className="mt-8 rounded-lg border border-dashed border-stone-line bg-white p-12 text-center text-sm text-asphalt/55">
+        No published projects yet — add approved media via the website management area when available.
+      </p>
     </div>
   );
 }

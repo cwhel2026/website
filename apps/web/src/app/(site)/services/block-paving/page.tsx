@@ -1,18 +1,18 @@
-import Link from "next/link";
+import { ServicePage } from "@/components/site/service-page";
 
 export const metadata = { title: "Block paving restoration" };
 
-export default function BlockPavingPage() {
+export default function Page() {
   return (
-    <div className="mx-auto max-w-3xl px-4 py-12">
-      <h1 className="text-3xl font-semibold text-emerald-950">Block paving cleaning, sanding and sealing</h1>
-      <p className="mt-4 text-emerald-900/80">
-        Weeds, joint sand loss and surface dullness respond well to professional cleaning and
-        sealing when blocks are stable.
-      </p>
-      <Link href="/quote" className="mt-8 inline-block rounded-full bg-emerald-900 px-6 py-3 text-white">
-        Get provisional quote
-      </Link>
-    </div>
+    <ServicePage
+      slug="block-paving"
+      title="Block paving restoration"
+      intro="Cleaning, re-sanding and sealing for block paved driveways where the installation is fundamentally sound."
+      benefits={[
+        "Restore colour contrast between blocks without replacing the entire driveway.",
+        "Address weeds and jointing as part of a structured restoration plan.",
+        "Suitable for many residential drives — verified before booking.",
+      ]}
+    />
   );
 }
