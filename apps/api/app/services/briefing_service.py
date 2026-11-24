@@ -13,7 +13,7 @@ from app.services.assistant_tools import (
     tool_pending_approvals,
     tool_wash_pending_coat,
 )
-from app.services.weather_engine import simulate_hourly_forecast
+from app.services.weather.service import get_hourly_forecast
 
 
 async def generate_briefing(db: AsyncSession, kind: BriefingKind) -> BriefingRecord:
@@ -23,9 +23,10 @@ async def generate_briefing(db: AsyncSession, kind: BriefingKind) -> BriefingRec
         payload["tomorrow"] = await tool_jobs_tomorrow(db)
         payload["wash_pending"] = await tool_wash_pending_coat(db)
         payload["approvals"] = await tool_pending_approvals(db)
-        forecast = simulate_hourly_forecast(53.5977, -2.8407, hours=24)
+        forecast, source, is_live = await get_hourly_forecast(db, 53.5977, -2.8407, hours=24)
         payload["weather_hq"] = {
-            "source": "simulation",
+            "source": source,
+            "is_live": is_live,
             "samples": [
                 {
                     "time": f.forecast_time.isoformat(),

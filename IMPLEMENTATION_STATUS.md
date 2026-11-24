@@ -35,12 +35,23 @@ Status legend: **Not started** · **Scaffolded** · **Implemented** · **Tested 
 | Research findings with source metadata | **Implemented** | `marketing_research.py`, `POST /marketing/research` |
 | Live Meta/Google campaign APIs | **Blocked** | Credentials + verified OAuth not connected |
 
-## Priorities 6–10 (not started in this run)
+## Stage 3 (this run): Weather + background workers
+
+| Feature | Status | Evidence / limits |
+|---------|--------|-------------------|
+| Open-Meteo live forecast | **Implemented** | `weather/providers/openmeteo.py`, postcode via postcodes.io |
+| Simulation separated from booking | **Implemented** | `WEATHER_ALLOW_SIMULATION_FOR_BOOKING=false` default |
+| Forecast cache rows | **Implemented** | `weather_forecast_hours` + `weather/service.py` |
+| Scheduling uses live forecast for slots | **Implemented** | `scheduling_engine.py` `for_booking=True` |
+| Celery worker + beat schedules | **Implemented** | `app/worker/*`, `docker-compose.yml` worker service |
+| Background job run audit | **Implemented** | `background_job_runs`, `/automations/workers/runs` |
+| Dashboard worker truth | **Implemented** | `dashboard/automations` shows last runs |
+| Redis in prod | **Blocked** | Railway needs Redis service + worker process |
+
+## Priorities 8–10 (not started in this run)
 
 | Area | Status | Notes |
 |------|--------|-------|
-| Live UK weather provider | **Not started** | `weather_engine.py` simulated |
-| Celery/Redis automation workers | **Not started** | |
 | FreeAgent / Mettle OAuth sync | **Scaffolded** | FreeAgent returns not-implemented |
 | Alembic real migrations | **Scaffolded** | Empty initial revision |
 | E2E production visual verification | **Not started** | Playwright smoke only |

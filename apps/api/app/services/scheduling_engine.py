@@ -11,7 +11,8 @@ from app.models.scheduling import OwnerCalendarBlock, SchedulingSettings
 from app.models.quotation import Quotation
 from app.models.service import Service
 from app.services.geo import estimate_drive_minutes, haversine_km
-from app.services.weather_engine import WorkActivity, score_window, simulate_hourly_forecast
+from app.services.weather.service import get_hourly_forecast
+from app.services.weather_engine import WorkActivity, score_window
 
 
 @dataclass
@@ -86,7 +87,7 @@ async def propose_two_stage_slots(
         lon,
     )
     travel = estimate_drive_minutes(distance) + settings.travel_buffer_minutes
-    forecast = simulate_hourly_forecast(lat, lon, hours=72)
+    forecast, _source, _live = await get_hourly_forecast(db, lat, lon, hours=72, for_booking=True)
 
     prep_slots: list[SlotProposal] = []
     coat_slots: list[SlotProposal] = []

@@ -39,6 +39,11 @@ class Settings(BaseSettings):
     freeagent_redirect_uri: str | None = None
     git_commit: str = "unknown"
     build_time: str | None = None
+    redis_url: str = "redis://localhost:6379/0"
+    celery_broker_url: str | None = None
+    weather_provider: str = "openmeteo"
+    weather_simulation_fallback: bool = True
+    weather_allow_simulation_for_booking: bool = False
 
     @property
     def telegram_admin_id_list(self) -> list[int]:
