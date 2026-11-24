@@ -3,6 +3,7 @@ from decimal import Decimal
 from typing import Annotated
 from uuid import UUID
 
+import httpx
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from pydantic import BaseModel
 from sqlalchemy import select
@@ -24,7 +25,13 @@ from app.models.quotation import Quotation
 from app.models.user import User
 from app.services.audit import record_audit
 from app.services.finance.csv_import import import_bank_csv
-from app.services.finance.freeagent_adapter import freeagent_status, sync_invoices_from_freeagent
+from app.models.finance import FreeAgentConnectionState
+from app.services.finance.freeagent_adapter import (
+    begin_oauth,
+    complete_oauth,
+    freeagent_status,
+    sync_invoices_from_freeagent,
+)
 from app.services.finance.invoicing import create_invoice_from_quotation
 from app.services.finance.profitability import job_profitability, territory_profitability
 from app.services.finance.tax_estimates import estimate_personal_tax
@@ -49,12 +56,23 @@ class PaymentIn(BaseModel):
 
 @router.get("/status")
 async def finance_status(
+    db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[User, Depends(get_current_admin)],
 ) -> dict:
-    fa = freeagent_status()
+    fa = await freeagent_status(db)
     return {
-        "freeagent": {"state": fa.state.value, "message": fa.message, "can_sync": fa.can_sync},
-        "mettle_feed": "Via FreeAgent when connected — not verified in this build",
+        "freeagent": {
+            "state": fa.state.value,
+            "message": fa.message,
+            "can_sync": fa.can_sync,
+            "organisation_name": fa.organisation_name,
+            "last_sync_at": fa.last_sync_at.isoformat() if fa.last_sync_at else None,
+        },
+        "mettle_feed": (
+            "Bank feed via FreeAgent when connected — use CSV import until OAuth is complete."
+            if fa.state != FreeAgentConnectionState.CONNECTED
+            else "Mettle transactions sync through FreeAgent (not independently verified here)."
+        ),
         "csv_import": True,
     }
 
@@ -249,8 +267,55 @@ async def profitability_job(
     return row.__dict__
 
 
+@router.get("/freeagent/authorize")
+async def freeagent_authorize(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    user: Annotated[User, Depends(get_current_admin)],
+) -> dict:
+    try:
+        payload = await begin_oauth(db)
+        await record_audit(
+            db,
+            actor_type="user",
+            actor_id=str(user.id),
+            action="finance.freeagent.authorize_start",
+        )
+        await db.commit()
+        return payload
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@router.get("/freeagent/callback")
+async def freeagent_callback(
+    code: str,
+    state: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict:
+    try:
+        result = await complete_oauth(db, code, state)
+        await db.commit()
+        return {"ok": True, **result}
+    except ValueError as exc:
+        await db.rollback()
+        raise HTTPException(400, str(exc)) from exc
+    except httpx.HTTPError as exc:
+        await db.rollback()
+        raise HTTPException(502, f"FreeAgent token exchange failed: {exc}") from exc
+
+
 @router.post("/freeagent/sync")
 async def freeagent_sync(
-    _: Annotated[User, Depends(get_current_admin)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    user: Annotated[User, Depends(get_current_admin)],
 ) -> dict:
-    return await sync_invoices_from_freeagent()
+    result = await sync_invoices_from_freeagent(db)
+    await record_audit(
+        db,
+        actor_type="user",
+        actor_id=str(user.id),
+        action="finance.freeagent.sync",
+        detail={"synced": result.get("synced"), "fetched": result.get("fetched")},
+    )
+    await db.commit()
+    return result
