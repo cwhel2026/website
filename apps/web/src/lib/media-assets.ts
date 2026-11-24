@@ -1,86 +1,123 @@
 /**
- * Configurable public-site imagery. Paths point at committed stock files or dashboard overrides.
- * Stock assets are illustrative only — never presented as completed Revive My Drive projects.
+ * Public-site imagery — verified UK Geograph reference photos (CC BY-SA 2.0).
+ * Paths point at committed WebP/AVIF under /public/media/approved/.
+ * Illustrative before/after uses the same reference frame; the "after" side is a licensed derivative treatment.
  */
 
 export type MediaAsset = {
   id: string;
   src: string;
+  srcWebp: string;
+  srcAvif?: string;
   alt: string;
-  /** stock | owned_project | override */
-  kind: "stock" | "owned_project" | "override";
-  credit?: string;
+  kind: "reference" | "owned_project" | "override" | "illustrative_derivative";
+  credit: string;
+  license: string;
+  sourceUrl?: string;
   caption?: string;
 };
 
-const STOCK = (path: string) => path;
+const approved = (basename: string) => ({
+  webp: `/media/approved/${basename}.webp`,
+  avif: `/media/approved/${basename}.avif`,
+});
+
+function asset(
+  id: string,
+  basename: string,
+  alt: string,
+  credit: string,
+  sourceUrl: string,
+  kind: MediaAsset["kind"],
+  caption?: string,
+): MediaAsset {
+  const paths = approved(basename);
+  return {
+    id,
+    src: paths.webp,
+    srcWebp: paths.webp,
+    srcAvif: paths.avif,
+    alt,
+    kind,
+    credit,
+    license: "CC BY-SA 2.0 (Geograph Britain and Ireland)",
+    sourceUrl,
+    caption,
+  };
+}
+
+/** Services with no verified UK imprinted-concrete reference on file — UI shows a pending placeholder. */
+export const PENDING_SERVICE_IMAGES = ["imprinted-concrete"] as const;
 
 export const MEDIA = {
-  hero: {
-    id: "hero-home",
-    src: STOCK("/media/stock/hero-home.jpg"),
-    alt: "Residential property with driveway — stock illustration",
-    kind: "stock" as const,
-    credit: "Unsplash (stock)",
-    caption: "Stock atmosphere photography — not a completed Revive My Drive project.",
-  },
+  hero: asset(
+    "hero-home",
+    "hero-home",
+    "UK residential tarmac driveway leading to a rural property",
+    "Phil Catterall / Geograph 409433",
+    "https://www.geograph.org.uk/photo/409433",
+    "reference",
+    "Licensed reference photo — not a completed Revive My Drive project.",
+  ),
   beforeAfter: {
-    before: {
-      id: "before-tarmac",
-      src: STOCK("/media/stock/tarmac-worn.jpg"),
-      alt: "Worn tarmac driveway — stock illustration (before)",
-      kind: "stock" as const,
-      credit: "Unsplash (stock)",
-    },
-    after: {
-      id: "after-driveway",
-      src: STOCK("/media/stock/driveway-refreshed.jpg"),
-      alt: "Refreshed residential driveway — stock illustration (after)",
-      kind: "stock" as const,
-      credit: "Unsplash (stock)",
-    },
+    before: asset(
+      "before-shoreham",
+      "ba-before",
+      "Cracked residential tarmac driveway in the UK (before)",
+      "Simon Carey / Geograph 276811",
+      "https://www.geograph.org.uk/photo/276811",
+      "reference",
+    ),
+    after: asset(
+      "after-shoreham-illustrative",
+      "ba-after",
+      "Same driveway — illustrative colour refresh (digital treatment on reference photo)",
+      "Derivative of Simon Carey / Geograph 276811",
+      "https://www.geograph.org.uk/photo/276811",
+      "illustrative_derivative",
+    ),
     caption:
-      "Illustrative stock comparison only — not a verified before/after from a Revive My Drive job. Authentic project pairs will replace this when approved.",
+      "Illustrative comparison using one UK reference photograph. The “after” side is a colour/contrast treatment on the same frame — not a real Revive My Drive job. Authentic project pairs will replace this when approved.",
   },
   services: {
-    "tarmac-restoration": {
-      id: "tarmac-service",
-      src: STOCK("/media/stock/tarmac-worn.jpg"),
-      alt: "Tarmac driveway — stock illustration",
-      kind: "stock" as const,
-      credit: "Unsplash (stock)",
-    },
-    "block-paving": {
-      id: "block-paving",
-      src: STOCK("/media/stock/block-paving.jpg"),
-      alt: "Block paving — stock illustration",
-      kind: "stock" as const,
-      credit: "Unsplash (stock)",
-    },
-    "imprinted-concrete": {
-      id: "imprinted",
-      src: STOCK("/media/stock/pattern-concrete.jpg"),
-      alt: "Patterned concrete — stock illustration",
-      kind: "stock" as const,
-      credit: "Unsplash (stock)",
-    },
-    "minor-repairs": {
-      id: "repairs",
-      src: STOCK("/media/stock/tarmac-worn.jpg"),
-      alt: "Surface wear — stock illustration",
-      kind: "stock" as const,
-      credit: "Unsplash (stock)",
-    },
-    "commercial-car-parks": {
-      id: "commercial",
-      src: STOCK("/media/stock/commercial-lot.jpg"),
-      alt: "Commercial property — stock illustration",
-      kind: "stock" as const,
-      credit: "Unsplash (stock)",
-    },
+    "tarmac-restoration": asset(
+      "tarmac-service",
+      "tarmac-surface",
+      "Worn UK tarmac driveway surface",
+      "Phil Catterall / Geograph 409433",
+      "https://www.geograph.org.uk/photo/409433",
+      "reference",
+    ),
+    "block-paving": asset(
+      "block-paving",
+      "block-paving",
+      "UK block-paved residential driveway",
+      "Robin Stott / Geograph 4239736",
+      "https://www.geograph.org.uk/photo/4239736",
+      "reference",
+    ),
+    "minor-repairs": asset(
+      "minor-repairs",
+      "tarmac-wear",
+      "UK tarmac driveway with localised wear and vegetation",
+      "Maigheach-gheal / Geograph 2435499",
+      "https://www.geograph.org.uk/photo/2435499",
+      "reference",
+    ),
+    "commercial-car-parks": asset(
+      "commercial",
+      "commercial-lot",
+      "UK tarmac access road and commercial-style hardstanding",
+      "Snowmanradio / Geograph (Hearsall Common)",
+      "https://www.geograph.org.uk/photo/610171",
+      "reference",
+    ),
   } satisfies Record<string, MediaAsset>,
 } as const;
 
 export function serviceMedia(slug: string): MediaAsset | undefined {
+  if ((PENDING_SERVICE_IMAGES as readonly string[]).includes(slug)) {
+    return undefined;
+  }
   return MEDIA.services[slug as keyof typeof MEDIA.services];
 }

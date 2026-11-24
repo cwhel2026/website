@@ -25,9 +25,10 @@ export function ServicePage({
         <div className="mt-10 overflow-hidden rounded-lg border border-stone-line shadow-sm">
           <StockImage asset={media} aspect="aspect-[21/9]" sizes="100vw" />
           <p className="border-t border-stone-line bg-stone-wash px-4 py-2 text-xs text-asphalt/60">
-            {media.kind === "stock"
-              ? "Stock illustration — not a completed Revive My Drive project."
-              : media.caption}
+            {media.caption ??
+              (media.kind === "owned_project"
+                ? "Completed Revive My Drive project imagery."
+                : `Licensed reference photo (${media.credit}) — not a completed Revive My Drive project.`)}
           </p>
         </div>
       ) : (
