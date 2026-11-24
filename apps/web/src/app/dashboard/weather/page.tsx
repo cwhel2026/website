@@ -2,42 +2,65 @@
 
 import { useState } from "react";
 import { apiGet } from "@/lib/api";
+import { getToken } from "@/lib/auth-client";
 
 type Hour = {
   forecast_time: string;
   temp_c: number;
   precip_probability_pct: number;
   wind_mph: number;
+  source: string;
+  is_live: boolean;
 };
 
 export default function WeatherPage() {
   const [rows, setRows] = useState<Hour[]>([]);
-  const postcode = "L39 4RX";
+  const [postcode, setPostcode] = useState("L39 4RX");
+  const [status, setStatus] = useState<string | null>(null);
 
   async function load() {
-    // Burscough default until geocoding is integrated
-    const data = await apiGet<Hour[]>("/api/v1/weather/forecast?lat=53.5977&lon=-2.8407&hours=24");
+    const token = getToken();
+    const meta = await apiGet<{ provider: string; simulation_allowed_for_booking: boolean }>(
+      "/api/v1/weather/status",
+      token ?? undefined,
+    );
+    setStatus(`${meta.provider} · booking simulation ${meta.simulation_allowed_for_booking ? "allowed" : "blocked"}`);
+    const data = await apiGet<Hour[]>(
+      `/api/v1/weather/forecast?postcode=${encodeURIComponent(postcode)}&hours=24`,
+      token ?? undefined,
+    );
     setRows(data);
   }
 
   return (
-    <div>
-      <h1 className="text-2xl font-semibold text-emerald-950">Weather intelligence</h1>
-      <p className="mt-2 text-sm text-slate-600">
-        Simulation mode for development — labelled clearly, not live MET data. Postcode: {postcode}
+    <div className="max-w-2xl">
+      <h1 className="text-2xl font-semibold text-asphalt">Weather intelligence</h1>
+      <p className="mt-2 text-sm text-asphalt/70">
+        Live UK forecasts via Open-Meteo when available. Simulation is labelled and never used for booking checks in
+        production.
       </p>
-      <button
-        type="button"
-        onClick={() => load()}
-        className="mt-4 rounded-full bg-emerald-900 px-4 py-2 text-sm text-white"
-      >
-        Load 24h Burscough simulation
+      {status && <p className="mt-2 text-xs text-restore-dark">{status}</p>}
+      <label className="mt-4 block text-sm">
+        Postcode
+        <input
+          value={postcode}
+          onChange={(e) => setPostcode(e.target.value.toUpperCase())}
+          className="mt-1 w-full rounded border px-3 py-2"
+        />
+      </label>
+      <button type="button" onClick={() => load()} className="btn-primary mt-4">
+        Load 24h forecast
       </button>
+      {rows[0] && (
+        <p className="mt-3 text-xs text-asphalt/60">
+          Source: {rows[0].source} · live data: {rows[0].is_live ? "yes" : "no (simulation)"}
+        </p>
+      )}
       <ul className="mt-6 max-h-96 overflow-y-auto text-xs">
         {rows.map((r) => (
-          <li key={r.forecast_time} className="border-b py-1">
-            {new Date(r.forecast_time).toLocaleString("en-GB")} · {r.temp_c}°C · rain {r.precip_probability_pct}% ·
-            wind {r.wind_mph} mph
+          <li key={r.forecast_time} className="border-b border-stone-line py-1">
+            {new Date(r.forecast_time).toLocaleString("en-GB", { timeZone: "Europe/London" })} · {r.temp_c}°C · rain{" "}
+            {r.precip_probability_pct}% · wind {r.wind_mph} mph
           </li>
         ))}
       </ul>

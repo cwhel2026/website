@@ -12,13 +12,25 @@ type Agent = {
   emergency_stop: boolean;
 };
 
+type WorkerTask = {
+  task_name: string;
+  description: string;
+  last_status: string;
+  last_success_at: string | null;
+  recent_error: string | null;
+};
+
 export default function AutomationsPage() {
   const [agents, setAgents] = useState<Agent[]>([]);
+  const [workers, setWorkers] = useState<WorkerTask[]>([]);
 
   useEffect(() => {
     const token = getToken();
     if (!token) return;
     apiGet<Agent[]>("/api/v1/automations/agents", token).then(setAgents).catch(() => setAgents([]));
+    apiGet<{ tasks: WorkerTask[] }>("/api/v1/automations/workers/runs", token)
+      .then((d) => setWorkers(d.tasks))
+      .catch(() => setWorkers([]));
   }, []);
 
   async function emergencyStop() {
@@ -39,13 +51,32 @@ export default function AutomationsPage() {
       >
         Emergency stop all agents
       </button>
-      <ul className="mt-6 space-y-2 text-sm">
+      <h2 className="mt-10 text-lg font-semibold text-asphalt">Background workers</h2>
+      <p className="text-sm text-asphalt/70">Last run status from the database — not fabricated agent activity.</p>
+      <ul className="mt-4 space-y-2 text-sm">
+        {workers.map((w) => (
+          <li key={w.task_name} className="rounded border border-stone-line px-3 py-2">
+            <div className="flex justify-between gap-2">
+              <strong>{w.task_name}</strong>
+              <span className="text-xs uppercase text-asphalt/60">{w.last_status}</span>
+            </div>
+            <p className="text-xs text-asphalt/60">{w.description}</p>
+            {w.last_success_at && (
+              <p className="text-xs text-restore-dark">Last success: {new Date(w.last_success_at).toLocaleString("en-GB")}</p>
+            )}
+            {w.recent_error && <p className="text-xs text-red-700">{w.recent_error}</p>}
+          </li>
+        ))}
+      </ul>
+
+      <h2 className="mt-10 text-lg font-semibold text-asphalt">Agent profiles</h2>
+      <ul className="mt-4 space-y-2 text-sm">
         {agents.map((a) => (
-          <li key={a.slug} className="flex justify-between rounded border px-3 py-2">
+          <li key={a.slug} className="flex justify-between rounded border border-stone-line px-3 py-2">
             <span>
               <strong>{a.name}</strong> — {a.operating_mode}
             </span>
-            <span className="text-slate-500">
+            <span className="text-asphalt/50">
               {a.emergency_stop ? "STOPPED" : a.is_paused ? "Paused" : "Active"}
             </span>
           </li>

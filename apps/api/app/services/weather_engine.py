@@ -1,20 +1,13 @@
 import json
-import math
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 from decimal import Decimal
 
 from app.models.weather import ProductProfile, WorkActivity
+from app.services.weather.providers.simulation import simulate_hourly_forecast
+from app.services.weather.types import HourForecast
 
-
-@dataclass
-class HourForecast:
-    forecast_time: datetime
-    temp_c: Decimal
-    precipitation_mm: Decimal
-    precip_probability_pct: int
-    wind_mph: int
-    humidity_pct: int
+__all__ = ["HourForecast", "simulate_hourly_forecast", "score_window", "suitability_to_json"]
 
 
 @dataclass
@@ -23,37 +16,6 @@ class SuitabilityResult:
     is_safe: bool
     requires_on_site_confirmation: bool
     detail: dict
-
-
-def simulate_hourly_forecast(
-    latitude: float, longitude: float, hours: int = 48
-) -> list[HourForecast]:
-    """Deterministic simulation for development — clearly not live MET data."""
-    now = datetime.now(UTC).replace(minute=0, second=0, microsecond=0)
-    seed = abs(int((latitude * 1000) + (longitude * 100))) % 97
-    rows: list[HourForecast] = []
-    for i in range(hours):
-        t = now + timedelta(hours=i)
-        wave = math.sin((i + seed) / 6.0)
-        temp = Decimal(str(round(11 + 6 * wave, 1)))
-        precip = Decimal("0.0")
-        prob = 0
-        if wave < -0.35:
-            precip = Decimal(str(round(0.4 + abs(wave), 2)))
-            prob = min(95, int(40 + abs(wave) * 60))
-        wind = int(8 + abs(wave) * 10)
-        humidity = int(55 + wave * 15)
-        rows.append(
-            HourForecast(
-                forecast_time=t,
-                temp_c=temp,
-                precipitation_mm=precip,
-                precip_probability_pct=prob,
-                wind_mph=wind,
-                humidity_pct=humidity,
-            )
-        )
-    return rows
 
 
 def score_window(

@@ -1,0 +1,151 @@
+import asyncio
+import json
+from datetime import UTC, datetime, timedelta
+
+from sqlalchemy import select
+
+from app.database_sync import SessionLocal
+from app.models.background_job import JobRunStatus
+from app.models.jobs import Appointment, AppointmentType
+from app.models.scheduling import SchedulingSettings
+from app.models.weather import ProductProfile, WorkActivity
+from app.services.weather.providers.openmeteo import fetch_openmeteo_hourly_sync
+from app.services.weather.providers.simulation import simulate_hourly_forecast
+from app.services.weather_engine import score_window, suitability_to_json
+from app.worker.celery_app import celery_app
+from app.worker.job_recorder import finish_run, start_run
+
+
+def _worker_id() -> str:
+    return celery_app.current_task.request.hostname if celery_app.current_task else "inline"
+
+
+@celery_app.task(name="rmd.refresh_weather_hq", bind=True)
+def refresh_weather_hq(self) -> dict:
+    session = SessionLocal()
+    run = start_run(session, "refresh_weather_hq", dedupe_key=None, worker_id=_worker_id())
+    try:
+        settings_row = session.execute(select(SchedulingSettings).limit(1)).scalar_one_or_none()
+        lat = float(settings_row.base_latitude) if settings_row else 53.5977
+        lon = float(settings_row.base_longitude) if settings_row else -2.8407
+        try:
+            rows = fetch_openmeteo_hourly_sync(lat, lon, hours=48)
+            source = "openmeteo"
+        except Exception:
+            rows = simulate_hourly_forecast(lat, lon, hours=48)
+            source = "simulation"
+        detail = {"source": source, "hours": len(rows), "lat": lat, "lon": lon}
+        finish_run(session, run, status=JobRunStatus.SUCCEEDED, detail=detail)
+        return detail
+    except Exception as exc:
+        finish_run(session, run, status=JobRunStatus.FAILED, error=str(exc))
+        raise
+    finally:
+        session.close()
+
+
+@celery_app.task(name="rmd.appointment_weather_risk", bind=True)
+def appointment_weather_risk(self) -> dict:
+    session = SessionLocal()
+    run = start_run(session, "appointment_weather_risk", dedupe_key=None, worker_id=_worker_id())
+    try:
+        now = datetime.now(UTC)
+        end = now + timedelta(days=3)
+        profile = session.execute(
+            select(ProductProfile).where(ProductProfile.is_active.is_(True)).limit(1)
+        ).scalar_one_or_none()
+        if profile is None:
+            finish_run(session, run, status=JobRunStatus.SKIPPED, detail={"reason": "no_product_profile"})
+            return {"checked": 0}
+
+        appts = session.execute(
+            select(Appointment).where(
+                Appointment.scheduled_start >= now,
+                Appointment.scheduled_start < end,
+            )
+        ).scalars().all()
+        checked = 0
+        flagged = 0
+        for appt in appts:
+            lat = appt.latitude or 53.5977
+            lon = appt.longitude or -2.8407
+            try:
+                forecast = fetch_openmeteo_hourly_sync(lat, lon, hours=72)
+            except Exception:
+                forecast = simulate_hourly_forecast(lat, lon, hours=72)
+            activity = (
+                WorkActivity.WASHING
+                if appt.appointment_type == AppointmentType.PREPARATION
+                else WorkActivity.COATING
+            )
+            result = score_window(
+                activity,
+                profile,
+                forecast,
+                appt.scheduled_start,
+                appt.duration_minutes / 60,
+            )
+            appt.weather_suitable = result.is_safe
+            appt.weather_notes = suitability_to_json(result)
+            checked += 1
+            if not result.is_safe:
+                flagged += 1
+        session.commit()
+        detail = {"checked": checked, "flagged_unsuitable": flagged}
+        finish_run(session, run, status=JobRunStatus.SUCCEEDED, detail=detail)
+        return detail
+    except Exception as exc:
+        session.commit()
+        finish_run(session, run, status=JobRunStatus.FAILED, error=str(exc))
+        raise
+    finally:
+        session.close()
+
+
+@celery_app.task(name="rmd.morning_briefing", bind=True)
+def morning_briefing(self) -> dict:
+    session = SessionLocal()
+    run = start_run(session, "morning_briefing", dedupe_key=datetime.now(UTC).date().isoformat(), worker_id=_worker_id())
+    try:
+        from app.database import SessionLocal as AsyncSessionLocal
+        from app.models.briefings import BriefingKind
+        from app.services.briefing_service import generate_briefing
+
+        async def _brief():
+            async with AsyncSessionLocal() as db:
+                record = await generate_briefing(db, BriefingKind.MORNING)
+                await db.commit()
+                return json.loads(record.payload_json)
+
+        payload = asyncio.run(_brief())
+        detail = {"sections": list(payload.keys())}
+        finish_run(session, run, status=JobRunStatus.SUCCEEDED, detail=detail)
+        return {"stored": False, "sections": detail["sections"], "preview": json.dumps(payload, default=str)[:500]}
+    except Exception as exc:
+        finish_run(session, run, status=JobRunStatus.FAILED, error=str(exc))
+        raise
+    finally:
+        session.close()
+
+
+@celery_app.task(name="rmd.marketing_capacity_snapshot", bind=True)
+def marketing_capacity_snapshot(self) -> dict:
+    session = SessionLocal()
+    run = start_run(session, "marketing_capacity_snapshot", dedupe_key=None, worker_id=_worker_id())
+    try:
+        from app.database import SessionLocal as AsyncSessionLocal
+        from app.services.marketing.capacity_engine import global_capacity_snapshot
+
+        async def _cap():
+            async with AsyncSessionLocal() as adb:
+                return await global_capacity_snapshot(adb)
+
+        snap = asyncio.run(_cap())
+        detail = {k: float(v) if hasattr(v, "as_tuple") else v for k, v in snap.__dict__.items()}
+        finish_run(session, run, status=JobRunStatus.SUCCEEDED, detail=detail)
+        return detail
+    except Exception as exc:
+        finish_run(session, run, status=JobRunStatus.FAILED, error=str(exc))
+        raise
+    finally:
+        session.close()
