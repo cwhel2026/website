@@ -1,0 +1,10 @@
+# In Railway: set this service Root Directory to apps/web, then redeploy.
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+startCommand = "node server.js"
+healthcheckPath = "/"
+restartPolicyType = "ON_FAILURE"

@@ -1,4 +1,8 @@
-# Revive My Drive — Regional Business Operating System
+# Revive My Drive
+
+Regional Business Operating System
+
+**Railway:** set each service **Root Directory** to `apps/web` or `apps/api` (not the repo root). See [DEPLOYMENT.md](./DEPLOYMENT.md).
 
 Autonomous business management platform for a North West England exterior surface restoration company (headquarters: Burscough, Lancashire).
 
