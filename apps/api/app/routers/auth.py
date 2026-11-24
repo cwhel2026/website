@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -8,13 +8,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth import create_access_token, get_current_user, verify_password
 from app.database import get_db
 from app.models.user import User
+from app.rate_limit import limiter
 from app.schemas.auth import LoginRequest, Token, UserOut
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 @router.post("/token", response_model=Token)
+@limiter.limit("30/minute")
 async def login_form(
+    request: Request,
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> Token:
@@ -32,8 +35,11 @@ async def login_form(
 
 
 @router.post("/login", response_model=Token)
+@limiter.limit("30/minute")
 async def login_json(
-    body: LoginRequest, db: Annotated[AsyncSession, Depends(get_db)]
+    request: Request,
+    body: LoginRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> Token:
     result = await db.execute(select(User).where(User.email == body.email))
     user = result.scalar_one_or_none()

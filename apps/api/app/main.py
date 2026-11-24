@@ -2,8 +2,15 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 
 from app.config import get_settings
+from app.middleware.request_id import RequestIdMiddleware
+from app.middleware.security_headers import SecurityHeadersMiddleware
+from app.rate_limit import limiter
+from app.security.startup import validate_production_settings
 from app.database import Base, SessionLocal, engine
 from app.routers import (
     approvals,
@@ -19,6 +26,7 @@ from app.routers import (
     analytics,
     business_director,
     finance,
+    health,
     inventory,
     jobs,
     quotations,
@@ -35,6 +43,7 @@ settings = get_settings()
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    validate_production_settings(settings)
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     async with SessionLocal() as session:
@@ -44,11 +53,17 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(
     title="Revive My Drive API",
-    version="0.6.0",
-    description="Regional business operating system — Phase 6 analytics & inventory",
+    version="0.7.0",
+    description="Regional business operating system — Phase 7 production readiness",
     lifespan=lifespan,
 )
 
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+app.add_middleware(SlowAPIMiddleware)
+app.add_middleware(RequestIdMiddleware)
+app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origin_list,
@@ -79,8 +94,4 @@ app.include_router(finance.router, prefix=prefix)
 app.include_router(inventory.router, prefix=prefix)
 app.include_router(analytics.router, prefix=prefix)
 app.include_router(business_director.router, prefix=prefix)
-
-
-@app.get("/health")
-async def health() -> dict[str, str]:
-    return {"status": "ok", "environment": settings.environment}
+app.include_router(health.router)

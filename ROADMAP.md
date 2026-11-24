@@ -77,7 +77,18 @@ Aligned with the master specification phases.
 
 ## Phase 7 — Production readiness
 
-Security review, E2E tests, monitoring, deployment.
+| Item | Status |
+|------|--------|
+| Security headers + request IDs | Done |
+| Rate limits (quote, login, flyer) | Done |
+| Production JWT / admin password gate | Done |
+| `/ready` database probe | Done |
+| Dockerfiles + prod compose | Done |
+| Integration smoke test (CI with Postgres) | Done |
+| Next.js CVE patch upgrade | Done (when lockfile updated) |
+| HTTP-only cookie auth | Not started |
+| Full E2E Playwright suite | Not started |
+| Redis rate limits / Celery | Not started |
 
 ## Phase 8 — Expansion
 

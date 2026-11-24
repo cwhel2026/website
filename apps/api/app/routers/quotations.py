@@ -5,7 +5,7 @@ from decimal import Decimal
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -25,6 +25,7 @@ from app.routers.crm import upsert_customer
 from app.schemas.quotation import InstantQuotationRequest, QuotationOut
 from app.services.pricing_engine import PricingInput, QuotationSectionInput, calculate_quotation
 from app.services.approval_service import ensure_quotation_approval
+from app.rate_limit import limiter
 from app.services.territory_lookup import resolve_territory_for_postcode
 
 router = APIRouter(prefix="/quotations", tags=["quotations"])
@@ -45,8 +46,11 @@ def _section_area(section) -> Decimal:
 
 
 @router.post("/instant", response_model=QuotationOut)
+@limiter.limit("12/minute")
 async def create_instant_quotation(
-    body: InstantQuotationRequest, db: Annotated[AsyncSession, Depends(get_db)]
+    request: Request,
+    body: InstantQuotationRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> QuotationOut:
     service_result = await db.execute(
         select(Service).where(Service.slug == body.service_slug, Service.is_active.is_(True))

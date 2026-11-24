@@ -1,6 +1,6 @@
 # Implementation status
 
-Last updated: 2025-11-24 (Phase 6 agent run).
+Last updated: 2025-11-24 (Phase 7 agent run).
 
 ## Completed and tested
 
@@ -37,7 +37,12 @@ Last updated: 2025-11-24 (Phase 6 agent run).
 | Business Director scan + task queue | `/business-director/*` |
 | Dashboard: analytics, inventory, system health | `apps/web/src/app/dashboard/*` |
 
-**Test result (local)**: see CI after push — includes `test_materials_forecast.py`.
+| Production gates (JWT/admin password) | `app/security/startup.py` |
+| Rate limits + security headers | `slowapi` + middleware |
+| `/health` + `/ready` | `app/routers/health.py` |
+| Docker images + prod compose | `apps/*/Dockerfile`, `docker-compose.prod.yml` |
+
+**Test result (local)**: 31 passed, 1 skipped (integration); CI runs Postgres smoke job.
 
 ## Partial / scaffold
 

@@ -23,6 +23,42 @@ jobs:
         working-directory: apps/api
         run: pytest -q
 
+  api-integration:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: rmd
+          POSTGRES_PASSWORD: rmd_ci_password
+          POSTGRES_DB: revive_my_drive
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U rmd -d revive_my_drive"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql+asyncpg://rmd:rmd_ci_password@localhost:5432/revive_my_drive
+      SYNC_DATABASE_URL: postgresql://rmd:rmd_ci_password@localhost:5432/revive_my_drive
+      JWT_SECRET: ci-integration-test-secret-at-least-thirty-two-chars
+      RUN_INTEGRATION_TESTS: "1"
+      ENVIRONMENT: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        working-directory: apps/api
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Integration smoke
+        working-directory: apps/api
+        run: pytest -q tests/test_smoke_integration.py
+
   web-build:
     runs-on: ubuntu-latest
     steps:
