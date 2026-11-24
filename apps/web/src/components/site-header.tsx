@@ -17,44 +17,53 @@ export function SiteHeader() {
   const [open, setOpen] = useState(false);
 
   return (
-    <header className="sticky top-0 z-40 border-b border-stone-line/80 bg-stone-wash/95 backdrop-blur-md">
-      <div className="site-container flex items-center justify-between gap-4 py-4">
-        <Link href="/" className="group">
-          <span className="font-display text-xl font-semibold tracking-tight text-asphalt">
-            Revive My Drive
+    <header className="sticky top-0 z-40 border-b border-stone-line/90 bg-stone-wash/97 shadow-[0_1px_0_rgba(26,31,30,0.04)] backdrop-blur-md">
+      <div className="h-1 bg-gradient-to-r from-restore-green via-restore-dark to-asphalt" aria-hidden />
+      <div className="site-container flex items-center justify-between gap-4 py-3.5 md:py-4">
+        <Link href="/" className="group flex items-center gap-3">
+          <span
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-asphalt font-display text-lg font-semibold text-white shadow-sm"
+            aria-hidden
+          >
+            R
           </span>
-          <span className="mt-0.5 block text-[11px] uppercase tracking-[0.18em] text-asphalt/60">
-            Surface restoration · North West
+          <span>
+            <span className="block font-display text-lg font-semibold tracking-tight text-asphalt md:text-xl">
+              Revive My Drive
+            </span>
+            <span className="mt-0.5 block text-[10px] font-semibold uppercase tracking-[0.22em] text-asphalt/55">
+              Surface restoration · North West
+            </span>
           </span>
         </Link>
 
-        <nav className="hidden items-center gap-8 lg:flex" aria-label="Primary">
+        <nav className="hidden items-center gap-7 xl:flex" aria-label="Primary">
           {nav.map((item) => (
             <Link
               key={item.href}
               href={item.href}
-              className={`text-sm font-medium transition ${
-                pathname.startsWith(item.href) ? "text-restore-dark" : "text-asphalt/75 hover:text-asphalt"
+              className={`text-sm font-medium tracking-tight transition ${
+                pathname.startsWith(item.href) ? "text-restore-dark" : "text-asphalt/72 hover:text-asphalt"
               }`}
             >
               {item.label}
             </Link>
           ))}
-          <Link href="/dashboard" className="text-sm font-medium text-asphalt/60 hover:text-asphalt">
+          <Link href="/dashboard" className="text-sm font-medium text-asphalt/55 hover:text-asphalt">
             Business login
           </Link>
-          <Link href="/quote" className="btn-primary px-5 py-2.5">
+          <Link href="/quote" className="btn-primary px-5 py-2.5 text-sm">
             Get instant quote
           </Link>
         </nav>
 
-        <div className="flex items-center gap-2 lg:hidden">
-          <Link href="/quote" className="btn-primary px-4 py-2.5 text-xs">
+        <div className="flex items-center gap-2 xl:hidden">
+          <Link href="/quote" className="btn-primary px-3.5 py-2 text-xs">
             Quote
           </Link>
           <button
             type="button"
-            className="rounded border border-stone-line px-3 py-2 text-sm"
+            className="rounded-md border border-stone-line bg-white px-3 py-2 text-sm font-medium text-asphalt"
             aria-expanded={open}
             onClick={() => setOpen(!open)}
           >
@@ -62,24 +71,28 @@ export function SiteHeader() {
           </button>
         </div>
       </div>
-      {open && (
-        <nav className="border-t border-stone-line bg-white px-4 py-4 lg:hidden" aria-label="Mobile">
+      {open ? (
+        <nav className="border-t border-stone-line bg-white px-4 py-4 xl:hidden" aria-label="Mobile">
           <ul className="space-y-3">
             {nav.map((item) => (
               <li key={item.href}>
-                <Link href={item.href} className="block text-base font-medium" onClick={() => setOpen(false)}>
+                <Link
+                  href={item.href}
+                  className="block text-base font-medium text-asphalt"
+                  onClick={() => setOpen(false)}
+                >
                   {item.label}
                 </Link>
               </li>
             ))}
             <li>
-              <Link href="/contact" onClick={() => setOpen(false)}>
+              <Link href="/contact" className="block text-base font-medium" onClick={() => setOpen(false)}>
                 Contact
               </Link>
             </li>
           </ul>
         </nav>
-      )}
+      ) : null}
     </header>
   );
 }

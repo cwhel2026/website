@@ -12,11 +12,28 @@ type Props = {
   caption: string;
 };
 
+function SlideImage({ asset, sizes }: { asset: MediaAsset; sizes: string }) {
+  return (
+    <picture className="absolute inset-0 block">
+      {asset.srcAvif ? <source srcSet={asset.srcAvif} type="image/avif" /> : null}
+      <source srcSet={asset.srcWebp} type="image/webp" />
+      <Image
+        src={asset.srcWebp}
+        alt={asset.alt}
+        fill
+        className="object-cover object-center"
+        sizes={sizes}
+        priority
+      />
+    </picture>
+  );
+}
+
 export function BeforeAfterSlider({
   before,
   after,
-  beforeLabel = "Before (stock illustration)",
-  afterLabel = "After (stock illustration)",
+  beforeLabel = "Before (reference)",
+  afterLabel = "After (illustrative)",
   caption,
 }: Props) {
   const [pct, setPct] = useState(50);
@@ -26,6 +43,8 @@ export function BeforeAfterSlider({
     const x = Math.min(Math.max(clientX - rect.left, 0), rect.width);
     setPct((x / rect.width) * 100);
   }, []);
+
+  const sizes = "(max-width: 768px) 100vw, 560px";
 
   return (
     <figure className="space-y-3">
@@ -49,27 +68,13 @@ export function BeforeAfterSlider({
           }
         }}
       >
-        <Image
-          src={before.src}
-          alt={before.alt}
-          fill
-          className="object-cover"
-          sizes="(max-width: 768px) 100vw, 560px"
-          priority
-        />
+        <SlideImage asset={before} sizes={sizes} />
         <div
           className="absolute inset-0"
           style={{ clipPath: `inset(0 ${100 - pct}% 0 0)` }}
           aria-hidden
         >
-          <Image
-            src={after.src}
-            alt={after.alt}
-            fill
-            className="object-cover"
-            sizes="(max-width: 768px) 100vw, 560px"
-            priority
-          />
+          <SlideImage asset={after} sizes={sizes} />
         </div>
         <div
           className="absolute bottom-0 top-0 z-10 w-1 -translate-x-1/2 bg-white shadow-lg"

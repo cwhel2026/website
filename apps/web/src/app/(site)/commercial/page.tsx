@@ -2,7 +2,9 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { StockImage } from "@/components/site/stock-image";
 import { apiPost } from "@/lib/api";
+import { MEDIA } from "@/lib/media-assets";
 
 export default function CommercialPage() {
   const [status, setStatus] = useState<"idle" | "loading" | "ok" | "err">("idle");
@@ -33,10 +35,17 @@ export default function CommercialPage() {
     <div className="site-container py-16 md:py-24">
       <p className="section-eyebrow">Commercial restoration</p>
       <h1 className="mt-2 font-display text-4xl font-semibold text-asphalt">Partner with Revive My Drive</h1>
-      <p className="mt-4 max-w-2xl text-asphalt/75">
+      <p className="mt-4 max-w-2xl text-lg leading-relaxed text-asphalt/75">
         Car parks, forecourts, retail parks, industrial estates, hotels and managing agents — surface
         restoration and maintenance enquiries routed to your commercial CRM pipeline.
       </p>
+
+      <div className="mt-8 overflow-hidden rounded-lg border border-stone-line shadow-sm">
+        <StockImage asset={MEDIA.services["commercial-car-parks"]} aspect="aspect-[21/9]" sizes="100vw" />
+        <p className="border-t border-stone-line bg-stone-wash px-4 py-2 text-xs text-asphalt/60">
+          Licensed UK reference photo — not a completed Revive My Drive commercial project.
+        </p>
+      </div>
 
       <ul className="mt-8 grid gap-3 sm:grid-cols-2 text-sm text-asphalt/80">
         {["Car park re-colouring", "Forecourt restoration", "Scheduled cleaning", "Targeted repairs"].map((i) => (

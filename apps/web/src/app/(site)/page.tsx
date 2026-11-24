@@ -48,24 +48,29 @@ export default function HomePage() {
       <section className="site-container py-20">
         <p className="section-eyebrow">Services</p>
         <h2 className="mt-2 font-display text-3xl font-semibold text-asphalt">Crafted surface restoration</h2>
-        <div className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="mt-8 flex gap-4 overflow-x-auto pb-2 snap-x snap-mandatory [-ms-overflow-style:none] [scrollbar-width:none] sm:mt-10 sm:grid sm:grid-cols-2 sm:gap-6 sm:overflow-visible sm:pb-0 lg:grid-cols-3 [&::-webkit-scrollbar]:hidden">
           {SERVICE_CARDS.map((s) => (
             <article
               key={s.slug}
-              className="group flex flex-col overflow-hidden rounded-lg border border-stone-line bg-white shadow-sm transition hover:shadow-lift"
+              className="group flex min-w-[78vw] max-w-[78vw] snap-start flex-col overflow-hidden rounded-lg border border-stone-line bg-white shadow-sm transition hover:shadow-lift sm:min-w-0 sm:max-w-none"
             >
               {(() => {
                 const img = serviceMedia(s.slug);
                 return img ? (
-                  <StockImage asset={img} className="rounded-t-lg" sizes="(max-width: 640px) 100vw, 33vw" />
+                  <StockImage
+                    asset={img}
+                    aspect="aspect-[16/10]"
+                    className="rounded-t-lg"
+                    sizes="(max-width: 640px) 78vw, 33vw"
+                  />
                 ) : (
-                  <div className="aspect-[4/3] bg-asphalt-900" role="img" aria-label={`${s.name} — image pending`} />
+                  <PendingServiceImage name={s.name} />
                 );
               })()}
-              <div className="flex flex-1 flex-col p-6">
-                <h3 className="font-display text-xl font-semibold text-asphalt">{s.name}</h3>
-                <p className="mt-2 flex-1 text-sm leading-relaxed text-asphalt/70">{s.blurb}</p>
-                <Link href={s.href} className="mt-4 text-sm font-semibold text-restore-dark hover:underline">
+              <div className="flex flex-1 flex-col p-4 sm:p-5">
+                <h3 className="font-display text-lg font-semibold text-asphalt sm:text-xl">{s.name}</h3>
+                <p className="mt-1.5 line-clamp-3 flex-1 text-sm leading-relaxed text-asphalt/70">{s.blurb}</p>
+                <Link href={s.href} className="mt-3 text-sm font-semibold text-restore-dark hover:underline">
                   View service →
                 </Link>
               </div>
@@ -82,6 +87,19 @@ export default function HomePage() {
       <FaqSection />
       <FinalCta />
     </>
+  );
+}
+
+function PendingServiceImage({ name }: { name: string }) {
+  return (
+    <div
+      className="flex aspect-[16/10] flex-col items-center justify-center gap-1 bg-asphalt-900 px-4 text-center"
+      role="img"
+      aria-label={`${name} — verified photography pending`}
+    >
+      <span className="text-[10px] font-semibold uppercase tracking-widest text-restore-green">Asset pending</span>
+      <span className="text-xs text-stone-wash/75">Verified UK reference photo not yet approved</span>
+    </div>
   );
 }
 

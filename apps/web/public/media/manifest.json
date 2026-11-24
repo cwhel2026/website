@@ -1,43 +1,79 @@
 {
-  "license": "Unsplash License (https://unsplash.com/license) — stock photography for illustration only; not Revive My Drive completed projects.",
+  "version": 2,
+  "policy": "Only verified, service-accurate UK reference photography. No hotlinked stock URLs.",
+  "pending": [
+    {
+      "serviceSlug": "imprinted-concrete",
+      "reason": "No verified UK imprinted/pattern-imprinted concrete driveway reference approved for the public site yet."
+    }
+  ],
   "assets": [
-  {
-    "id": "hero-home",
-    "path": "/media/stock/hero-home.jpg",
-    "credit": "Unsplash",
-    "purpose": "Homepage hero atmosphere"
-  },
-  {
-    "id": "before-tarmac",
-    "path": "/media/stock/tarmac-worn.jpg",
-    "credit": "Unsplash",
-    "purpose": "Illustrative worn surface (before)"
-  },
-  {
-    "id": "after-driveway",
-    "path": "/media/stock/driveway-refreshed.jpg",
-    "credit": "Unsplash",
-    "purpose": "Illustrative refreshed residential drive (after)"
-  },
-  {
-    "id": "block-paving",
-    "path": "/media/stock/block-paving.jpg",
-    "credit": "Unsplash"
-  },
-  {
-    "id": "pattern-concrete",
-    "path": "/media/stock/pattern-concrete.jpg",
-    "credit": "Unsplash"
-  },
-  {
-    "id": "commercial-lot",
-    "path": "/media/stock/commercial-lot.jpg",
-    "credit": "Unsplash"
-  }
-],
-  "required_owned_assets": [
-    "Verified before-and-after pairs from completed jobs (territory + consent on file)",
-    "Service-specific hero images per catalogue slug",
-    "Regional landing photography where used on /areas pages"
+    {
+      "id": "hero-home",
+      "paths": { "webp": "/media/approved/hero-home.webp", "avif": "/media/approved/hero-home.avif" },
+      "subject": "UK residential tarmac driveway",
+      "credit": "Phil Catterall",
+      "license": "CC BY-SA 2.0",
+      "source": "https://www.geograph.org.uk/photo/409433",
+      "verified": true
+    },
+    {
+      "id": "ba-before",
+      "paths": { "webp": "/media/approved/ba-before.webp", "avif": "/media/approved/ba-before.avif" },
+      "subject": "Cracked UK residential tarmac (before reference)",
+      "credit": "Simon Carey",
+      "license": "CC BY-SA 2.0",
+      "source": "https://www.geograph.org.uk/photo/276811",
+      "verified": true
+    },
+    {
+      "id": "ba-after",
+      "paths": { "webp": "/media/approved/ba-after.webp", "avif": "/media/approved/ba-after.avif" },
+      "subject": "Illustrative refresh — derivative of ba-before",
+      "credit": "Derivative treatment; original Simon Carey / Geograph 276811",
+      "license": "CC BY-SA 2.0",
+      "illustrative": true,
+      "verified": true
+    },
+    {
+      "id": "tarmac-surface",
+      "paths": { "webp": "/media/approved/tarmac-surface.webp", "avif": "/media/approved/tarmac-surface.avif" },
+      "credit": "Phil Catterall",
+      "license": "CC BY-SA 2.0",
+      "source": "https://www.geograph.org.uk/photo/409433",
+      "verified": true
+    },
+    {
+      "id": "block-paving",
+      "paths": { "webp": "/media/approved/block-paving.webp", "avif": "/media/approved/block-paving.avif" },
+      "credit": "Robin Stott",
+      "license": "CC BY-SA 2.0",
+      "source": "https://www.geograph.org.uk/photo/4239736",
+      "verified": true
+    },
+    {
+      "id": "tarmac-wear",
+      "paths": { "webp": "/media/approved/tarmac-wear.webp", "avif": "/media/approved/tarmac-wear.avif" },
+      "credit": "Maigheach-gheal",
+      "license": "CC BY-SA 2.0",
+      "source": "https://www.geograph.org.uk/photo/2435499",
+      "verified": true
+    },
+    {
+      "id": "commercial-lot",
+      "paths": { "webp": "/media/approved/commercial-lot.webp", "avif": "/media/approved/commercial-lot.avif" },
+      "credit": "Snowmanradio",
+      "license": "CC BY-SA 3.0",
+      "source": "https://www.geograph.org.uk/photo/610171",
+      "verified": true
+    }
+  ],
+  "retired": [
+    "/media/stock/hero-home.jpg",
+    "/media/stock/tarmac-worn.jpg",
+    "/media/stock/driveway-refreshed.jpg",
+    "/media/stock/block-paving.jpg",
+    "/media/stock/pattern-concrete.jpg",
+    "/media/stock/commercial-lot.jpg"
   ]
 }

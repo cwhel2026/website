@@ -1,0 +1,3 @@
+/source/*.jpg
+/source/*.JPG
+!/source/README.md

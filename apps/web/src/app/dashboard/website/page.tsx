@@ -3,10 +3,10 @@
 import Link from "next/link";
 
 const REQUIRED_ASSETS = [
-  { id: "hero-home", detail: "Homepage hero (21:9, ≥1600px wide)", status: "Stock (Unsplash) — replace with owned creative" },
-  { id: "before-after-pair", detail: "Verified before/after pair with customer consent", status: "Stock placeholder slider only" },
-  { id: "per-service", detail: "One hero image per service slug in catalogue", status: "Partial stock coverage" },
-  { id: "regional", detail: "Optional imagery for /areas pages", status: "Not started" },
+  { id: "hero-home", detail: "Homepage hero (21:9, ≥1600px wide)", status: "Geograph reference (CC BY-SA) — WebP/AVIF" },
+  { id: "before-after-pair", detail: "Verified before/after pair with customer consent", status: "Same-frame illustrative pair until owned project" },
+  { id: "per-service", detail: "One hero image per service slug in catalogue", status: "4/5 verified — imprinted concrete pending" },
+  { id: "regional", detail: "Optional imagery for /areas pages", status: "Text-only (no unrelated stock)" },
 ];
 
 export default function WebsiteDashboardPage() {
@@ -15,8 +15,8 @@ export default function WebsiteDashboardPage() {
       <h1 className="text-2xl font-semibold text-asphalt">Website &amp; marketing</h1>
       <p className="mt-2 text-sm text-asphalt/70">
         Public imagery is configured in <code className="text-xs">apps/web/src/lib/media-assets.ts</code> with
-        committed files under <code className="text-xs">apps/web/public/media/</code>. Stock assets are labelled on the
-        live site and must not be presented as completed projects.
+        committed files under <code className="text-xs">apps/web/public/media/approved/</code>. Reference photos are
+        labelled on the live site and must not be presented as completed projects.
       </p>
 
       <section className="mt-8 rounded-lg border border-stone-line bg-white p-6">
@@ -42,7 +42,7 @@ export default function WebsiteDashboardPage() {
       </section>
 
       <dl className="mt-8 grid gap-4 text-sm md:grid-cols-2">
-        <Item title="Live public site" detail="Stock photography, quote funnel (provisional + submit)" status="Implemented — verify on Railway" />
+        <Item title="Live public site" detail="Verified reference photography, quote funnel (provisional + submit)" status="Implemented — verify on Railway" />
         <Item title="Quotation funnel" detail="No CRM records until customer submit" status="Implemented" />
         <Item title="Media library" detail="Manifest + dashboard checklist" status="Scaffolded" />
         <Item title="Landing page builder" detail="Dashboard editor + approval queue" status="Not started" />
