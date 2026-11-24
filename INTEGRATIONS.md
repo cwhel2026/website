@@ -10,7 +10,7 @@
 | Address lookup | Not connected | Licensed provider TBD |
 | FreeAgent | **Unverified** | OAuth/docs not completed |
 | Mettle | **Unverified** | Via FreeAgent feed only |
-| Meta / Google Ads | Not connected | Supervised mode Phase 4 |
+| Meta / Google Ads | Simulation only (not configured) | Ad spend requires approval; no live API calls |
 | Telegram | Webhook stub (503 if unset) | Admin ID allowlist in env |
 | OpenAI | Not connected | Optional future layer on tools |
 | SMS / WhatsApp | Not connected | Phase 3 |
