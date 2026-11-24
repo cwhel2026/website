@@ -31,9 +31,9 @@ Last updated: 2025-11-24 (Phase 2 agent run).
 | AI photo assessment | Not built |
 | Dashboard overview metrics | Empty until real data; no fabricated stats |
 
-## Not started (Phases 2–8)
+## Not started (remaining Phases 2–8)
 
-Scheduling, weather, OR-Tools, Google Calendar, Telegram, marketing APIs, FreeAgent, Mettle, inventory, agents, field mobile app, E2E simulations, production deploy.
+OR-Tools, Google Calendar, live weather providers, Telegram, marketing APIs, FreeAgent, Mettle, inventory, AI agents, field photo uploads and offline queue, E2E DB tests, production deploy.
 
 ## Known defects / tech debt
 
