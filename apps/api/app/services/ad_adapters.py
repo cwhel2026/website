@@ -28,6 +28,18 @@ def integration_state_for(platform: AdPlatform) -> IntegrationState:
     return IntegrationState.NOT_CONFIGURED
 
 
+def fetch_campaign_metrics(campaign: RegionalCampaign) -> AdapterResult:
+    """Reporting path — returns honest not-connected until verified API access."""
+    state = integration_state_for(campaign.platform)
+    if state == IntegrationState.NOT_CONFIGURED:
+        return AdapterResult(False, False, "Integration not configured", None)
+    return AdapterResult(
+        False,
+        False,
+        "Live reporting not implemented — connect platform and verify OAuth scopes.",
+    )
+
+
 def launch_campaign(campaign: RegionalCampaign, spend_cap: Decimal) -> AdapterResult:
     """Never calls external APIs unless explicitly verified connected — simulation by default."""
     if campaign.simulation_only:

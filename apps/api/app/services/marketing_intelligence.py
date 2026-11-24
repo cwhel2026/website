@@ -1,18 +1,17 @@
 import json
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
-from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.jobs import Appointment
 from app.models.marketing import AdPlatform, RegionalCampaign
-from app.models.territory import Territory
+from app.services.marketing.capacity_engine import territory_demand_insights
 
 
 @dataclass
 class TerritoryCapacityInsight:
+    """Legacy shape for existing routes — backed by global capacity engine."""
+
     territory_id: str
     territory_code: str
     territory_name: str
@@ -20,52 +19,26 @@ class TerritoryCapacityInsight:
     spare_capacity_score: int
     recommendation: str
     suggest_advertising: bool
+    global_spare_slots: int = 0
+    suggested_daily_budget_gbp: float = 0.0
 
 
 async def territory_capacity_insights(db: AsyncSession) -> list[TerritoryCapacityInsight]:
-    now = datetime.now(UTC)
-    window_end = now + timedelta(days=14)
-    territories = (await db.execute(select(Territory).where(Territory.is_active.is_(True)))).scalars().all()
+    global_cap, territories = await territory_demand_insights(db)
     insights: list[TerritoryCapacityInsight] = []
-
-    from app.models.jobs import Job
-
     for t in territories:
-        count_result = await db.execute(
-            select(func.count())
-            .select_from(Appointment)
-            .join(Job)
-            .where(
-                Job.territory_id == t.id,
-                Appointment.scheduled_start >= now,
-                Appointment.scheduled_start < window_end,
-            )
-        )
-        appt_count = count_result.scalar() or 0
-        # Heuristic: owner solo ~10 slots per 14 days practical
-        max_slots = 12
-        spare = max(0, max_slots - appt_count)
-        score = int((spare / max_slots) * 100)
-        suggest = spare >= 4
-        if appt_count >= max_slots:
-            rec = "Pause or reduce campaigns — diary near capacity."
-            suggest = False
-        elif spare >= 6:
-            rec = "Good window for targeted regional advertising."
-        elif spare >= 2:
-            rec = "Limited capacity — small test budget only."
-        else:
-            rec = "Low spare capacity — avoid increasing demand."
-
+        score = int((t.allocated_spare_slots / max(global_cap.spare_slots, 1)) * 100) if t.allocated_spare_slots else 0
         insights.append(
             TerritoryCapacityInsight(
-                territory_id=str(t.id),
-                territory_code=t.code,
-                territory_name=t.name,
-                appointments_next_14_days=appt_count,
+                territory_id=t.territory_id,
+                territory_code=t.territory_code,
+                territory_name=t.territory_name,
+                appointments_next_14_days=t.appointments_next_14_days,
                 spare_capacity_score=score,
-                recommendation=rec,
-                suggest_advertising=suggest,
+                recommendation=t.recommendation,
+                suggest_advertising=t.recommend_advertising,
+                global_spare_slots=global_cap.spare_slots,
+                suggested_daily_budget_gbp=float(t.suggested_daily_budget_gbp),
             )
         )
     return insights
@@ -76,17 +49,19 @@ def propose_regional_campaigns(insights: list[TerritoryCapacityInsight]) -> list
     for i in insights:
         if not i.suggest_advertising:
             continue
+        budget = i.suggested_daily_budget_gbp or (15.0 if i.spare_capacity_score >= 40 else 8.0)
         proposals.append(
             {
                 "territory_code": i.territory_code,
                 "territory_name": i.territory_name,
                 "platform": AdPlatform.META.value,
-                "suggested_daily_budget_gbp": 15.0 if i.spare_capacity_score >= 50 else 8.0,
+                "suggested_daily_budget_gbp": budget,
                 "headline": f"Driveway restoration in {i.territory_name}",
-                "service_slug": "tarmac-driveway-restoration",
+                "service_slug": "tarmac-restoration",
                 "simulation_only": True,
                 "rationale": i.recommendation,
                 "spare_capacity_score": i.spare_capacity_score,
+                "global_spare_slots": i.global_spare_slots,
             }
         )
     return proposals

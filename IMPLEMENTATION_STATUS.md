@@ -21,12 +21,24 @@ Status legend: **Not started** · **Scaffolded** · **Implemented** · **Tested 
 
 **Tests executed (local):** `pytest apps/api/tests/test_quotation_workflow.py` (3 passed); full API suite pending CI; `npm run build` for web.
 
-## Priorities 4–10 (not started in this run)
+## Stage 2 (this run): AI assistant + marketing foundations
+
+| Feature | Status | Evidence / limits |
+|---------|--------|-------------------|
+| UK timezone (`Europe/London`) for assistant | **Tested locally** | `uk_time.py`, `tool_jobs_today` |
+| Today vs tomorrow intent fix | **Tested locally** | `deterministic_reply.py`, `test_assistant_today` |
+| Tool-enabled orchestrator + OpenAI adapter | **Implemented** | `services/ai/orchestrator.py`, `openai_provider.py`; needs `OPENAI_API_KEY` |
+| AI spend limits + usage audit table | **Implemented** | `ai_usage.py`, `usage_limits.py` |
+| Global capacity marketing engine | **Tested locally** | `capacity_engine.py`, `GET /marketing/capacity` |
+| Integration status (honest blockers) | **Implemented** | `integration_registry.py`, `GET /marketing/platform-status` |
+| Marketing director weekly plan | **Implemented** | `director.py`, `GET /marketing/director/weekly-plan` |
+| Research findings with source metadata | **Implemented** | `marketing_research.py`, `POST /marketing/research` |
+| Live Meta/Google campaign APIs | **Blocked** | Credentials + verified OAuth not connected |
+
+## Priorities 6–10 (not started in this run)
 
 | Area | Status | Notes |
 |------|--------|-------|
-| Genuine AI assistant (OpenAI/tools) | **Scaffolded** | `assistant_brain.py` regex-based |
-| Marketing intelligence (live APIs) | **Scaffolded** | Fixed slot assumptions; adapters not live |
 | Live UK weather provider | **Not started** | `weather_engine.py` simulated |
 | Celery/Redis automation workers | **Not started** | |
 | FreeAgent / Mettle OAuth sync | **Scaffolded** | FreeAgent returns not-implemented |
