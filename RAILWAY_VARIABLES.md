@@ -12,7 +12,10 @@ If you put **Telegram**, **database**, or **JWT** variables on the **website (we
 
 Plus **Postgres** and **Redis** plugins.
 
-If you only have one service today (the website), **add an API service**: New service → same repo → root `apps/api` → deploy from `main`.
+If you only have one service today (the website), either:
+
+- **Option A (one URL, keep one service):** Use the **combined** image — see **[RAILWAY_COMBINED.md](./RAILWAY_COMBINED.md)** (repo root + `apps/combined/Dockerfile`).  
+- **Option B (recommended at scale):** **Add an API service**: New service → same repo → root `apps/api` → deploy from `main`.
 
 ---
 

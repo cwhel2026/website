@@ -1,0 +1,17 @@
+# Single-service Railway deploy (site + API + Telegram on one URL).
+#
+# Railway service settings:
+#   Root Directory:  (empty = repository root)
+#   Dockerfile path:   apps/combined/Dockerfile  (or set in UI to match)
+#
+# Variables on THIS service: all API + web vars (see RAILWAY_COMBINED.md).
+# PUBLIC_API_BASE_URL and NEXT_PUBLIC_API_URL = your public Railway URL (same host).
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "apps/combined/Dockerfile"
+watchPatterns = ["apps/web/**", "apps/api/**", "apps/combined/**"]
+
+[deploy]
+healthcheckPath = "/health"
+restartPolicyType = "ON_FAILURE"

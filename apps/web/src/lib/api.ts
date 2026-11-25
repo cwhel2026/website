@@ -1,4 +1,7 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+/** Empty = same origin (combined Railway service with Next.js → FastAPI proxy). */
+const API_URL = (
+  process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"
+).replace(/\/$/, "");
 
 export async function apiGet<T>(path: string, token?: string): Promise<T> {
   const res = await fetch(`${API_URL}${path}`, {
