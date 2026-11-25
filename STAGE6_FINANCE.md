@@ -1,94 +1,65 @@
 # Stage 6 — UK Ltd financial platform
 
-Architecture: **Mettle → FreeAgent → Revive AI Finance Director**. FreeAgent is authoritative; this platform adds onboarding, sync audit, planning tax constants, and (later phases) remuneration, receipts, and watchdog alerts.
+Architecture: **Mettle → FreeAgent → Revive AI Finance Director**. FreeAgent is authoritative; this platform adds onboarding, sync audit, planning tax constants, remuneration, receipts, and watchdog alerts.
 
-## Phase A (this PR) — implemented
+## Verification matrix (all phases)
 
-| Area | Status | Notes |
-|------|--------|-------|
-| Company profile + onboarding checklist | **Implemented** | `GET/PUT /api/v1/company/profile`, dashboard **Company setup** |
-| Encrypted OAuth tokens | **Implemented** | `FINANCE_TOKEN_ENCRYPTION_KEY` or derived from `JWT_SECRET` |
-| FreeAgent bank transaction import | **Implemented** | Paginated `/v2/bank_accounts` + `/bank_transactions`; duplicate skip |
-| Invoice sync (existing) | **Implemented** | Matched local invoice rows only |
-| Full sync endpoint | **Implemented** | `POST /finance/freeagent/sync/full` |
-| Sync audit | **Implemented** | `finance_sync_runs` table |
-| Scheduled sync | **Implemented** | Celery `rmd.freeagent_sync_incremental` (05:20 UK) |
-| Corporation tax planning stub | **Implemented** | `GET /finance/tax/corporation-estimate` — **provisional**, no marginal relief |
-| Alembic 0004 | **Implemented** | Company + sync tables |
+| Phase | PR | Migrations | Tested locally |
+|-------|-----|------------|----------------|
+| A Onboarding + FreeAgent | [#20](https://github.com/cwhel2026/website/pull/20) | 0004 | Yes |
+| B Bookkeeping + receipts | [#21](https://github.com/cwhel2026/website/pull/21) | 0005 | Yes |
+| C Tax + compliance | [#23](https://github.com/cwhel2026/website/pull/23) | 0006 | Yes |
+| D Remuneration | [#24](https://github.com/cwhel2026/website/pull/24) | 0007 | Yes |
+| E Watchdog + Telegram finance | [#25](https://github.com/cwhel2026/website/pull/25) | — | Yes |
+| F Accountant + exports | [#26](https://github.com/cwhel2026/website/pull/26) | 0008 | Yes |
 
-## Phase B (PR #21 stack) — intelligent bookkeeping
+**Production verified:** owner must merge stack, run migrations 0004–0008, set env vars, connect FreeAgent, and confirm Telegram/worker on API service.
 
-| Feature | Status |
-|---------|--------|
-| Rule-based transaction categorisation + confidence | Implemented |
-| Review queue approve/reject | Implemented |
-| Telegram receipt photos (FastAPI + forward from Next) | Implemented |
-| OpenAI vision OCR (optional) | Implemented when `OPENAI_API_KEY` set |
-| Receipt ↔ bank matching + pending queue | Implemented |
-| Mobile **Money hub** dashboard | Implemented |
-| Migration **0005** | Required |
+## Phase summaries
 
-Env: `FINANCE_RECEIPTS_DIR` (persistent volume), `FINANCE_TELEGRAM_INGEST_KEY` (for Next→API receipt forward).
+**A:** Company setup wizard, encrypted FreeAgent tokens, bank sync audit, corporation tax stub.
 
-### Generate `FINANCE_TOKEN_ENCRYPTION_KEY`
+**B:** Categorisation, review queue, Telegram receipt photos, Money hub, `generate_finance_token_encryption_key.py`.
+
+**C:** Versioned tax rules, marginal relief, VAT monitor, tax reserves, compliance calendar, Tax centre UI.
+
+**D:** Salary/dividend optimiser, dividend proposals (approval only), director's loan, Director pay UI.
+
+**E:** Financial watchdog, cash flow forecast, territory profitability API, Telegram finance answers, daily alerts.
+
+**F:** `accountant` role, CSV exports, accountant review/tax summary endpoints.
+
+## Generate `FINANCE_TOKEN_ENCRYPTION_KEY`
 
 ```bash
 python apps/api/scripts/generate_finance_token_encryption_key.py
 ```
 
-Paste the single line into Railway on the **API** service (minimum 16 characters; script emits a URL-safe 48-byte token).
-
-## Phase C (stack) — tax engine & compliance
-
-| Feature | Status |
-|---------|--------|
-| Versioned rules (`rules_uk_ltd` draft 2) | Implemented |
-| Corporation tax + marginal relief | Implemented |
-| Personal income tax & dividend tax bands | Implemented |
-| VAT rolling turnover monitor | Implemented |
-| Tax reserve snapshots (provisional flag) | Implemented |
-| Compliance calendar with plain English | Implemented |
-| Tax centre API + dashboard | Implemented |
-| Migration **0006** | Required |
-
-## Phase D–F — in progress
-
-Intelligent bookkeeping, Telegram receipts, versioned tax engine (VAT, PAYE, dividends), remuneration optimiser, director's loan, cash flow, job profitability, accountant role, financial dashboard sections, automated reports.
+Paste the single line into Railway on the **API** service. The vault derives a Fernet key via SHA-256 of this material (minimum 16 characters; script prints a URL-safe 48-byte token).
 
 ## Credentials / env
 
-| Variable | Required | Purpose |
-|----------|----------|---------|
-| `FREEAGENT_CLIENT_ID` | For OAuth | FreeAgent app |
-| `FREEAGENT_CLIENT_SECRET` | For OAuth | |
-| `FREEAGENT_REDIRECT_URI` | For OAuth | Must match FreeAgent app settings |
-| `FINANCE_TOKEN_ENCRYPTION_KEY` | Recommended in production | Fernet encryption for stored tokens |
-| `DATABASE_MIGRATIONS_MANAGED` | Production | Run Alembic **0004** before deploy |
-| FastAPI service | Required | Finance API not available on web-only Railway deploy |
+| Variable | Service | Purpose |
+|----------|---------|---------|
+| `FREEAGENT_*` | API | OAuth |
+| `FINANCE_TOKEN_ENCRYPTION_KEY` | API | Token encryption |
+| `FINANCE_RECEIPTS_DIR` | API | Persistent receipt storage |
+| `FINANCE_TELEGRAM_INGEST_KEY` | API + website | Next.js receipt forward |
+| `API_INTERNAL_URL` | website | Forward Telegram to FastAPI |
+| `OPENAI_API_KEY` | API | Receipt OCR (optional) |
+| `DATABASE_MIGRATIONS_MANAGED` | API | Alembic 0004–0008 |
 
 ## FreeAgent API — verified in code
 
-| Endpoint | Use |
-|----------|-----|
-| OAuth authorize + token | Connection |
-| `GET /v2/company` | Organisation name |
-| `GET /v2/invoices` | Invoice sync |
-| `GET /v2/bank_accounts` | Bank list |
-| `GET /v2/bank_transactions` | Paginated import |
-
-Not yet integrated: bills, expenses, attachments, contacts (enums reserved in `finance_sync_runs`).
+OAuth, company, invoices, bank accounts, bank transactions. Bills/expenses/attachments: not yet integrated — documented in code.
 
 ## Professional review required
 
-- Initial remuneration strategy (salary vs dividends)
-- VAT scheme selection and registration timing
-- Corporation tax returns and filings
-- Any figure marked `requires_accountant_review: true`
+Remuneration strategy, VAT scheme, corporation tax filings, dividend legality, any output with `requires_accountant_review` or `provisional: true`.
 
-## Owner setup
+## Known limits
 
-1. Apply migration `20251125_0004`.
-2. Set FreeAgent OAuth env on the **API** service (or use combined Docker image).
-3. Open **Company setup** and enter Companies House number and dates.
-4. Connect FreeAgent from **Finance**, then run **Full sync**.
-5. Set `FINANCE_TOKEN_ENCRYPTION_KEY` before reconnecting if tokens were stored unencrypted in dev.
+- Not HMRC filing software; no automatic bank payments.
+- Dividends blocked when distributable profit &lt; cash.
+- Web-only deploy: finance APIs and receipt OCR require API or combined image.
+- FreeAgent remains authoritative — local expenses are planning/review layers unless accountant confirms.

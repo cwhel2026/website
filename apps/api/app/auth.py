@@ -63,3 +63,11 @@ async def get_current_admin(user: Annotated[User, Depends(get_current_user)]) ->
     if user.role.value not in ("admin", "owner"):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     return user
+
+
+async def get_current_accountant_or_admin(
+    user: Annotated[User, Depends(get_current_user)],
+) -> User:
+    if user.role.value not in ("admin", "owner", "accountant"):
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+    return user

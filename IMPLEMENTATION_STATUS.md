@@ -15,7 +15,8 @@ Status legend: **Not started** · **Scaffolded** · **Implemented** · **Tested 
 | Scheduled FreeAgent sync | **Implemented** | `rmd.freeagent_sync_incremental` |
 | Corporation tax planning stub | **Implemented** | `tax_engine/` — provisional rates only |
 | Intelligent bookkeeping Phase B | **Tested locally** | PR stack — bookkeeping, Telegram receipts, Money hub |
-| Salary/dividend optimiser, tax reserves, Phases C–F | **In progress** | `STAGE6_FINANCE.md` |
+| Phases C–F (PR stack #23–#26) | **Tested locally** | See `STAGE6_FINANCE.md` verification matrix |
+| Stage 6 production sign-off | **Blocked** | Merge PRs #20→#26, run migrations 0004–0008, set env keys |
 
 ## Stage 5 (in progress)
 
