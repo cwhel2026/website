@@ -32,7 +32,11 @@ Create **two** services from the same GitHub repo (`cwhel2026/website`), branch 
 |---------|---------------------------|--------|
 | `web` | `apps/web` | Dockerfile → `node server.js` |
 | `api` | `apps/api` | Dockerfile → uvicorn on `$PORT` |
+| `worker` | `apps/api` | Same image → `celery -A app.worker.celery_app worker --beat` |
 | `postgres` | (plugin) | Enable PostGIS when needed |
+| `redis` | (plugin) | Stage 3 workers + beat |
+
+**Stage 3 (Redis + Celery):** see **[RAILWAY_STAGE3.md](./RAILWAY_STAGE3.md)** for a short Railway checklist (`REDIS_URL`, `SYNC_DATABASE_URL`, worker start command).
 
 ### Fix “repo only contains README.md” (Railpack)
 
