@@ -26,6 +26,7 @@ from app.models.user import User
 from app.services.audit import record_audit
 from app.services.finance.csv_import import import_bank_csv
 from app.models.finance import FreeAgentConnectionState
+from app.services.finance.freeagent_sync import sync_all_freeagent, sync_bank_transactions_from_freeagent
 from app.services.finance.freeagent_adapter import (
     begin_oauth,
     complete_oauth,
@@ -34,6 +35,7 @@ from app.services.finance.freeagent_adapter import (
 )
 from app.services.finance.invoicing import create_invoice_from_quotation
 from app.services.finance.profitability import job_profitability, territory_profitability
+from app.services.tax_engine.corporation_tax import estimate_corporation_tax
 from app.services.finance.tax_estimates import estimate_personal_tax
 
 router = APIRouter(prefix="/finance", tags=["finance"])
@@ -319,3 +321,43 @@ async def freeagent_sync(
     )
     await db.commit()
     return result
+
+
+@router.post("/freeagent/sync/full")
+async def freeagent_sync_full(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    user: Annotated[User, Depends(get_current_admin)],
+) -> dict:
+    result = await sync_all_freeagent(db)
+    await record_audit(
+        db,
+        actor_type="user",
+        actor_id=str(user.id),
+        action="finance.freeagent.sync_full",
+        detail=result,
+    )
+    await db.commit()
+    return result
+
+
+@router.post("/freeagent/sync/bank")
+async def freeagent_sync_bank(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    user: Annotated[User, Depends(get_current_admin)],
+) -> dict:
+    result = await sync_bank_transactions_from_freeagent(db)
+    await db.commit()
+    return result
+
+
+@router.get("/tax/corporation-estimate")
+async def corporation_tax_estimate(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[User, Depends(get_current_admin)],
+    profit_gbp: float = 0,
+    small_profits_rate: bool = False,
+) -> dict:
+    from decimal import Decimal
+
+    estimate = estimate_corporation_tax(Decimal(str(profit_gbp)), uses_small_profits_rate=small_profits_rate)
+    return estimate

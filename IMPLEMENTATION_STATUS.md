@@ -1,8 +1,20 @@
 # Implementation status
 
-Last updated: 2025-11-25 (stage 5 in progress — safety + Telegram foundation).
+Last updated: 2025-11-25 (stage 6 Phase A — UK Ltd onboarding + FreeAgent sync).
 
 Status legend: **Not started** · **Scaffolded** · **Implemented** · **Tested locally** · **Integration verified** · **Production verified** · **Blocked**
+
+## Stage 6 Phase A (UK Ltd finance foundation)
+
+| Feature | Status | Evidence / limits |
+|---------|--------|-------------------|
+| Company profile + onboarding wizard API | **Tested locally** | `routers/company.py`, `services/company/onboarding.py` |
+| Company setup dashboard | **Implemented** | `dashboard/company-setup/page.tsx` |
+| Token encryption at rest | **Tested locally** | `token_vault.py`, `test_stage6_finance_phase_a.py` |
+| FreeAgent bank sync + audit | **Implemented** | `freeagent_sync.py`, migration **0004** |
+| Scheduled FreeAgent sync | **Implemented** | `rmd.freeagent_sync_incremental` |
+| Corporation tax planning stub | **Implemented** | `tax_engine/` — provisional rates only |
+| Salary/dividend optimiser, receipts, tax reserves | **Not started** | Phases B–F (`STAGE6_FINANCE.md`) |
 
 ## Stage 5 (in progress)
 

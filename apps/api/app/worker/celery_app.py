@@ -36,6 +36,10 @@ celery_app.conf.update(
             "task": "rmd.deliver_notification_outbox",
             "schedule": crontab(minute="*/2"),
         },
+        "freeagent-sync-daily": {
+            "task": "rmd.freeagent_sync_incremental",
+            "schedule": crontab(minute=20, hour=5),
+        },
     },
     timezone="Europe/London",
 )

@@ -54,6 +54,7 @@ class Settings(BaseSettings):
     freeagent_api_base: str = "https://api.freeagent.com"
     rate_limit_storage_redis: bool = False
     database_migrations_managed: bool = False
+    finance_token_encryption_key: str | None = None
 
     @property
     def telegram_admin_id_list(self) -> list[int]:

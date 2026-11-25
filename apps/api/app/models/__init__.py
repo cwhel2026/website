@@ -13,6 +13,8 @@ from app.models.marketing_experiment import MarketingExperiment
 from app.models.background_job import BackgroundJobRun, JobRunStatus
 from app.models.service import Service
 from app.models.territory import PostcodeDistrict, Territory, TerritoryLocality
+from app.models.company import CompanyOnboardingTask, CompanyProfile
+from app.models.finance_sync import FinanceSyncRun
 from app.models.user import User, UserRole
 
 __all__ = [

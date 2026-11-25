@@ -17,6 +17,7 @@ const nav = [
   { href: "/dashboard/advertising", label: "Advertising" },
   { href: "/dashboard/commercial-leads", label: "Commercial leads" },
   { href: "/dashboard/flyers", label: "Flyers" },
+  { href: "/dashboard/company-setup", label: "Company setup" },
   { href: "/dashboard/finance", label: "Finance" },
   { href: "/dashboard/invoices", label: "Invoices" },
   { href: "/dashboard/expenses", label: "Expenses" },

@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import Settings, get_settings
 from app.models.finance import FreeAgentConnection, FreeAgentConnectionState, Invoice
 from app.services.finance import freeagent_client
+from app.services.finance.token_vault import decrypt_token, encrypt_token
 
 
 @dataclass
@@ -46,7 +47,7 @@ async def freeagent_status(db: AsyncSession) -> FreeAgentStatus:
             False,
         )
 
-    if row and row.state == FreeAgentConnectionState.CONNECTED and row.access_token:
+    if row and row.state == FreeAgentConnectionState.CONNECTED and _clear_access_token(row):
         return FreeAgentStatus(
             FreeAgentConnectionState.CONNECTED,
             "Connected — invoice sync available.",
@@ -103,37 +104,57 @@ async def complete_oauth(db: AsyncSession, code: str, state: str) -> dict:
         await db.flush()
         raise
 
-    row.access_token = payload.get("access_token")
-    row.refresh_token = payload.get("refresh_token") or row.refresh_token
+    row.access_token = encrypt_token(payload.get("access_token"))
+    row.refresh_token = encrypt_token(
+        payload.get("refresh_token") or decrypt_token(row.refresh_token)
+    )
     row.token_expires_at = freeagent_client.token_expiry_from_payload(payload)
     row.oauth_state = None
     row.state = FreeAgentConnectionState.CONNECTED
-    if row.access_token:
-        row.organisation_name = await freeagent_client.fetch_company_name(settings, row.access_token)
+    clear_access = decrypt_token(row.access_token)
+    if clear_access:
+        row.organisation_name = await freeagent_client.fetch_company_name(settings, clear_access)
+    from app.services.company.onboarding import get_or_create_profile
+
+    profile = await get_or_create_profile(db)
+    profile.freeagent_configured = True
     row.last_error = None
     await db.flush()
     return {"state": row.state.value, "organisation_name": row.organisation_name}
 
 
+def _clear_access_token(row: FreeAgentConnection) -> str | None:
+    return decrypt_token(row.access_token)
+
+
+def _clear_refresh_token(row: FreeAgentConnection) -> str | None:
+    return decrypt_token(row.refresh_token)
+
+
 async def ensure_fresh_token(db: AsyncSession, row: FreeAgentConnection, settings: Settings) -> str:
-    if not row.access_token:
+    access = _clear_access_token(row)
+    if not access:
         raise ValueError("FreeAgent not connected")
     if row.token_expires_at and row.token_expires_at > datetime.now(UTC) + timedelta(minutes=2):
-        return row.access_token
-    if not row.refresh_token:
-        return row.access_token
+        return access
+    refresh = _clear_refresh_token(row)
+    if not refresh:
+        return access
     try:
-        payload = await freeagent_client.refresh_access_token(settings, row.refresh_token)
+        payload = await freeagent_client.refresh_access_token(settings, refresh)
     except httpx.HTTPError as exc:
         row.state = FreeAgentConnectionState.ERROR
         row.last_error = f"Token refresh failed: {exc}"
         await db.flush()
         raise
-    row.access_token = payload.get("access_token") or row.access_token
-    row.refresh_token = payload.get("refresh_token") or row.refresh_token
+    row.access_token = encrypt_token(payload.get("access_token")) or row.access_token
+    row.refresh_token = encrypt_token(payload.get("refresh_token") or refresh) or row.refresh_token
     row.token_expires_at = freeagent_client.token_expiry_from_payload(payload)
     await db.flush()
-    return row.access_token
+    access = _clear_access_token(row)
+    if not access:
+        raise ValueError("Token refresh produced empty access token")
+    return access
 
 
 def _freeagent_id_from_url(url: str | None) -> str | None:

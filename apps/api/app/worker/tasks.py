@@ -204,6 +204,37 @@ def morning_briefing(self) -> dict:
         session.close()
 
 
+@celery_app.task(name="rmd.freeagent_sync_incremental", bind=True)
+def freeagent_sync_incremental(self) -> dict:
+    session = SessionLocal()
+    today = datetime.now(UTC).date().isoformat()
+    run = start_run(
+        session,
+        "freeagent_sync_incremental",
+        dedupe_key=f"freeagent-sync:{today}",
+        worker_id=_worker_id(),
+    )
+    try:
+        from app.database import SessionLocal as AsyncSessionLocal
+        from app.services.finance.freeagent_sync import sync_all_freeagent
+
+        async def _sync():
+            async with AsyncSessionLocal() as adb:
+                result = await sync_all_freeagent(adb)
+                await adb.commit()
+                return result
+
+        result = asyncio.run(_sync())
+        detail = {k: v for k, v in result.items()}
+        finish_run(session, run, status=JobRunStatus.SUCCEEDED, detail=detail)
+        return detail
+    except Exception as exc:
+        finish_run(session, run, status=JobRunStatus.FAILED, error=str(exc))
+        raise
+    finally:
+        session.close()
+
+
 @celery_app.task(name="rmd.marketing_capacity_snapshot", bind=True)
 def marketing_capacity_snapshot(self) -> dict:
     session = SessionLocal()

@@ -60,18 +60,23 @@ export default function FinancePage() {
     }
   }
 
-  async function syncFreeAgent() {
+  async function syncFreeAgent(full: boolean) {
     const token = getToken();
     if (!token) return;
     setBusy(true);
     setSyncMsg(null);
     try {
+      const path = full ? "/api/v1/finance/freeagent/sync/full" : "/api/v1/finance/freeagent/sync";
       const result = await apiPost<Record<string, string | number>>(
-        "/api/v1/finance/freeagent/sync",
+        path,
         {},
         token,
       );
-      setSyncMsg(String(result.message ?? "Sync finished"));
+      setSyncMsg(
+        full
+          ? JSON.stringify(result).slice(0, 200)
+          : String((result as { message?: string }).message ?? "Sync finished"),
+      );
       load();
     } catch {
       setSyncMsg("Sync failed — see Finance status message.");
@@ -86,8 +91,8 @@ export default function FinancePage() {
     <div>
       <h1 className="text-2xl font-semibold text-emerald-950">Finance</h1>
       <p className="mt-2 text-sm text-slate-600">
-        Management accounts in-app; FreeAgent is authoritative when connected. Mettle bank feed is via
-        FreeAgent, not verified independently here.
+        Revive My Drive Ltd — FreeAgent remains the authoritative books. Mettle feeds through FreeAgent when linked.
+        Use <strong>Company setup</strong> for incorporation details and statutory checklist.
       </p>
 
       {fa && (
@@ -111,14 +116,24 @@ export default function FinancePage() {
                 Connect FreeAgent
               </button>
             ) : (
-              <button
-                type="button"
-                disabled={busy || !fa.can_sync}
-                onClick={syncFreeAgent}
-                className="rounded-md border border-emerald-800 px-4 py-2 text-xs font-semibold text-emerald-900 hover:bg-emerald-50 disabled:opacity-50"
-              >
-                Sync invoices
-              </button>
+              <>
+                <button
+                  type="button"
+                  disabled={busy || !fa.can_sync}
+                  onClick={() => syncFreeAgent(false)}
+                  className="rounded-md border border-emerald-800 px-4 py-2 text-xs font-semibold text-emerald-900 hover:bg-emerald-50 disabled:opacity-50"
+                >
+                  Sync invoices
+                </button>
+                <button
+                  type="button"
+                  disabled={busy || !fa.can_sync}
+                  onClick={() => syncFreeAgent(true)}
+                  className="rounded-md bg-emerald-800 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-900 disabled:opacity-50"
+                >
+                  Full sync (invoices + bank)
+                </button>
+              </>
             )}
           </div>
           {syncMsg ? <p className="mt-2 text-xs text-slate-600">{syncMsg}</p> : null}

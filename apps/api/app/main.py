@@ -28,6 +28,7 @@ from app.routers import (
     public,
     analytics,
     business_director,
+    company,
     finance,
     health,
     inventory,
@@ -112,6 +113,7 @@ app.include_router(telegram.router, prefix=prefix)
 app.include_router(marketing.router, prefix=prefix)
 app.include_router(marketing_public.router, prefix=prefix)
 app.include_router(public.router, prefix=prefix)
+app.include_router(company.router, prefix=prefix)
 app.include_router(finance.router, prefix=prefix)
 app.include_router(inventory.router, prefix=prefix)
 app.include_router(analytics.router, prefix=prefix)

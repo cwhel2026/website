@@ -32,12 +32,13 @@ async def get_tax_settings(db: AsyncSession) -> TaxYearSettings:
 
 async def estimate_personal_tax(db: AsyncSession) -> TaxEstimateResult:
     """
-    Simplified UK sole-trader style estimate for planning — NOT HMRC filing software.
-    Rules sourced from configured tax_year_settings (admin updates from HMRC publications).
+    Legacy personal tax planning view — Revive My Drive Ltd operates as a UK private company.
+    Use /finance/tax/corporation-estimate for company CT planning. NOT HMRC filing software.
     """
     settings = await get_tax_settings(db)
     notes = [
         "Indicative management estimate only — consult your accountant.",
+        "Company trades through Revive My Drive Ltd — director salary/dividend via Tax centre (Stage 6).",
         "Does not include student loans, dividends, or other income adjustments.",
     ]
 

@@ -88,6 +88,34 @@ async def fetch_invoices(settings: Settings, access_token: str) -> list[dict[str
     return invoices
 
 
+async def fetch_bank_accounts(settings: Settings, access_token: str) -> list[dict[str, Any]]:
+    payload = await api_get(settings, access_token, "/v2/bank_accounts")
+    accounts = payload.get("bank_accounts") or []
+    return accounts if isinstance(accounts, list) else []
+
+
+async def fetch_bank_transactions(
+    settings: Settings,
+    access_token: str,
+    bank_account_path: str,
+    *,
+    page: int = 1,
+    per_page: int = 50,
+) -> tuple[list[dict[str, Any]], int | None]:
+    """bank_account_path is the URL suffix from FreeAgent, e.g. /v2/bank_accounts/123."""
+    path = f"{bank_account_path}/bank_transactions?page={page}&per_page={per_page}"
+    payload = await api_get(settings, access_token, path)
+    txns = payload.get("bank_transactions") or []
+    if not isinstance(txns, list):
+        txns = []
+    total = payload.get("total")
+    try:
+        total_i = int(total) if total is not None else None
+    except (TypeError, ValueError):
+        total_i = None
+    return txns, total_i
+
+
 async def fetch_company_name(settings: Settings, access_token: str) -> str | None:
     try:
         payload = await api_get(settings, access_token, "/v2/company")
