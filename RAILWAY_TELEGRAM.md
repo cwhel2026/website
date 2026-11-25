@@ -110,10 +110,33 @@ CORS_ORIGINS=https://website-production-c21e95cd.up.railway.app
 
 ## 6. Troubleshooting
 
+### “Nothing happens” when I message the bot (messages show ✓✓ but no reply)
+
+Telegram ✓✓ only means the message reached Telegram’s servers — **not** that your API received it.
+
+Work through this list in order:
+
+1. **Webhook registered?** On API shell: `python scripts/register_telegram_webhook.py --info-only`  
+   - `url` must be your **API** host + `/api/v1/telegram/webhook` (not the website Next.js URL).  
+   - If `url` is empty, run `python scripts/register_telegram_webhook.py`.
+
+2. **`last_error_message` in getWebhookInfo**  
+   - Wrong host, SSL, or 401 → fix `PUBLIC_API_BASE_URL` and `TELEGRAM_WEBHOOK_SECRET`, re-register.
+
+3. **Latest API code deployed?** PR #15 changes are required (real `sendMessage`, not JSON-only webhook). Redeploy the **api** service from the branch/commit that includes `app/routers/telegram.py` outbound send.
+
+4. **`TELEGRAM_ADMIN_IDS`** must include **your numeric user ID** (not username).  
+   - After the latest handler update, unauthorised users still get a **one-time hint message** with their ID.  
+   - Or use [@userinfobot](https://t.me/userinfobot).
+
+5. **Dashboard check (after login):** `GET /api/v1/telegram/status` — shows webhook URL, errors, admin ID count (no secrets).
+
+6. **Database:** migration `20251125_0003` applied (`telegram_processed_updates` table).
+
 | Symptom | Check |
 |---------|--------|
 | Webhook `last_error_message` SSL / connection | API service public networking enabled; URL is API host not web host |
 | 401 on webhook | `TELEGRAM_WEBHOOK_SECRET` mismatch — re-run registration script |
-| 403 in app logs | Sender user ID not in `TELEGRAM_ADMIN_IDS` |
-| No reply but webhook OK | API logs; OpenAI key if assistant errors |
+| Hint with user ID but no assistant | Add ID to `TELEGRAM_ADMIN_IDS`, redeploy API |
+| No reply at all | Webhook URL empty/wrong — re-run registration script |
 | Outbox stuck pending | Worker running; worker has `TELEGRAM_*` and `REDIS_URL` |
