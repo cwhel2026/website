@@ -16,7 +16,29 @@ Architecture: **Mettle → FreeAgent → Revive AI Finance Director**. FreeAgent
 | Corporation tax planning stub | **Implemented** | `GET /finance/tax/corporation-estimate` — **provisional**, no marginal relief |
 | Alembic 0004 | **Implemented** | Company + sync tables |
 
-## Phase B–F — not in this PR
+## Phase B (PR #21 stack) — intelligent bookkeeping
+
+| Feature | Status |
+|---------|--------|
+| Rule-based transaction categorisation + confidence | Implemented |
+| Review queue approve/reject | Implemented |
+| Telegram receipt photos (FastAPI + forward from Next) | Implemented |
+| OpenAI vision OCR (optional) | Implemented when `OPENAI_API_KEY` set |
+| Receipt ↔ bank matching + pending queue | Implemented |
+| Mobile **Money hub** dashboard | Implemented |
+| Migration **0005** | Required |
+
+Env: `FINANCE_RECEIPTS_DIR` (persistent volume), `FINANCE_TELEGRAM_INGEST_KEY` (for Next→API receipt forward).
+
+### Generate `FINANCE_TOKEN_ENCRYPTION_KEY`
+
+```bash
+python apps/api/scripts/generate_finance_token_encryption_key.py
+```
+
+Paste the single line into Railway on the **API** service (minimum 16 characters; script emits a URL-safe 48-byte token).
+
+## Phase C–F — in progress
 
 Intelligent bookkeeping, Telegram receipts, versioned tax engine (VAT, PAYE, dividends), remuneration optimiser, director's loan, cash flow, job profitability, accountant role, financial dashboard sections, automated reports.
 

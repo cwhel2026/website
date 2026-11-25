@@ -135,10 +135,15 @@ async def sync_bank_transactions_from_freeagent(db: AsyncSession) -> dict:
     run.detail_json = json.dumps({"accounts": len(accounts)})
     row.last_sync_at = datetime.now(UTC)
     await db.flush()
+
+    from app.services.finance.bookkeeping.review_queue import categorize_uncategorized_transactions
+
+    cat = await categorize_uncategorized_transactions(db, limit=500)
     return {
         "fetched": fetched,
         "imported": imported,
         "skipped_duplicates": skipped,
+        "categorization": cat,
         "message": f"Imported {imported} new bank lines ({skipped} duplicates skipped).",
     }
 

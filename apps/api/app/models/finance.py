@@ -148,9 +148,21 @@ class Receipt(Base):
     )
     filename: Mapped[str] = mapped_column(String(255))
     storage_key: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    content_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    telegram_file_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     extracted_merchant: Mapped[str | None] = mapped_column(String(200), nullable=True)
     extracted_total_gbp: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
+    extracted_net_gbp: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
+    extracted_vat_gbp: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
+    extracted_vat_number: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    extracted_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    payment_method: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    matched_bank_transaction_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("bank_transactions.id"), nullable=True
+    )
+    processing_status: Mapped[str] = mapped_column(String(40), default="pending")
     ocr_status: Mapped[str] = mapped_column(String(40), default="not_processed")
+    raw_extraction_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     uploaded_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -173,7 +185,13 @@ class BankTransaction(Base):
     )
     matched_invoice_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
     matched_expense_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    suggested_category: Mapped[ExpenseCategory | None] = mapped_column(
+        Enum(ExpenseCategory, name="expense_category", create_constraint=False), nullable=True
+    )
+    categorisation_confidence: Mapped[int | None] = mapped_column(nullable=True)
+    review_item_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
     is_duplicate: Mapped[bool] = mapped_column(default=False)
+    is_reconciled: Mapped[bool] = mapped_column(Boolean, default=False)
     imported_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

@@ -55,6 +55,8 @@ class Settings(BaseSettings):
     rate_limit_storage_redis: bool = False
     database_migrations_managed: bool = False
     finance_token_encryption_key: str | None = None
+    finance_receipts_dir: str | None = None
+    finance_telegram_ingest_key: str | None = None
 
     @property
     def telegram_admin_id_list(self) -> list[int]:
