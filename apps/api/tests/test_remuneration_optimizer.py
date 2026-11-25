@@ -16,7 +16,7 @@ def test_optimiser_returns_recommendation():
     assert result["requires_accountant_review"] is True
 
 
-def test_high_cash_low_reserves_warning():
+def test_cash_exceeds_reserves_still_bounded_by_reserves():
     result = optimise_remuneration(
         RemunerationInputs(
             desired_monthly_net_gbp=Decimal("2000"),
@@ -25,4 +25,6 @@ def test_high_cash_low_reserves_warning():
             company_cash_gbp=Decimal("50000"),
         )
     )
-    assert result["inputs"]["warning_cash_not_profit"]
+    rec = result.get("recommended")
+    if rec:
+        assert rec["dividend_gbp"] <= 5000

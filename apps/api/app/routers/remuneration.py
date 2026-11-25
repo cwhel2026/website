@@ -37,7 +37,19 @@ async def optimise_pay(
 ) -> dict:
     reserves_payload = await compute_tax_reserves(db)
     dist = await compute_distributable_reserves(db)
-    profit = body.annual_company_profit_gbp or Decimal(str(reserves_payload.get("profit_estimate_gbp", 0)))
+    from app.services.finance.freeagent_reports import _extract_net_profit_before_tax, get_cached_report
+
+    profit = body.annual_company_profit_gbp
+    if profit is None:
+        pl = await get_cached_report(db, "pl_summary_ytd")
+        np = _extract_net_profit_before_tax(pl or {}) if pl else None
+        profit = np if np is not None else Decimal("0")
+    if profit <= 0 and not dist.get("available"):
+        return {
+            "blocked": True,
+            "blocked_reason": "Company profit and distributable reserves unavailable.",
+            "requires_accountant_review": True,
+        }
 
     if not dist.get("available"):
         return {
@@ -48,9 +60,10 @@ async def optimise_pay(
         }
 
     reserves = body.distributable_reserves_gbp or Decimal(
-        str(dist.get("after_tax_and_pending_dividends_gbp") or dist.get("distributable_profit_gbp") or 0)
+        str(dist.get("available_distributable_gbp") or dist.get("distributable_profit_gbp") or 0)
     )
     cash = body.company_cash_gbp or reserves
+    obligation = Decimal(str(reserves_payload.get("recommended_reserve_gbp") or 0))
 
     block_reasons: list[str] = []
     if dist.get("blocked"):
@@ -67,6 +80,7 @@ async def optimise_pay(
             distributable_reserves_gbp=reserves,
             company_cash_gbp=cash,
             other_personal_income_gbp=body.other_personal_income_gbp,
+            obligation_reserve_gbp=obligation,
         )
     )
     out["distributable_reserves"] = dist

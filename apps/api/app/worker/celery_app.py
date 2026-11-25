@@ -60,9 +60,9 @@ celery_app.conf.update(
             "task": "rmd.finance_report_monthly",
             "schedule": crontab(minute=0, hour=9, day_of_month=1),
         },
-        "finance-report-annual": {
+        "finance-report-annual-check": {
             "task": "rmd.finance_report_annual",
-            "schedule": crontab(minute=30, hour=9, day_of_month=1),
+            "schedule": crontab(minute=15, hour=7),
         },
         "finance-task-centre-weekly": {
             "task": "rmd.finance_task_centre_notify",

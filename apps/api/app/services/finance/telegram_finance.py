@@ -53,15 +53,21 @@ async def answer_finance_question(db: AsyncSession, text: str) -> str | None:
             if prof and prof.director_desired_monthly_net_gbp
             else __import__("decimal").Decimal("2500")
         )
-        dist = __import__("decimal").Decimal(str(reserves.get("after_tax_and_pending_dividends_gbp", 0)))
+        dist = __import__("decimal").Decimal(str(reserves.get("available_distributable_gbp", 0)))
+        from app.services.finance.freeagent_reports import _extract_net_profit_before_tax, get_cached_report
+
+        pl = await get_cached_report(db, "pl_summary_ytd")
+        np = _extract_net_profit_before_tax(pl or {}) if pl else None
+        profit = np if np is not None else __import__("decimal").Decimal("0")
         tax = await compute_tax_reserves(db)
-        profit = __import__("decimal").Decimal(str(tax.get("profit_estimate_gbp", 0)))
+        obligation = __import__("decimal").Decimal(str(tax.get("recommended_reserve_gbp") or 0))
         opt = optimise_remuneration(
             RemunerationInputs(
                 desired_monthly_net_gbp=desired,
                 annual_company_profit_before_remuneration_gbp=profit,
                 distributable_reserves_gbp=dist,
                 company_cash_gbp=dist,
+                obligation_reserve_gbp=obligation,
             )
         )
         if opt.get("blocked"):
@@ -69,11 +75,10 @@ async def answer_finance_question(db: AsyncSession, text: str) -> str | None:
         rec = opt.get("recommended")
         if not rec:
             return opt.get("plain_english", "Cannot compute pay yet.")
-        p = rec["personal"]
         return (
             f"Planning for ~£{desired}/mo net (accountant must approve): "
-            f"salary £{p['salary_gross_gbp']:.0f}/yr, dividends £{p['dividend_gbp']:.0f}/yr. "
-            f"{opt['plain_english']}"
+            f"salary £{rec['salary_gross_gbp']:.0f}/yr, dividends £{rec['dividend_gbp']:.0f}/yr. "
+            f"{opt.get('recommendation_reason', opt['plain_english'])}"
         )
     if "cash flow" in lower or "cashflow" in lower:
         fc = await simple_cashflow_forecast(db)

@@ -83,6 +83,10 @@ async def deliver_telegram_outbox_item(db: AsyncSession, item: NotificationOutbo
         payload["telegram_message_id"] = result.get("message_id")
         item.payload_json = json.dumps(payload)
         db.add(item)
+        if item.dedupe_key and item.dedupe_key.startswith("fin-report:"):
+            from app.services.finance.financial_reports import mark_finance_report_delivered
+
+            await mark_finance_report_delivered(db, item.dedupe_key)
         return True
     except TelegramApiError as exc:
         logger.warning("Telegram delivery failed for outbox %s: %s", item.id, exc)

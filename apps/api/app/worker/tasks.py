@@ -293,19 +293,20 @@ def finance_report_monthly(self) -> dict:
 @celery_app.task(name="rmd.finance_report_annual", bind=True)
 def finance_report_annual(self) -> dict:
     session = SessionLocal()
-    run = start_run(session, "finance_report_annual", dedupe_key=datetime.now(UTC).strftime("%Y"), worker_id=_worker_id())
+    run = start_run(session, "finance_report_annual", dedupe_key=None, worker_id=_worker_id())
     try:
         from app.database import SessionLocal as AsyncSessionLocal
         from app.services.finance.financial_reports import (
+            annual_report_idempotency_key,
             deliver_report_telegram,
             generate_annual_finance_report,
-            should_run_annual_report,
         )
 
         async def _run():
             async with AsyncSessionLocal() as adb:
-                if not await should_run_annual_report(adb):
-                    return {"skipped": True}
+                idem = await annual_report_idempotency_key(adb)
+                if idem is None:
+                    return {"skipped": True, "reason": "not_accounting_year_end"}
                 record = await generate_annual_finance_report(adb)
                 await deliver_report_telegram(adb, record)
                 await adb.commit()

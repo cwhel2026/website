@@ -31,3 +31,8 @@ def test_classify_already_reconciled():
 def test_classify_personal_payment_method():
     receipt = Receipt(filename="x.jpg", payment_method="personal cash", extracted_total_gbp=Decimal("20"))
     assert classify_receipt_route(receipt, None) == AccountingRoute.PERSONAL_DIRECTOR
+
+
+def test_unmatched_with_total_not_personal():
+    receipt = Receipt(filename="x.jpg", payment_method="card", extracted_total_gbp=Decimal("20"))
+    assert classify_receipt_route(receipt, None) == AccountingRoute.UNMATCHED

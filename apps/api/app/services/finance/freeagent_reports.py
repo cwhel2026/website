@@ -12,6 +12,18 @@ from app.services.finance.freeagent_adapter import ensure_fresh_token, freeagent
 from app.services.finance import freeagent_client
 
 
+def _extract_net_profit_before_tax(pl: dict) -> Decimal | None:
+    summary = pl.get("profit_and_loss_summary") or pl.get("profit_and_loss") or pl
+    for key in ("net_profit", "profit_before_tax", "total_net_profit", "profit"):
+        val = summary.get(key)
+        if val is not None:
+            try:
+                return Decimal(str(val))
+            except Exception:
+                continue
+    return None
+
+
 def _extract_retained_profit(pl: dict) -> Decimal | None:
     summary = pl.get("profit_and_loss_summary") or pl.get("profit_and_loss") or pl
     for key in ("retained_profit_carried_forward", "retained-profit-carried-forward", "retained_profit"):
@@ -107,7 +119,7 @@ async def distributable_profit_from_freeagent(db: AsyncSession) -> dict:
     return {
         "source": "freeagent",
         "available": True,
-        "distributable_profit_gbp": detailed.get("after_tax_and_pending_dividends_gbp"),
+        "distributable_profit_gbp": detailed.get("available_distributable_gbp"),
         "retained_profit_gbp": detailed.get("distributable_profit_gbp"),
         "provisional": detailed.get("blocked", False),
         "message": detailed.get("plain_english"),

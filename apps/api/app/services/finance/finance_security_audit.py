@@ -16,7 +16,8 @@ from app.services.finance.token_vault import encryption_configured
 async def run_finance_security_audit(db: AsyncSession) -> dict:
     settings = get_settings()
     root = receipts_root()
-    backup = Path(settings.finance_receipts_backup_dir or "")
+    backup_raw = (settings.finance_receipts_backup_dir or "").strip()
+    backup = Path(backup_raw).resolve() if backup_raw else None
     sample = next(root.glob("*"), None)
 
     receipt_perms_ok = True
@@ -27,9 +28,17 @@ async def run_finance_security_audit(db: AsyncSession) -> dict:
         except OSError:
             receipt_perms_ok = False
 
-    volume_persistent = settings.finance_receipts_dir not in (None, "", "/tmp/rmd-finance-receipts")
-    backup_configured = bool(str(settings.finance_receipts_backup_dir or "").strip())
-    backup_readable = backup.exists() and backup.is_dir() if backup_configured else None
+    receipts_path = Path(settings.finance_receipts_dir or "")
+    volume_persistent = bool(settings.finance_receipts_dir) and settings.finance_receipts_dir.startswith("/data")
+    mount_writable = root.exists() and os.access(root, os.W_OK)
+    backup_configured = backup is not None
+    backup_readable = backup is not None and backup.exists() and backup.is_dir()
+    same_device_as_tmp = False
+    try:
+        if root.exists():
+            same_device_as_tmp = root.stat().st_dev == Path("/tmp").stat().st_dev and str(root).startswith("/tmp")
+    except OSError:
+        pass
 
     fa = await freeagent_status(db)
     jwt_prod_ok = settings.environment != "production" or settings.jwt_secret not in (
@@ -41,8 +50,11 @@ async def run_finance_security_audit(db: AsyncSession) -> dict:
         "encryption_key_configured": encryption_configured(),
         "jwt_production_safe": jwt_prod_ok,
         "receipt_volume_persistent": volume_persistent,
+        "receipt_on_ephemeral_storage": same_device_as_tmp,
+        "receipt_mount_writable": mount_writable,
         "receipt_backup_configured": backup_configured,
         "receipt_backup_reachable": backup_readable,
+        "receipt_backup_not_cwd": backup is None or backup != Path.cwd(),
         "receipt_file_permissions_ok": receipt_perms_ok,
         "finance_telegram_ingest_key_set": bool(settings.finance_telegram_ingest_key),
         "freeagent_oauth_configured": bool(settings.freeagent_client_id and settings.freeagent_redirect_uri),

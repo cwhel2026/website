@@ -1,5 +1,7 @@
 from decimal import Decimal
 
+import pytest
+
 from app.services.tax_engine.marginal_relief import corporation_tax_with_marginal_relief
 from app.services.tax_engine.personal_tax import income_tax_on_non_dividend_income
 from app.services.tax_engine.rules_uk_ltd import ACTIVE_RULES
@@ -7,7 +9,7 @@ from app.services.tax_engine.rules_uk_ltd import ACTIVE_RULES
 
 def test_small_profits_corporation_tax():
     r = corporation_tax_with_marginal_relief(Decimal("30000"))
-    assert r["corporation_tax_gbp"] == 30000 * 0.19
+    assert r["corporation_tax_gbp"] == pytest.approx(5700.0)
     assert r["marginal_relief_applied"] is False
 
 

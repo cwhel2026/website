@@ -44,8 +44,10 @@ def classify_receipt_route(
     if txn and txn.amount_gbp < 0 and not txn.is_reconciled:
         receipt.accounting_route = AccountingRoute.COMPANY_BANK.value
         return AccountingRoute.COMPANY_BANK
-    if any(k in method for k in PERSONAL_KEYWORDS) or (txn is None and receipt.extracted_total_gbp):
+    if any(k in method for k in PERSONAL_KEYWORDS):
         return AccountingRoute.PERSONAL_DIRECTOR
+    if txn is None and receipt.extracted_total_gbp:
+        return AccountingRoute.UNMATCHED
     if txn is None:
         merchant = (receipt.extracted_merchant or "").lower()
         if any(w in merchant for w in ("utilities", "supplier", "wholesale", "b&q", "travis")):

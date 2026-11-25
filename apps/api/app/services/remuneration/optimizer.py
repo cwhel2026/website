@@ -1,4 +1,4 @@
-"""Salary + dividend optimiser — combined company and personal tax (planning only)."""
+"""Constrained remuneration optimiser — deterministic tax engine only (planning, not payroll)."""
 
 from __future__ import annotations
 
@@ -7,8 +7,8 @@ from decimal import Decimal
 
 from app.services.tax_engine.marginal_relief import corporation_tax_with_marginal_relief
 from app.services.tax_engine.national_insurance import employee_ni_on_salary, employer_ni_on_salary
-from app.services.tax_engine.personal_tax import dividend_tax, income_tax_on_non_dividend_income
-from app.services.tax_engine.rules_uk_ltd import ACTIVE_RULES
+from app.services.tax_engine.personal_tax import dividend_tax, incremental_income_tax_on_salary
+from app.services.tax_engine.rules_uk_ltd import rules_for_date
 
 
 @dataclass
@@ -19,135 +19,154 @@ class RemunerationInputs:
     company_cash_gbp: Decimal
     other_personal_income_gbp: Decimal = Decimal("0")
     employer_pension_gbp: Decimal = Decimal("0")
+    obligation_reserve_gbp: Decimal = Decimal("0")
+    associated_companies: int = 1
+    accounting_period_months: int = 12
 
 
-def _monthly_net_from_salary_and_dividend(
-    annual_salary: Decimal,
-    annual_dividend: Decimal,
-    other_income: Decimal,
-) -> dict:
-    salary = max(Decimal("0"), annual_salary)
-    div = max(Decimal("0"), annual_dividend)
-    emp_ni = employee_ni_on_salary(salary)
-    ni = Decimal(str(emp_ni["employee_ni_gbp"]))
-    taxable_salary = max(Decimal("0"), salary - ni)
-    it = income_tax_on_non_dividend_income(taxable_salary + other_income)
-    extra_salary_tax = income_tax_on_non_dividend_income(taxable_salary)
-    salary_tax = Decimal(str(extra_salary_tax["income_tax_gbp"]))
-    div_tax = dividend_tax(div, other_income_gbp=taxable_salary + other_income)
-    dividend_tax_gbp = Decimal(str(div_tax["dividend_tax_gbp"]))
-    take_home = salary - ni - salary_tax + div - dividend_tax_gbp
-    employer = employer_ni_on_salary(salary)
+def _evaluate_scenario(
+    inputs: RemunerationInputs,
+    salary: Decimal,
+    dividend: Decimal,
+) -> dict | None:
+    rules = rules_for_date()
+    profit = max(Decimal("0"), inputs.annual_company_profit_before_remuneration_gbp)
+    employer = employer_ni_on_salary(salary, rules=rules)
+    employer_ni = Decimal(str(employer["employer_ni_gbp"]))
+    payroll_cash = salary + employer_ni
+    if payroll_cash > inputs.company_cash_gbp:
+        return None
+    if payroll_cash + inputs.obligation_reserve_gbp > inputs.company_cash_gbp:
+        return None
+
+    profit_after_pay = profit - payroll_cash
+    if profit_after_pay < 0:
+        return None
+
+    ct = corporation_tax_with_marginal_relief(
+        profit_after_pay,
+        rules=rules,
+        associated_companies=inputs.associated_companies,
+        accounting_period_months=inputs.accounting_period_months,
+    )
+    corp_tax = Decimal(str(ct["corporation_tax_gbp"]))
+    after_ct = profit_after_pay - corp_tax
+
+    if dividend > after_ct or dividend > inputs.distributable_reserves_gbp:
+        return None
+    if dividend > inputs.company_cash_gbp - payroll_cash - inputs.obligation_reserve_gbp:
+        return None
+
+    emp_ni = Decimal(str(employee_ni_on_salary(salary, rules=rules)["employee_ni_gbp"]))
+    inc = incremental_income_tax_on_salary(
+        salary,
+        inputs.other_personal_income_gbp,
+        dividends_for_pa_taper_gbp=salary + dividend,
+    )
+    salary_tax = Decimal(str(inc["incremental_income_tax_gbp"]))
+    div_tax_res = dividend_tax(
+        dividend,
+        other_non_dividend_gbp=inputs.other_personal_income_gbp + salary,
+        dividends_for_pa_taper_gbp=dividend,
+        rules=rules,
+    )
+    div_tax = Decimal(str(div_tax_res["dividend_tax_gbp"]))
+
+    take_home = salary - emp_ni - salary_tax + dividend - div_tax
+    personal_tax = salary_tax + div_tax + emp_ni
+    combined_tax = personal_tax + corp_tax + employer_ni
+
     return {
+        "salary_gross_gbp": float(salary),
+        "dividend_gbp": float(dividend),
         "annual_take_home_gbp": float(take_home),
         "monthly_take_home_gbp": float((take_home / 12).quantize(Decimal("0.01"))),
-        "salary_gross_gbp": float(salary),
-        "dividend_gbp": float(div),
-        "income_tax_gbp": float(salary_tax),
-        "dividend_tax_gbp": float(dividend_tax_gbp),
-        "employee_ni_gbp": float(ni),
-        "employer_ni_gbp": employer["employer_ni_gbp"],
-    }
-
-
-def _company_cost(salary: Decimal, employer_ni: float, profit_before: Decimal) -> dict:
-    profit_after_salary = profit_before - salary - Decimal(str(employer_ni))
-    ct = corporation_tax_with_marginal_relief(max(Decimal("0"), profit_after_salary))
-    return {
-        "profit_after_remuneration_gbp": float(max(Decimal("0"), profit_after_salary)),
-        "corporation_tax_gbp": ct["corporation_tax_gbp"],
-        "employer_ni_gbp": employer_ni,
-        "total_company_cost_gbp": float(salary + Decimal(str(employer_ni)) + Decimal(str(ct["corporation_tax_gbp"]))),
+        "personal_tax_gbp": float(personal_tax),
+        "corporation_tax_gbp": float(corp_tax),
+        "employer_ni_gbp": float(employer_ni),
+        "combined_tax_gbp": float(combined_tax),
+        "profit_after_remuneration_gbp": float(max(Decimal("0"), after_ct - dividend)),
+        "lawful_dividend": dividend <= inputs.distributable_reserves_gbp and dividend <= after_ct,
+        "personal": {
+            "income_tax_gbp": float(salary_tax),
+            "dividend_tax_gbp": float(div_tax),
+            "employee_ni_gbp": float(emp_ni),
+        },
+        "company": {
+            "corporation_tax_gbp": float(corp_tax),
+            "employer_ni_gbp": float(employer_ni),
+            "total_company_cost_gbp": float(payroll_cash + corp_tax + dividend),
+        },
     }
 
 
 def optimise_remuneration(inputs: RemunerationInputs) -> dict:
-    target_annual_net = inputs.desired_monthly_net_gbp * 12
-    profit = max(Decimal("0"), inputs.annual_company_profit_before_remuneration_gbp)
-    reserves = max(Decimal("0"), inputs.distributable_reserves_gbp)
-    cash = max(Decimal("0"), inputs.company_cash_gbp)
+    rules = rules_for_date()
+    target_annual = inputs.desired_monthly_net_gbp * 12
+    tolerance = Decimal("600")
+    profit_cap = int(min(inputs.annual_company_profit_before_remuneration_gbp, Decimal("150000")))
+    if profit_cap < 0:
+        profit_cap = 0
 
     scenarios: list[dict] = []
-    salary_cents = range(0, min(int(profit), 60000) + 1, 3000)
-    for sal_int in salary_cents:
+    salary_step = Decimal("500")
+    for sal_int in range(0, profit_cap + 1, int(salary_step)):
         salary = Decimal(sal_int)
-        remaining_profit = profit - salary
-        employer = employer_ni_on_salary(salary)
-        emp_cost = salary + Decimal(str(employer["employer_ni_gbp"]))
-        if emp_cost > profit:
-            continue
-        profit_after_pay = profit - emp_cost
-        ct = corporation_tax_with_marginal_relief(max(Decimal("0"), profit_after_pay))
-        after_ct = Decimal(str(profit_after_pay)) - Decimal(str(ct["corporation_tax_gbp"]))
-        max_div = min(after_ct, reserves)
-        if max_div > cash:
-            max_div = min(max_div, cash)
-        max_div = max(Decimal("0"), max_div)
-
-        for div_int in (0, int(max_div // 2), int(max_div)):
-            div = Decimal(div_int)
-            if div > reserves:
+        div_cap = min(
+            inputs.distributable_reserves_gbp,
+            inputs.company_cash_gbp - inputs.obligation_reserve_gbp,
+        )
+        if div_cap < 0:
+            div_cap = Decimal("0")
+        max_div_int = int(div_cap)
+        div_points = set(range(0, max_div_int + 1, int(salary_step)))
+        if max_div_int not in div_points:
+            div_points.add(max_div_int)
+        for div_int in sorted(div_points):
+            row = _evaluate_scenario(inputs, salary, Decimal(div_int))
+            if row is None:
                 continue
-            if div > after_ct:
+            gap = abs(Decimal(str(row["annual_take_home_gbp"])) - target_annual)
+            if gap > tolerance:
                 continue
-            personal = _monthly_net_from_salary_and_dividend(salary, div, inputs.other_personal_income_gbp)
-            diff = abs(Decimal(str(personal["annual_take_home_gbp"])) - target_annual_net)
-            company = _company_cost(salary, personal["employer_ni_gbp"], profit)
-            lawful_dividend = div <= reserves and div <= after_ct
-            scenarios.append(
-                {
-                    "salary_gross_gbp": personal["salary_gross_gbp"],
-                    "dividend_gbp": personal["dividend_gbp"],
-                    "monthly_take_home_gbp": personal["monthly_take_home_gbp"],
-                    "target_gap_gbp": float(diff),
-                    "lawful_dividend": lawful_dividend,
-                    "dividend_blocked_reason": (
-                        None
-                        if lawful_dividend
-                        else "Distributable profit/reserves insufficient — not recommended."
-                    ),
-                    "personal": personal,
-                    "company": company,
-                }
-            )
+            row["target_gap_gbp"] = float(gap)
+            scenarios.append(row)
 
-    scenarios.sort(key=lambda s: (s["target_gap_gbp"], -s["monthly_take_home_gbp"]))
-    best = scenarios[0] if scenarios else None
-    candidates = scenarios[:5]
+    if not scenarios:
+        return {
+            "blocked": True,
+            "blocked_reason": "No lawful scenario meets cash, distributable reserves, and net income tolerance.",
+            "requires_accountant_review": True,
+            "rule_version": rules.version,
+            "sources": list(rules.sources),
+            "verified_on": rules.verified_on,
+            "plain_english": "Cannot recommend pay — missing figures or constraints block all scenarios.",
+        }
 
-    strategy_summary = []
-    if best:
-        if best["dividend_gbp"] == 0:
-            strategy_summary.append("salary_heavy")
-        elif best["salary_gross_gbp"] == 0:
-            strategy_summary.append("dividend_heavy")
-        else:
-            strategy_summary.append("salary_and_dividend_blend")
-    personal_reserve_hint = float(target_annual_net) * 0.25
+    scenarios.sort(key=lambda s: (s["combined_tax_gbp"], s["target_gap_gbp"]))
+    best = scenarios[0]
+    alts = scenarios[1:6]
+
+    recommendation_reason = (
+        f"Lowest combined company and personal tax (£{best['combined_tax_gbp']:.0f}) "
+        f"while delivering ~£{best['monthly_take_home_gbp']:.0f}/mo net within £{tolerance}/yr tolerance."
+    )
 
     return {
         "recommended": best,
-        "alternatives": candidates,
-        "strategy_tags": strategy_summary,
-        "personal_tax_reserve_hint_gbp": personal_reserve_hint,
+        "alternatives": alts,
+        "recommendation_reason": recommendation_reason,
         "inputs": {
             "desired_monthly_net_gbp": float(inputs.desired_monthly_net_gbp),
-            "profit_gbp": float(profit),
-            "distributable_reserves_gbp": float(reserves),
-            "company_cash_gbp": float(cash),
-            "warning_cash_not_profit": (
-                "Bank cash is higher than distributable profit — dividends must follow profit, not cash."
-                if cash > reserves
-                else None
-            ),
+            "distributable_reserves_gbp": float(inputs.distributable_reserves_gbp),
+            "company_cash_gbp": float(inputs.company_cash_gbp),
+            "obligation_reserve_gbp": float(inputs.obligation_reserve_gbp),
         },
-        "rule_version": ACTIVE_RULES.version,
-        "sources": ACTIVE_RULES.sources,
+        "rule_version": rules.version,
+        "tax_year_label": rules.tax_year_label,
+        "sources": list(rules.sources),
+        "verified_on": rules.verified_on,
         "requires_accountant_review": True,
-        "provisional": True,
-        "plain_english": (
-            "These scenarios optimise estimated combined tax — approve with your accountant before payroll or dividends."
-            if best
-            else "Not enough company profit data to recommend pay — update accounts or company profile."
-        ),
+        "provisional": False,
+        "plain_english": recommendation_reason + " Accountant must approve before payroll or dividends.",
     }

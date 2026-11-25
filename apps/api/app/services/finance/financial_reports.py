@@ -111,9 +111,17 @@ async def generate_weekly_finance_report(db: AsyncSession) -> FinancialReportRec
 async def generate_monthly_finance_report(db: AsyncSession) -> FinancialReportRecord:
     reserves = await compute_tax_reserves(db)
     dist = await compute_distributable_reserves(db)
-    distributable = dist.get("after_tax_and_pending_dividends_gbp") or dist.get("distributable_profit_gbp")
+    distributable = dist.get("available_distributable_gbp") or dist.get("distributable_profit_gbp")
     desired = await _company_desired_net(db)
-    profit = Decimal(str(reserves.get("profit_estimate_gbp", 0)))
+    profit = Decimal("0")
+    pl_cached = await get_cached_report(db, "pl_summary_ytd")
+    if pl_cached:
+        from app.services.finance.freeagent_reports import _extract_net_profit_before_tax
+
+        np = _extract_net_profit_before_tax(pl_cached)
+        if np is not None:
+            profit = np
+    obligation = Decimal(str(reserves.get("recommended_reserve_gbp") or 0))
     opt = None
     blocked_reason = None
     if dist.get("blocked"):
@@ -125,11 +133,12 @@ async def generate_monthly_finance_report(db: AsyncSession) -> FinancialReportRe
                 annual_company_profit_before_remuneration_gbp=profit,
                 distributable_reserves_gbp=Decimal(str(distributable or 0)),
                 company_cash_gbp=Decimal(str(distributable or 0)),
+                obligation_reserve_gbp=obligation,
             )
         )
     pl = await get_cached_report(db, "pl_summary_ytd")
     bs = await get_cached_report(db, "balance_sheet_latest")
-    ct_forecast = corporation_tax_with_marginal_relief(profit)
+    ct_forecast = corporation_tax_with_marginal_relief(profit) if profit > 0 else {"corporation_tax_gbp": None}
     deadlines = await upcoming_reminders(db, within_days=90)
     cashflow = await multi_horizon_cashflow(db)
     adequacy = reserves.get("recommended_reserve_gbp", 0)
@@ -204,7 +213,7 @@ async def generate_annual_finance_report(db: AsyncSession) -> FinancialReportRec
     )
 
 
-async def deliver_report_telegram(db: AsyncSession, record: FinancialReportRecord) -> bool:
+async def deliver_report_telegram(db: AsyncSession, record: FinancialReportRecord) -> dict:
     settings = get_settings()
     base = (settings.public_dashboard_base_url or settings.public_api_base_url or "").rstrip("/")
     link = f"{base}{record.dashboard_path}" if base else record.dashboard_path
@@ -218,17 +227,39 @@ async def deliver_report_telegram(db: AsyncSession, record: FinancialReportRecor
         dedupe_key=f"fin-report:{record.period}:{record.id}",
         priority="normal",
     )
-    record.telegram_sent = True
+    record.telegram_sent = False
     await db.flush()
-    return True
+    return {"queued": True, "outbox_category": f"finance_report_{record.period}", "telegram_sent": False}
+
+
+async def mark_finance_report_delivered(db: AsyncSession, dedupe_key: str) -> None:
+    if not dedupe_key.startswith("fin-report:"):
+        return
+    parts = dedupe_key.split(":")
+    if len(parts) < 3:
+        return
+    try:
+        from uuid import UUID
+
+        report_id = UUID(parts[2])
+    except ValueError:
+        return
+    record = await db.get(FinancialReportRecord, report_id)
+    if record:
+        record.telegram_sent = True
+        await db.flush()
+
+
+async def annual_report_idempotency_key(db: AsyncSession) -> str | None:
+    result = await db.execute(select(CompanyProfile).limit(1))
+    profile = result.scalar_one_or_none()
+    if not profile or not profile.accounting_reference_month or not profile.accounting_reference_day:
+        return None
+    today = date.today()
+    if today.month != profile.accounting_reference_month or today.day != profile.accounting_reference_day:
+        return None
+    return f"annual:{today.year}"
 
 
 async def should_run_annual_report(db: AsyncSession) -> bool:
-    result = await db.execute(select(CompanyProfile).limit(1))
-    profile = result.scalar_one_or_none()
-    today = date.today()
-    if profile and profile.accounting_reference_month and profile.accounting_reference_day:
-        if today.month == profile.accounting_reference_month and today.day == profile.accounting_reference_day:
-            return True
-    # Default: last month of UK financial year prep window
-    return today.month == 3 and today.day == 1
+    return (await annual_report_idempotency_key(db)) is not None

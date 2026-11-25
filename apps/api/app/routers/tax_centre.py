@@ -49,7 +49,10 @@ async def personal_dividend_tax(
     dividend_gbp: float = 0,
     other_income_gbp: float = 0,
 ) -> dict:
-    return dividend_tax(Decimal(str(dividend_gbp)), other_income_gbp=Decimal(str(other_income_gbp)))
+    return dividend_tax(
+        Decimal(str(dividend_gbp)),
+        other_non_dividend_gbp=Decimal(str(other_income_gbp)),
+    )
 
 
 @router.get("/vat-monitor")

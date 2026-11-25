@@ -1,84 +1,121 @@
 import json
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.compliance import TaxReserveSnapshot
-from app.models.finance import Expense, Invoice, InvoiceStatus, Payment
+from app.models.company import CompanyProfile, PayrollStatus, VatStatus
 from app.services.finance.freeagent_adapter import freeagent_status
+from app.services.finance.freeagent_reports import _extract_net_profit_before_tax, get_cached_report
 from app.services.tax_engine.marginal_relief import corporation_tax_with_marginal_relief
-from app.services.tax_engine.rules_uk_ltd import ACTIVE_RULES
+from app.services.tax_engine.rules_uk_ltd import rules_for_date
 from app.services.tax_engine.vat_monitor import rolling_vat_taxable_turnover
 
 
+def _liability_bucket(*, known: bool, amount: Decimal | None, note: str) -> dict:
+    if not known or amount is None:
+        return {"status": "unknown", "amount_gbp": None, "note": note}
+    return {"status": "estimated", "amount_gbp": float(amount), "note": note}
+
+
 async def compute_tax_reserves(db: AsyncSession) -> dict:
+    rules = rules_for_date()
     fa = await freeagent_status(db)
-    stale = fa.last_sync_at is None if fa.can_sync else True
-    freshness = (
-        f"FreeAgent last sync: {fa.last_sync_at.isoformat() if fa.last_sync_at else 'never'}"
-        if fa.can_sync
-        else "FreeAgent not connected — reserves use local invoices/expenses only."
+    now = datetime.now(UTC)
+    sync_age_hours: float | None = None
+    if fa.last_sync_at:
+        sync_age_hours = (now - fa.last_sync_at).total_seconds() / 3600.0
+    data_stale = sync_age_hours is None or sync_age_hours > 168
+    data_complete = fa.can_sync and not data_stale
+
+    pl = await get_cached_report(db, "pl_summary_ytd")
+    net_profit = _extract_net_profit_before_tax(pl or {}) if pl else None
+
+    profile = await db.execute(select(CompanyProfile).limit(1))
+    prof = profile.scalar_one_or_none()
+
+    ct_known = False
+    ct_amount: Decimal | None = None
+    if net_profit is not None and data_complete:
+        ct = corporation_tax_with_marginal_relief(max(Decimal("0"), net_profit))
+        ct_amount = Decimal(str(ct["corporation_tax_gbp"]))
+        ct_known = True
+    ct_bucket = _liability_bucket(
+        known=ct_known,
+        amount=ct_amount,
+        note="From cached FreeAgent P&L retained movement when sync <7d." if ct_known else "Connect FreeAgent and sync reports.",
     )
 
-    inv = await db.execute(
-        select(Invoice).where(
-            Invoice.status.in_([InvoiceStatus.SENT, InvoiceStatus.PART_PAID, InvoiceStatus.PAID, InvoiceStatus.OVERDUE])
-        )
-    )
-    revenue = sum((i.subtotal_ex_vat_gbp for i in inv.scalars().all()), Decimal("0"))
-    payments = await db.execute(select(Payment))
-    collected = sum((p.amount_gbp for p in payments.scalars().all()), Decimal("0"))
-    exp = await db.execute(select(Expense))
-    expenses = sum((e.amount_gbp for e in exp.scalars().all()), Decimal("0"))
-
-    profit_estimate = max(Decimal("0"), revenue - expenses)
-    ct = corporation_tax_with_marginal_relief(profit_estimate)
     vat = await rolling_vat_taxable_turnover(db)
-    vat_provision = Decimal("0")
-    if vat.get("registration_may_be_required"):
-        vat_provision = Decimal(str(vat["taxable_turnover_gbp"])) * Decimal("0.17")
+    vat_known = prof is not None and prof.vat_status in (VatStatus.REGISTERED, VatStatus.APPLIED)
+    vat_amount: Decimal | None = None
+    if vat_known:
+        # Not a filing estimate — rough liability reserve only when registered
+        net_taxable = Decimal(str(vat["taxable_turnover_gbp"])) * Decimal("0.2") * Decimal("0.17")
+        vat_amount = net_taxable.quantize(Decimal("0.01"))
+    elif vat.get("registration_may_be_required"):
+        vat_amount = Decimal("0")
+    vat_bucket = _liability_bucket(
+        known=vat_known or vat.get("data_complete") is False,
+        amount=vat_amount,
+        note="VAT reserve only when registration status confirmed.",
+    )
 
-    paye_provision = Decimal("0")
-    recommended = Decimal(str(ct["corporation_tax_gbp"])) + vat_provision + paye_provision
+    paye_known = prof is not None and prof.paye_status == PayrollStatus.REGISTERED
+    paye_bucket = _liability_bucket(
+        known=paye_known,
+        amount=Decimal("0") if paye_known else None,
+        note="PAYE/NI accrual requires FreeAgent payroll read — set PAYE status on company profile.",
+    )
 
-    provisional = stale or not fa.can_sync
+    known_amounts = [
+        b["amount_gbp"] for b in (ct_bucket, vat_bucket, paye_bucket) if b["status"] != "unknown" and b["amount_gbp"] is not None
+    ]
+    recommended = sum((Decimal(str(a)) for a in known_amounts), Decimal("0"))
+    has_unknown = any(b["status"] == "unknown" for b in (ct_bucket, vat_bucket, paye_bucket))
+
     snapshot = TaxReserveSnapshot(
-        rule_version=ACTIVE_RULES.version,
-        corporation_tax_gbp=str(ct["corporation_tax_gbp"]),
-        vat_provision_gbp=str(float(vat_provision)),
-        paye_provision_gbp=str(float(paye_provision)),
-        recommended_total_gbp=str(float(recommended)),
+        rule_version=rules.version,
+        corporation_tax_gbp=str(ct_bucket["amount_gbp"] if ct_bucket["amount_gbp"] is not None else "unknown"),
+        vat_provision_gbp=str(vat_bucket["amount_gbp"] if vat_bucket["amount_gbp"] is not None else "unknown"),
+        paye_provision_gbp=str(paye_bucket["amount_gbp"] if paye_bucket["amount_gbp"] is not None else "unknown"),
+        recommended_total_gbp=str(float(recommended)) if not has_unknown else "unknown",
         assumptions_json=json.dumps(
             {
-                "profit_estimate_gbp": float(profit_estimate),
-                "revenue_invoices_gbp": float(revenue),
-                "collected_payments_gbp": float(collected),
-                "expenses_gbp": float(expenses),
+                "sync_age_hours": sync_age_hours,
+                "data_stale": data_stale,
+                "has_unknown_liabilities": has_unknown,
             }
         ),
-        data_freshness_note=freshness,
-        is_provisional=provisional,
+        data_freshness_note=(
+            f"FreeAgent sync {sync_age_hours:.0f}h ago" if sync_age_hours is not None else "FreeAgent never synced"
+        ),
+        is_provisional=data_stale or has_unknown or not fa.can_sync,
     )
     db.add(snapshot)
     await db.flush()
 
     return {
-        "recommended_reserve_gbp": float(recommended),
-        "corporation_tax_gbp": ct["corporation_tax_gbp"],
-        "vat_provision_gbp": float(vat_provision),
-        "paye_provision_gbp": float(paye_provision),
-        "profit_estimate_gbp": float(profit_estimate),
+        "recommended_reserve_gbp": float(recommended) if not has_unknown else None,
+        "corporation_tax": ct_bucket,
+        "vat": vat_bucket,
+        "paye": paye_bucket,
+        "has_unknown_liabilities": has_unknown,
+        "is_provisional": snapshot.is_provisional,
+        "data_stale": data_stale,
+        "sync_age_hours": sync_age_hours,
+        "data_complete": data_complete,
         "vat_monitor": vat,
-        "is_provisional": provisional,
-        "data_freshness": freshness,
-        "rule_version": ACTIVE_RULES.version,
-        "sources": ACTIVE_RULES.sources,
+        "rule_version": rules.version,
+        "tax_year_label": rules.tax_year_label,
+        "sources": list(rules.sources),
+        "verified_on": rules.verified_on,
         "plain_english": (
-            "These are planning figures — money has not been moved. Keep cash aside based on accountant advice."
-            if not provisional
-            else "Data is incomplete or stale. Treat all reserve figures as provisional until books are up to date."
+            "Some statutory liabilities are unknown — do not treat missing amounts as zero."
+            if has_unknown
+            else "Known liability buckets summed for cash planning — not a filing."
         ),
         "snapshot_id": str(snapshot.id),
     }
