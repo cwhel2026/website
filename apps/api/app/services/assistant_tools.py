@@ -9,7 +9,10 @@ from app.models.approvals import ApprovalRequest, ApprovalStatus
 from app.models.jobs import Appointment, AppointmentType, Job, JobStatus
 from app.models.quotation import Quotation
 from app.services.analytics_service import build_analytics_snapshot
+from app.services.marketing.budget_controls import weekly_spend_summary
 from app.services.marketing.capacity_engine import global_capacity_snapshot, territory_demand_insights
+from app.services.marketing.director import build_daily_marketing_plan
+from app.services.marketing.marketing_profitability import marketing_profitability_snapshot
 from app.services.uk_time import uk_date_label, uk_now, uk_today, utc_range_for_uk_day
 
 
@@ -81,6 +84,18 @@ def _jsonable(obj: dict[str, Any]) -> dict[str, Any]:
         else:
             out[k] = v
     return out
+
+
+async def tool_marketing_weekly_spend(db: AsyncSession) -> dict[str, Any]:
+    return await weekly_spend_summary(db)
+
+
+async def tool_marketing_director_plan(db: AsyncSession) -> dict[str, Any]:
+    return await build_daily_marketing_plan(db)
+
+
+async def tool_marketing_profitability(db: AsyncSession) -> dict[str, Any]:
+    return await marketing_profitability_snapshot(db, days=30)
 
 
 async def tool_marketing_capacity(db: AsyncSession) -> dict[str, Any]:
@@ -202,4 +217,7 @@ TOOL_HANDLERS = {
     "new_enquiries": tool_new_enquiries_count,
     "analytics_snapshot": tool_analytics_snapshot,
     "marketing_capacity": tool_marketing_capacity,
+    "marketing_weekly_spend": tool_marketing_weekly_spend,
+    "marketing_director_plan": tool_marketing_director_plan,
+    "marketing_profitability": tool_marketing_profitability,
 }

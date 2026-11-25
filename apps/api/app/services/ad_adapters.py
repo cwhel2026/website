@@ -28,15 +28,27 @@ def integration_state_for(platform: AdPlatform) -> IntegrationState:
     return IntegrationState.NOT_CONFIGURED
 
 
-def fetch_campaign_metrics(campaign: RegionalCampaign) -> AdapterResult:
-    """Reporting path — returns honest not-connected until verified API access."""
+async def fetch_campaign_metrics(campaign: RegionalCampaign) -> AdapterResult:
+    """Reporting path — Meta insights when credentials verified."""
     state = integration_state_for(campaign.platform)
     if state == IntegrationState.NOT_CONFIGURED:
         return AdapterResult(False, False, "Integration not configured", None)
+    if campaign.platform == AdPlatform.META:
+        from app.services.marketing.meta_ads_client import fetch_account_insights
+
+        data = await fetch_account_insights()
+        if data.get("live_read_verified"):
+            return AdapterResult(
+                True,
+                False,
+                f"Account insights spend (7d): £{data.get('spend_gbp', 0):.2f}",
+                None,
+            )
+        return AdapterResult(False, False, data.get("message", "Meta insights unavailable"))
     return AdapterResult(
         False,
         False,
-        "Live reporting not implemented — connect platform and verify OAuth scopes.",
+        "Live reporting not verified for this platform.",
     )
 
 

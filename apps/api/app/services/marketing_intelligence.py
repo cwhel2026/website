@@ -67,9 +67,21 @@ def propose_regional_campaigns(insights: list[TerritoryCapacityInsight]) -> list
     return proposals
 
 
-async def check_budget_headroom(campaign: RegionalCampaign, amount: Decimal) -> tuple[bool, str]:
+async def check_budget_headroom(
+    db: AsyncSession, campaign: RegionalCampaign, amount: Decimal
+) -> tuple[bool, str]:
+    from app.services.marketing.budget_controls import validate_campaign_spend
+
     if amount <= 0:
         return False, "Amount must be positive"
+    gate = await validate_campaign_spend(
+        db,
+        platform=campaign.platform,
+        daily_budget_gbp=amount,
+        simulation_only=campaign.simulation_only,
+    )
+    if not gate.get("allowed"):
+        return False, gate.get("reason", "Budget policy blocked spend")
     if campaign.daily_budget_gbp > 0 and amount > campaign.daily_budget_gbp:
         return False, "Exceeds daily budget"
     if campaign.monthly_budget_gbp > 0 and campaign.spent_gbp + amount > campaign.monthly_budget_gbp:
