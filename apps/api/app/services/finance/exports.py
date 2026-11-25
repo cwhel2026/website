@@ -5,7 +5,7 @@ from datetime import date
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.finance import Expense, Invoice
+from app.models.finance import BankTransaction, Expense, Invoice
 
 
 async def export_invoices_csv(db: AsyncSession) -> str:
@@ -44,6 +44,27 @@ async def export_expenses_csv(db: AsyncSession) -> str:
                 float(exp.amount_gbp),
                 float(exp.vat_gbp),
                 exp.source.value,
+            ]
+        )
+    return buf.getvalue()
+
+
+async def export_bank_transactions_csv(db: AsyncSession) -> str:
+    result = await db.execute(select(BankTransaction).order_by(BankTransaction.transacted_at.desc()))
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(
+        ["date", "description", "amount_gbp", "reconciled", "freeagent_url", "source"]
+    )
+    for txn in result.scalars().all():
+        writer.writerow(
+            [
+                txn.transacted_at.isoformat(),
+                txn.description,
+                float(txn.amount_gbp),
+                txn.is_reconciled,
+                txn.freeagent_url or "",
+                txn.source.value,
             ]
         )
     return buf.getvalue()

@@ -165,6 +165,8 @@ class Receipt(Base):
     raw_extraction_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     freeagent_attach_status: Mapped[str | None] = mapped_column(String(40), nullable=True)
     freeagent_attach_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    freeagent_expense_url: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    accounting_route: Mapped[str | None] = mapped_column(String(40), nullable=True)
     uploaded_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

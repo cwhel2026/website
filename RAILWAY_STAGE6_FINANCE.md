@@ -11,7 +11,9 @@ export DATABASE_MIGRATIONS_MANAGED=true
 cd apps/api && alembic upgrade head
 ```
 
-Apply revisions **20251125_0004** through **20251125_0009** in order after merging PRs #20–#27.
+Apply revisions **20251125_0004** through **20251125_0010** in order after merging PRs #20–#28.
+
+For a single variable reference see **`RAILWAY_FINANCE_ENV.md`**.
 
 ## 2. Persistent receipt storage
 

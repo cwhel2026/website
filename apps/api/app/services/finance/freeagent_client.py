@@ -70,6 +70,24 @@ def token_expiry_from_payload(payload: dict[str, Any]) -> datetime | None:
         return None
 
 
+async def api_post(
+    settings: Settings, access_token: str, path: str, body: dict[str, Any]
+) -> dict[str, Any]:
+    base = settings.freeagent_api_base.rstrip("/")
+    url = f"{base}{path}" if path.startswith("/") else f"{base}/{path}"
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+    }
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        resp = await client.post(url, headers=headers, json=body)
+        resp.raise_for_status()
+        if not resp.content:
+            return {}
+        return resp.json()
+
+
 async def api_put(
     settings: Settings, access_token: str, path: str, body: dict[str, Any]
 ) -> dict[str, Any]:
@@ -232,6 +250,43 @@ async def attach_explanation_receipt(
         }
     }
     return await api_put(settings, access_token, path, body)
+
+
+async def fetch_users_me(settings: Settings, access_token: str) -> dict[str, Any]:
+    return await api_get(settings, access_token, "/v2/users/me")
+
+
+async def create_expense_with_attachment(
+    settings: Settings,
+    access_token: str,
+    *,
+    user_url: str,
+    category_url: str,
+    dated_on: str,
+    description: str,
+    gross_value: str,
+    sales_tax_value: str,
+    file_name: str,
+    content_type: str,
+    data_b64: str,
+) -> dict[str, Any]:
+    """Director personal expense reimbursement — requires approval before call."""
+    body = {
+        "expense": {
+            "user": user_url,
+            "category": category_url,
+            "dated_on": dated_on,
+            "description": description[:255],
+            "gross_value": gross_value,
+            "sales_tax_value": sales_tax_value,
+            "attachment": {
+                "file_name": file_name[:200],
+                "content_type": content_type,
+                "data": data_b64,
+            },
+        }
+    }
+    return await api_post(settings, access_token, "/v2/expenses", body)
 
 
 async def fetch_company_name(settings: Settings, access_token: str) -> str | None:

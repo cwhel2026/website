@@ -1,6 +1,8 @@
 from datetime import date, datetime
 from uuid import UUID
 
+from decimal import Decimal
+
 from pydantic import BaseModel, EmailStr, Field
 
 from app.models.company import OnboardingTaskStatus, PayrollStatus, VatStatus
@@ -22,6 +24,7 @@ class CompanyProfileIn(BaseModel):
     corporation_tax_registered: bool | None = None
     accountant_name: str | None = None
     accountant_email: EmailStr | None = None
+    director_desired_monthly_net_gbp: Decimal | None = Field(default=None, gt=0)
     mettle_account_hint: str | None = None
     freeagent_configured: bool = False
     directors_json: dict | None = None

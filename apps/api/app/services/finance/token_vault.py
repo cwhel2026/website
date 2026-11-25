@@ -39,3 +39,8 @@ def decrypt_token(ciphertext: str | None) -> str | None:
         return f.decrypt(ciphertext.encode("ascii")).decode("utf-8")
     except InvalidToken:
         return ciphertext
+
+
+def encryption_configured() -> bool:
+    settings = get_settings()
+    return bool(settings.finance_token_encryption_key and len(settings.finance_token_encryption_key) >= 32)

@@ -265,6 +265,96 @@ def finance_report_weekly(self) -> dict:
         session.close()
 
 
+@celery_app.task(name="rmd.finance_report_monthly", bind=True)
+def finance_report_monthly(self) -> dict:
+    session = SessionLocal()
+    run = start_run(session, "finance_report_monthly", dedupe_key=datetime.now(UTC).strftime("%Y-%m"), worker_id=_worker_id())
+    try:
+        from app.database import SessionLocal as AsyncSessionLocal
+        from app.services.finance.financial_reports import deliver_report_telegram, generate_monthly_finance_report
+
+        async def _run():
+            async with AsyncSessionLocal() as adb:
+                record = await generate_monthly_finance_report(adb)
+                await deliver_report_telegram(adb, record)
+                await adb.commit()
+                return {"report_id": str(record.id)}
+
+        detail = asyncio.run(_run())
+        finish_run(session, run, status=JobRunStatus.SUCCEEDED, detail=detail)
+        return detail
+    except Exception as exc:
+        finish_run(session, run, status=JobRunStatus.FAILED, error=str(exc))
+        raise
+    finally:
+        session.close()
+
+
+@celery_app.task(name="rmd.finance_report_annual", bind=True)
+def finance_report_annual(self) -> dict:
+    session = SessionLocal()
+    run = start_run(session, "finance_report_annual", dedupe_key=datetime.now(UTC).strftime("%Y"), worker_id=_worker_id())
+    try:
+        from app.database import SessionLocal as AsyncSessionLocal
+        from app.services.finance.financial_reports import (
+            deliver_report_telegram,
+            generate_annual_finance_report,
+            should_run_annual_report,
+        )
+
+        async def _run():
+            async with AsyncSessionLocal() as adb:
+                if not await should_run_annual_report(adb):
+                    return {"skipped": True}
+                record = await generate_annual_finance_report(adb)
+                await deliver_report_telegram(adb, record)
+                await adb.commit()
+                return {"report_id": str(record.id)}
+
+        detail = asyncio.run(_run())
+        finish_run(session, run, status=JobRunStatus.SUCCEEDED, detail=detail)
+        return detail
+    except Exception as exc:
+        finish_run(session, run, status=JobRunStatus.FAILED, error=str(exc))
+        raise
+    finally:
+        session.close()
+
+
+@celery_app.task(name="rmd.finance_task_centre_notify", bind=True)
+def finance_task_centre_notify(self) -> dict:
+    session = SessionLocal()
+    run = start_run(session, "finance_task_centre_notify", dedupe_key=datetime.now(UTC).date().isoformat(), worker_id=_worker_id())
+    try:
+        from app.database import SessionLocal as AsyncSessionLocal
+        from app.services.finance.financial_task_centre import task_centre_plain_summary
+        from app.services.notifications.outbox import enqueue_notification
+
+        async def _run():
+            async with AsyncSessionLocal() as adb:
+                body = await task_centre_plain_summary(adb)
+                await enqueue_notification(
+                    adb,
+                    channel="telegram",
+                    title="Finance task centre",
+                    body=body,
+                    category="finance_tasks",
+                    dedupe_key=f"tasks:{datetime.now(UTC).date().isoformat()}",
+                    priority="normal",
+                )
+                await adb.commit()
+                return {"queued": True}
+
+        detail = asyncio.run(_run())
+        finish_run(session, run, status=JobRunStatus.SUCCEEDED, detail=detail)
+        return detail
+    except Exception as exc:
+        finish_run(session, run, status=JobRunStatus.FAILED, error=str(exc))
+        raise
+    finally:
+        session.close()
+
+
 @celery_app.task(name="rmd.financial_watchdog", bind=True)
 def financial_watchdog(self) -> dict:
     session = SessionLocal()
