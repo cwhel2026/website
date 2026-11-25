@@ -16,6 +16,7 @@ from app.models.user import User
 from app.services.assistant_brain import answer_question
 from app.services.notifications.outbox import enqueue_notification
 from app.services.telegram.client import TelegramApiError, send_message
+from app.services.telegram.register import WebhookRegistrationError, register_telegram_webhook
 from app.services.telegram.webhook_info import fetch_webhook_info
 
 logger = logging.getLogger(__name__)
@@ -68,6 +69,35 @@ async def _safe_send(chat_id: int, text: str) -> int | None:
     except TelegramApiError as exc:
         logger.warning("Telegram outbound failed for chat %s: %s", chat_id, exc)
         return None
+
+
+@router.post("/register-webhook")
+async def telegram_register_webhook(
+    _: Annotated[User, Depends(get_current_admin)],
+) -> dict[str, Any]:
+    """Register or refresh the Telegram webhook from server env (no secrets returned)."""
+    try:
+        return register_telegram_webhook()
+    except WebhookRegistrationError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/register-webhook/bootstrap")
+async def telegram_register_webhook_bootstrap(
+    setup_key: Annotated[str | None, Header(alias="X-Telegram-Setup-Key")] = None,
+) -> dict[str, Any]:
+    """
+    One-off bootstrap when shell access is unavailable.
+    Set TELEGRAM_WEBHOOK_SETUP_KEY on the API service, call once, then remove the key.
+    """
+    cfg = get_settings()
+    expected = (cfg.telegram_webhook_setup_key or "").strip()
+    if not expected or setup_key != expected:
+        raise HTTPException(status_code=401, detail="Invalid setup key")
+    try:
+        return register_telegram_webhook()
+    except WebhookRegistrationError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.get("/status")

@@ -42,7 +42,29 @@ celery -A app.worker.celery_app worker --beat --loglevel=info
 
 ## 3. Register the webhook (one-off)
 
-**Option A — Railway shell (recommended)**
+**Option A — Automatic on API boot (recommended if you cannot use a shell)**
+
+When `TELEGRAM_AUTO_REGISTER_WEBHOOK` is not `false` (default), the API calls Telegram `setWebhook` on startup using `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, and `PUBLIC_API_BASE_URL`. **Redeploy the API** once after setting those variables.
+
+**Option B — Dashboard / bootstrap HTTP (no shell)**
+
+1. On the API service, add a temporary variable:  
+   `TELEGRAM_WEBHOOK_SETUP_KEY=<long random string>`
+2. Redeploy API.
+3. From any machine:
+
+```bash
+curl -sS -X POST "https://<api-host>/api/v1/telegram/register-webhook/bootstrap" \
+  -H "X-Telegram-Setup-Key: <same string>"
+```
+
+4. Remove `TELEGRAM_WEBHOOK_SETUP_KEY` and redeploy again.
+
+**Option C — Admin dashboard JWT**
+
+`POST /api/v1/telegram/register-webhook` with `Authorization: Bearer <admin token>`.
+
+**Option D — Railway shell**
 
 1. Open the **API** service → **Deployments** → latest deployment → **Shell** (or use [Railway CLI](https://docs.railway.app/develop/cli) `railway shell` linked to the API service).
 2. Confirm env is loaded: `test -n "$TELEGRAM_BOT_TOKEN" && echo ok`

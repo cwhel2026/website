@@ -33,6 +33,8 @@ class Settings(BaseSettings):
     telegram_owner_chat_id: int | None = None
     notification_morning_briefing_time: str = "06:30"
     notification_timezone: str = "Europe/London"
+    telegram_auto_register_webhook: bool = True
+    telegram_webhook_setup_key: str | None = None
     global_emergency_stop: bool = False
     meta_access_token: str | None = None
     meta_ad_account_id: str | None = None
