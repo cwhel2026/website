@@ -6,6 +6,8 @@ import hashlib
 import os
 from pathlib import Path
 
+import shutil
+
 from app.config import get_settings
 
 
@@ -14,6 +16,21 @@ def receipts_root() -> Path:
     root = Path(settings.finance_receipts_dir or "/tmp/rmd-finance-receipts")
     root.mkdir(parents=True, exist_ok=True)
     return root
+
+
+def backup_receipt_copy(storage_key: str) -> bool:
+    settings = get_settings()
+    backup_root = Path(settings.finance_receipts_backup_dir or "")
+    if not str(backup_root):
+        return False
+    backup_root.mkdir(parents=True, exist_ok=True)
+    src = receipts_root() / storage_key
+    if not src.exists():
+        return False
+    dest = backup_root / storage_key
+    if not dest.exists():
+        shutil.copy2(src, dest)
+    return True
 
 
 def save_receipt_bytes(content: bytes, filename: str) -> tuple[str, str]:
@@ -27,6 +44,7 @@ def save_receipt_bytes(content: bytes, filename: str) -> tuple[str, str]:
             os.chmod(path, 0o600)
         except OSError:
             pass
+    backup_receipt_copy(storage_key)
     return storage_key, digest
 
 

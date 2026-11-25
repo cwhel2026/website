@@ -231,6 +231,19 @@ async def ingest_telegram_receipt(
         summary.append("Saved to pending reconciliation queue.")
     else:
         summary.append("Could not read totals — add details in Finance hub or resend a clearer photo.")
+
+    if extraction.total_gbp:
+        cat = suggest_for_description(merchant, -abs(extraction.total_gbp))
+        summary.append(f"Suggested category: {cat.category.value} ({cat.confidence}% confidence).")
+        if cat.vat_likely:
+            summary.append("Likely VAT — keep receipt for records.")
+    if receipt.matched_bank_transaction_id and get_settings().finance_receipt_freeagent_attach:
+        from app.services.finance.freeagent_receipt_attach import attach_receipt_to_freeagent
+
+        attach = await attach_receipt_to_freeagent(db, receipt)
+        summary.append(
+            "Attached in FreeAgent." if attach.get("attached") else f"FreeAgent attach: {attach.get('reason')}."
+        )
     return receipt, " ".join(summary)
 
 
@@ -243,6 +256,8 @@ def summarise_receipt_reply(receipt: Receipt, detail: str) -> str:
         lines.append(f"Total: £{receipt.extracted_total_gbp}")
     if receipt.extracted_vat_gbp is not None:
         lines.append(f"VAT: £{receipt.extracted_vat_gbp}")
+    if receipt.freeagent_attach_status:
+        lines.append(f"FreeAgent: {receipt.freeagent_attach_status}")
     lines.append(detail)
     if receipt.ocr_status == "manual_required":
         lines.append("Tip: set OPENAI_API_KEY on the API service for automatic reading.")

@@ -18,6 +18,7 @@ class RemunerationInputs:
     distributable_reserves_gbp: Decimal
     company_cash_gbp: Decimal
     other_personal_income_gbp: Decimal = Decimal("0")
+    employer_pension_gbp: Decimal = Decimal("0")
 
 
 def _monthly_net_from_salary_and_dividend(
@@ -114,9 +115,21 @@ def optimise_remuneration(inputs: RemunerationInputs) -> dict:
     best = scenarios[0] if scenarios else None
     candidates = scenarios[:5]
 
+    strategy_summary = []
+    if best:
+        if best["dividend_gbp"] == 0:
+            strategy_summary.append("salary_heavy")
+        elif best["salary_gross_gbp"] == 0:
+            strategy_summary.append("dividend_heavy")
+        else:
+            strategy_summary.append("salary_and_dividend_blend")
+    personal_reserve_hint = float(target_annual_net) * 0.25
+
     return {
         "recommended": best,
         "alternatives": candidates,
+        "strategy_tags": strategy_summary,
+        "personal_tax_reserve_hint_gbp": personal_reserve_hint,
         "inputs": {
             "desired_monthly_net_gbp": float(inputs.desired_monthly_net_gbp),
             "profit_gbp": float(profit),

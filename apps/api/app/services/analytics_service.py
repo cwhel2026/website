@@ -6,7 +6,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.crm import Customer, Enquiry
-from app.models.finance import Invoice, InvoiceStatus, Payment
+from app.models.finance import Expense, Invoice, InvoiceStatus, Payment
 from app.models.quotation import Quotation, QuotationStatus
 from app.services.finance.profitability import territory_profitability
 
@@ -70,6 +70,24 @@ async def build_analytics_snapshot(db: AsyncSession, days: int = 30) -> Analytic
         quote_conversion_rate=round(conv, 2),
         unique_customers=customers or 0,
     )
+
+
+async def revenue_and_expense_summary(db: AsyncSession, days: int = 7) -> dict:
+    since = datetime.now(UTC) - timedelta(days=days)
+    collected = await db.scalar(
+        select(func.coalesce(func.sum(Payment.amount_gbp), 0)).where(Payment.paid_at >= since)
+    )
+    expense_sum = await db.scalar(
+        select(func.coalesce(func.sum(Expense.amount_gbp), 0)).where(Expense.expense_date >= since.date())
+    )
+    revenue = Decimal(str(collected or 0))
+    expenses = Decimal(str(expense_sum or 0))
+    return {
+        "period_days": days,
+        "revenue_gbp": float(revenue),
+        "expenses_gbp": float(expenses),
+        "profit_estimate_gbp": float(revenue - expenses),
+    }
 
 
 async def regional_analytics(db: AsyncSession) -> dict:

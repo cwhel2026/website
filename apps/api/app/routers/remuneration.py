@@ -13,6 +13,7 @@ from app.database import get_db
 from app.models.remuneration import DividendProposal, DividendProposalStatus
 from app.models.user import User
 from app.services.audit import record_audit
+from app.services.finance.freeagent_reports import distributable_profit_from_freeagent
 from app.services.finance.tax_reserves import compute_tax_reserves
 from app.services.remuneration.directors_loan import loan_balance, sync_directors_loan_from_reviews
 from app.services.remuneration.optimizer import RemunerationInputs, optimise_remuneration
@@ -35,8 +36,12 @@ async def optimise_pay(
     _: Annotated[User, Depends(get_current_admin)],
 ) -> dict:
     reserves_payload = await compute_tax_reserves(db)
+    fa_dist = await distributable_profit_from_freeagent(db)
     profit = body.annual_company_profit_gbp or Decimal(str(reserves_payload.get("profit_estimate_gbp", 0)))
-    reserves = body.distributable_reserves_gbp or profit
+    if fa_dist.get("available") and fa_dist.get("distributable_profit_gbp") is not None:
+        reserves = body.distributable_reserves_gbp or Decimal(str(fa_dist["distributable_profit_gbp"]))
+    else:
+        reserves = body.distributable_reserves_gbp or profit
     cash = body.company_cash_gbp or reserves
     if reserves_payload.get("is_provisional"):
         out = optimise_remuneration(
@@ -50,9 +55,10 @@ async def optimise_pay(
         )
         out["blocked"] = True
         out["blocked_reason"] = "Accounting data provisional — obtain accountant approval before acting."
+        out["requires_accountant_review"] = True
         return out
 
-    return optimise_remuneration(
+    out = optimise_remuneration(
         RemunerationInputs(
             desired_monthly_net_gbp=body.desired_monthly_net_gbp,
             annual_company_profit_before_remuneration_gbp=profit,
@@ -61,6 +67,10 @@ async def optimise_pay(
             other_personal_income_gbp=body.other_personal_income_gbp,
         )
     )
+    out["distributable_profit"] = fa_dist
+    out["company_cash_gbp"] = float(cash)
+    out["requires_accountant_review"] = True
+    return out
 
 
 class DividendProposalIn(BaseModel):

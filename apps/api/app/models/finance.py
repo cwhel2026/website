@@ -163,6 +163,8 @@ class Receipt(Base):
     processing_status: Mapped[str] = mapped_column(String(40), default="pending")
     ocr_status: Mapped[str] = mapped_column(String(40), default="not_processed")
     raw_extraction_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    freeagent_attach_status: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    freeagent_attach_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     uploaded_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -177,6 +179,8 @@ class BankTransaction(Base):
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
     external_id: Mapped[str | None] = mapped_column(String(120), unique=True, nullable=True)
+    freeagent_url: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    freeagent_explanation_url: Mapped[str | None] = mapped_column(String(255), nullable=True)
     description: Mapped[str] = mapped_column(String(255))
     amount_gbp: Mapped[Decimal] = mapped_column(Numeric(12, 2))
     transacted_at: Mapped[date] = mapped_column(Date)

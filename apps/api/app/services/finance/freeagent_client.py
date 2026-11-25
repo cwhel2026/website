@@ -70,6 +70,24 @@ def token_expiry_from_payload(payload: dict[str, Any]) -> datetime | None:
         return None
 
 
+async def api_put(
+    settings: Settings, access_token: str, path: str, body: dict[str, Any]
+) -> dict[str, Any]:
+    base = settings.freeagent_api_base.rstrip("/")
+    url = f"{base}{path}" if path.startswith("/") else f"{base}/{path}"
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+    }
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        resp = await client.put(url, headers=headers, json=body)
+        resp.raise_for_status()
+        if not resp.content:
+            return {}
+        return resp.json()
+
+
 async def api_get(settings: Settings, access_token: str, path: str) -> dict[str, Any]:
     base = settings.freeagent_api_base.rstrip("/")
     url = f"{base}{path}" if path.startswith("/") else f"{base}/{path}"
@@ -114,6 +132,106 @@ async def fetch_bank_transactions(
     except (TypeError, ValueError):
         total_i = None
     return txns, total_i
+
+
+async def fetch_paginated_list(
+    settings: Settings,
+    access_token: str,
+    path: str,
+    list_key: str,
+    *,
+    max_pages: int = 25,
+) -> list[dict[str, Any]]:
+    items: list[dict[str, Any]] = []
+    for page in range(1, max_pages + 1):
+        sep = "&" if "?" in path else "?"
+        payload = await api_get(settings, access_token, f"{path}{sep}page={page}&per_page=50")
+        batch = payload.get(list_key) or []
+        if not isinstance(batch, list) or not batch:
+            break
+        items.extend(batch)
+        total = payload.get("total")
+        if total is not None and page * 50 >= int(total):
+            break
+        if len(batch) < 50:
+            break
+    return items
+
+
+async def fetch_bills(settings: Settings, access_token: str) -> list[dict[str, Any]]:
+    return await fetch_paginated_list(settings, access_token, "/v2/bills", "bills")
+
+
+async def fetch_expenses(settings: Settings, access_token: str) -> list[dict[str, Any]]:
+    return await fetch_paginated_list(settings, access_token, "/v2/expenses", "expenses")
+
+
+async def profit_and_loss_summary(
+    settings: Settings, access_token: str, *, from_date: str, to_date: str
+) -> dict[str, Any]:
+    path = f"/v2/accounting/profit_and_loss/summary?from_date={from_date}&to_date={to_date}"
+    return await api_get(settings, access_token, path)
+
+
+async def balance_sheet_summary(
+    settings: Settings, access_token: str, *, as_at_date: str | None = None
+) -> dict[str, Any]:
+    path = "/v2/accounting/balance_sheet/summary"
+    if as_at_date:
+        path += f"?as_at_date={as_at_date}"
+    return await api_get(settings, access_token, path)
+
+
+async def trial_balance_summary(
+    settings: Settings, access_token: str, *, to_date: str | None = None
+) -> dict[str, Any]:
+    path = "/v2/accounting/trial_balance/summary"
+    if to_date:
+        path += f"?to_date={to_date}"
+    return await api_get(settings, access_token, path)
+
+
+async def fetch_categories(settings: Settings, access_token: str) -> dict[str, Any]:
+    return await api_get(settings, access_token, "/v2/categories")
+
+
+async def fetch_payroll_year(settings: Settings, access_token: str, year: int) -> dict[str, Any]:
+    return await api_get(settings, access_token, f"/v2/payroll/{year}")
+
+
+async def fetch_payroll_period(settings: Settings, access_token: str, year: int, period: int) -> dict[str, Any]:
+    return await api_get(settings, access_token, f"/v2/payroll/{year}/{period}")
+
+
+async def attach_explanation_receipt(
+    settings: Settings,
+    access_token: str,
+    explanation_path: str,
+    *,
+    dated_on: str,
+    gross_value: str,
+    bank_transaction_url: str,
+    file_name: str,
+    content_type: str,
+    data_b64: str,
+    description: str,
+) -> dict[str, Any]:
+    """PUT bank transaction explanation with base64 attachment — FreeAgent authoritative."""
+    path = explanation_path if explanation_path.startswith("/") else f"/v2/bank_transaction_explanations/{explanation_path.rsplit('/', 1)[-1]}"
+    body = {
+        "bank_transaction_explanation": {
+            "dated_on": dated_on,
+            "gross_value": gross_value,
+            "bank_transaction": bank_transaction_url,
+            "attachment": {
+                "file_name": file_name,
+                "content_type": content_type,
+                "data": data_b64,
+                "description": description,
+            },
+        }
+    }
+    return await api_put(settings, access_token, path, body)
 
 
 async def fetch_company_name(settings: Settings, access_token: str) -> str | None:
