@@ -20,6 +20,7 @@ const nav = [
   { href: "/dashboard/company-setup", label: "Company setup" },
   { href: "/dashboard/finance-hub", label: "Money hub" },
   { href: "/dashboard/tax-centre", label: "Tax & compliance" },
+  { href: "/dashboard/director-pay", label: "Director pay" },
   { href: "/dashboard/finance", label: "Finance" },
   { href: "/dashboard/invoices", label: "Invoices" },
   { href: "/dashboard/expenses", label: "Expenses" },
