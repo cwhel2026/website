@@ -36,6 +36,7 @@ from app.routers import (
     jobs,
     quotations,
     regional_ops,
+    remuneration,
     services,
     tax_centre,
     telegram,
@@ -119,6 +120,7 @@ app.include_router(company.router, prefix=prefix)
 app.include_router(finance.router, prefix=prefix)
 app.include_router(bookkeeping.router, prefix=prefix)
 app.include_router(tax_centre.router, prefix=prefix)
+app.include_router(remuneration.router, prefix=prefix)
 app.include_router(inventory.router, prefix=prefix)
 app.include_router(analytics.router, prefix=prefix)
 app.include_router(business_director.router, prefix=prefix)
