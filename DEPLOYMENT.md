@@ -47,7 +47,9 @@ That error means Railway is building from the **repository root** before the mon
 3. **Settings** → **Build** → Builder: **Dockerfile** (each app has `railway.toml` + `Dockerfile`).
 4. **Redeploy** (Deployments → three dots → Redeploy). `main` now contains `apps/web/package.json` and Dockerfiles — not README-only.
 
-For the web image build, set variable **`NEXT_PUBLIC_API_URL`** to your public API URL (e.g. `https://<api-service>.up.railway.app`) before deploy.
+For the web image build, set variable **`NEXT_PUBLIC_API_URL`** to your public API URL (e.g. `https://<api-service>.up.railway.app`) before deploy. Use the **origin only** — no trailing slash and **no** `/api/v1` suffix (the web app appends `/api/v1/...` on every request).
+
+On the **API** service, set **`PUBLIC_API_BASE_URL`** to the same origin for Telegram webhook registration (`scripts/register_telegram_webhook.py`). See [RAILWAY_TELEGRAM.md](./RAILWAY_TELEGRAM.md).
 
 ### Required variables
 

@@ -90,8 +90,12 @@ async def persist_submitted_quotation(
         customer_washed_already=body.customer_washed_already,
         postcode=body.postcode,
         town=body.town,
-        distance_km_from_base=body.distance_km_from_base,
     )
+    if territory is None or pricing is None:
+        raise HTTPException(
+            status_code=400,
+            detail=unsupported_reason or "Location is outside the online service area",
+        )
     if fingerprint != input_fingerprint:
         raise HTTPException(
             status_code=409,

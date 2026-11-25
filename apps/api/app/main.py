@@ -1,3 +1,5 @@
+import asyncio
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -40,6 +42,22 @@ from app.routers import (
 from app.seeds.bootstrap import seed_database
 
 settings = get_settings()
+logger = logging.getLogger(__name__)
+
+
+def _try_register_telegram_webhook() -> None:
+    if not settings.telegram_auto_register_webhook:
+        return
+    if not settings.telegram_bot_token or not settings.telegram_webhook_secret:
+        return
+    try:
+        from app.services.telegram.register import WebhookRegistrationError, register_telegram_webhook
+
+        register_telegram_webhook()
+    except WebhookRegistrationError as exc:
+        logger.warning("Telegram webhook auto-registration skipped: %s", exc)
+    except Exception:
+        logger.exception("Telegram webhook auto-registration failed")
 
 
 @asynccontextmanager
@@ -50,6 +68,7 @@ async def lifespan(_: FastAPI):
             await conn.run_sync(Base.metadata.create_all)
     async with SessionLocal() as session:
         await seed_database(session)
+    await asyncio.to_thread(_try_register_telegram_webhook)
     yield
 
 

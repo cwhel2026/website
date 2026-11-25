@@ -52,6 +52,7 @@ The **worker** does not need `+asyncpg`; it only needs `SYNC_DATABASE_URL` (and 
    - `REDIS_URL` (reference)
    - `ENVIRONMENT=production`
    - `JWT_SECRET` (same as API — harmless if copied)
+   - `TELEGRAM_BOT_TOKEN` and `TELEGRAM_ADMIN_IDS` if Telegram outbox delivery is enabled
    - Any others you already use on API (Open-Meteo needs no key)
 
 Easiest: use Railway **shared variables** for the whole project so api + worker stay in sync.

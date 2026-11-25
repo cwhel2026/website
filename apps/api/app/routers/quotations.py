@@ -16,11 +16,17 @@ from app.schemas.quotation import (
     InstantQuotationRequest,
     ProvisionalQuotationOut,
     ProvisionalQuotationRequest,
+    PublicQuotationOut,
     QuotationOut,
     QuotationSubmitRequest,
 )
 from app.services.quotation_persist import load_active_service, persist_submitted_quotation
-from app.services.quotation_workflow import PROVISIONAL_DISCLAIMER, priced_at_now, price_quotation_inputs
+from app.services.quotation_workflow import (
+    PROVISIONAL_DISCLAIMER,
+    priced_at_now,
+    price_quotation_inputs,
+    public_pricing_breakdown,
+)
 
 router = APIRouter(prefix="/quotations", tags=["quotations"])
 
@@ -44,13 +50,11 @@ async def calculate_provisional_quotation(
         customer_washed_already=body.customer_washed_already,
         postcode=body.postcode,
         town=body.town,
-        distance_km_from_base=body.distance_km_from_base,
     )
     out = ProvisionalQuotationOut(
         input_fingerprint=fingerprint,
         priced_at=priced_at_now(),
-        covered=territory is not None,
-        territory_id=territory.id if territory else None,
+        covered=territory is not None and pricing is not None,
         territory_name=territory.name if territory else None,
         surface_supported=supported,
         unsupported_reason=unsupported_reason,
@@ -62,14 +66,11 @@ async def calculate_provisional_quotation(
     out.subtotal_ex_vat_gbp = pricing.subtotal_ex_vat_gbp
     out.vat_gbp = pricing.vat_gbp
     out.total_inc_vat_gbp = pricing.total_inc_vat_gbp
-    out.estimated_labour_hours = pricing.estimated_labour_hours
-    out.meets_minimum_margin = pricing.meets_minimum_margin
-    out.requires_approval = pricing.requires_approval
-    out.breakdown = pricing.breakdown
+    out.breakdown = public_pricing_breakdown(pricing.breakdown)
     return out
 
 
-@router.post("/submit", response_model=QuotationOut)
+@router.post("/submit", response_model=PublicQuotationOut)
 @limiter.limit("12/minute")
 async def submit_quotation(
     request: Request,
@@ -84,44 +85,29 @@ async def submit_quotation(
         raise HTTPException(status_code=400, detail="Full name is required")
     if len(body.address_line1.strip()) < 3:
         raise HTTPException(status_code=400, detail="Address line 1 is required")
-    return await persist_submitted_quotation(
+    saved = await persist_submitted_quotation(
         db,
         body,
         input_fingerprint=body.input_fingerprint,
         idempotency_key=body.idempotency_key,
     )
+    public = PublicQuotationOut.model_validate(saved)
+    public.breakdown = public_pricing_breakdown(saved.breakdown)
+    return public
 
 
-@router.post("/instant", response_model=QuotationOut)
-@limiter.limit("12/minute")
+@router.post("/instant", response_model=PublicQuotationOut)
+@limiter.limit("4/minute")
 async def create_instant_quotation(
     request: Request,
     body: InstantQuotationRequest,
+    _: Annotated[User, Depends(get_current_admin)],
     db: Annotated[AsyncSession, Depends(get_db)],
-) -> QuotationOut:
-    """Legacy endpoint — requires full customer details and a fresh input_fingerprint from /provisional."""
-    service = await load_active_service(db, body.service_slug)
-    pricing, fingerprint, supported, unsupported_reason, _territory = await price_quotation_inputs(
-        db,
-        service=service,
-        surface_type=body.surface_type,
-        surface_condition=body.surface_condition,
-        sections_raw=body.sections,
-        requires_washing=body.requires_washing,
-        customer_washed_already=body.customer_washed_already,
-        postcode=body.postcode,
-        town=body.town,
-        distance_km_from_base=body.distance_km_from_base,
-    )
-    if not supported:
-        raise HTTPException(status_code=400, detail=unsupported_reason or "Surface not supported")
-    if pricing is None:
-        raise HTTPException(status_code=400, detail="Unable to price quotation")
-    return await persist_submitted_quotation(
-        db,
-        body,
-        input_fingerprint=fingerprint,
-        idempotency_key=None,
+) -> PublicQuotationOut:
+    """Deprecated for public use — owner-only escape hatch; website must use /provisional then /submit."""
+    raise HTTPException(
+        status_code=410,
+        detail="This endpoint is retired for public clients. Use /quotations/provisional then /quotations/submit.",
     )
 
 
@@ -142,6 +128,7 @@ async def list_quotations(
 async def get_quotation(
     quotation_id: UUID,
     db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[User, Depends(get_current_admin)],
 ) -> QuotationOut:
     result = await db.execute(
         select(Quotation)

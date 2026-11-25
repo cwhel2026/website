@@ -1,10 +1,26 @@
 # Implementation status
 
-Last updated: 2025-11-24 (stages 1–4 recovery).
+Last updated: 2025-11-25 (stage 5 in progress — safety + Telegram foundation).
 
 Status legend: **Not started** · **Scaffolded** · **Implemented** · **Tested locally** · **Integration verified** · **Production verified** · **Blocked**
 
-## Stage 4 (this run): FreeAgent, Alembic, rate limits
+## Stage 5 (in progress)
+
+| Feature | Status | Evidence / limits |
+|---------|--------|-------------------|
+| Booking weather cache safety | **Tested locally** | `weather/service.py` rejects simulated/stale cache when `for_booking=True`; `test_weather_booking_safety.py` |
+| Worker weather risk (no simulation for suitability) | **Implemented** | `appointment_weather_risk` sets `weather_suitable=None` when live fetch fails |
+| HQ weather refresh reporting | **Implemented** | Simulation-only refresh marks job **failed** with explicit error |
+| Public quotation API surface | **Tested locally** | `PublicQuotationOut`, sanitized `breakdown`, server-side travel distance |
+| `GET /quotations/{id}` exposure | **Implemented** | Admin auth required |
+| Legacy `POST /quotations/instant` | **Implemented** | Returns **410** for public clients |
+| Telegram outbound `sendMessage` | **Implemented** | `services/telegram/client.py` |
+| Telegram webhook delivery + dedupe | **Implemented** | `routers/telegram.py`, `telegram_processed_updates` |
+| Notification outbox + Celery delivery | **Implemented** | `notification_outbox`, `rmd.deliver_notification_outbox` (migration **0003** required) |
+| Telegram delivery in production | **Blocked** | Needs `TELEGRAM_*` env + migration + webhook registration (`STAGE5_CREDENTIALS.md`) |
+| PWA web push, Meta/Google ads, AI write tools | **Not started** | See stage 5 brief |
+
+## Stage 4: FreeAgent, Alembic, rate limits
 
 | Feature | Status | Evidence / limits |
 |---------|--------|-------------------|

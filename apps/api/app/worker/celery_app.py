@@ -30,7 +30,11 @@ celery_app.conf.update(
         },
         "morning-briefing": {
             "task": "rmd.morning_briefing",
-            "schedule": crontab(minute=0, hour=7),
+            "schedule": crontab(minute=30, hour=6),
+        },
+        "deliver-notifications": {
+            "task": "rmd.deliver_notification_outbox",
+            "schedule": crontab(minute="*/2"),
         },
     },
     timezone="Europe/London",

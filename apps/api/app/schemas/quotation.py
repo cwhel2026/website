@@ -27,14 +27,12 @@ class ProvisionalQuotationRequest(BaseModel):
     sections: list[QuotationSectionIn] = Field(..., min_length=1)
     requires_washing: bool = True
     customer_washed_already: bool = False
-    distance_km_from_base: Decimal = Decimal("15")
 
 
 class ProvisionalQuotationOut(BaseModel):
     input_fingerprint: str
     priced_at: datetime
     covered: bool
-    territory_id: UUID | None = None
     territory_name: str | None = None
     surface_supported: bool
     unsupported_reason: str | None = None
@@ -42,11 +40,16 @@ class ProvisionalQuotationOut(BaseModel):
     subtotal_ex_vat_gbp: Decimal | None = None
     vat_gbp: Decimal | None = None
     total_inc_vat_gbp: Decimal | None = None
+    provisional_disclaimer: str
+    breakdown: dict | None = None
+
+
+class AdminProvisionalQuotationOut(ProvisionalQuotationOut):
+    territory_id: UUID | None = None
     estimated_labour_hours: Decimal | None = None
     meets_minimum_margin: bool | None = None
     requires_approval: bool | None = None
-    provisional_disclaimer: str
-    breakdown: dict | None = None
+    internal_breakdown: dict | None = None
 
 
 class InstantQuotationRequest(BaseModel):
@@ -70,7 +73,6 @@ class InstantQuotationRequest(BaseModel):
     consent_marketing: bool = False
     source: str | None = "website"
     campaign: str | None = None
-    distance_km_from_base: Decimal = Decimal("15")
 
 
 class QuotationSubmitRequest(InstantQuotationRequest):
@@ -88,7 +90,7 @@ class QuotationSectionOut(ORMModel):
     area_sqm: Decimal
 
 
-class QuotationOut(ORMModel):
+class PublicQuotationOut(ORMModel):
     id: UUID
     reference: str
     status: QuotationStatus
@@ -98,14 +100,19 @@ class QuotationOut(ORMModel):
     subtotal_ex_vat_gbp: Decimal
     vat_gbp: Decimal
     total_inc_vat_gbp: Decimal
+    provisional_disclaimer: str
+    created_at: datetime
+    sections: list[QuotationSectionOut] = []
+    breakdown: dict | None = None
+
+
+class QuotationOut(PublicQuotationOut):
+    """Owner dashboard — includes internal costing fields."""
+
     estimated_labour_hours: Decimal
     estimated_materials_gbp: Decimal
     estimated_travel_gbp: Decimal
     estimated_contribution_gbp: Decimal
     meets_minimum_margin: bool
     requires_approval: bool
-    provisional_disclaimer: str
     territory_id: UUID | None
-    created_at: datetime
-    sections: list[QuotationSectionOut] = []
-    breakdown: dict | None = None

@@ -33,7 +33,12 @@ async def get_hourly_forecast(
     if db is not None:
         cached = await _load_cache(db, lat_r, lon_r, hours)
         if cached:
-            return cached
+            _forecast, source, is_live = cached
+            if for_booking and (not is_live or source == "simulation"):
+                # Stale or simulated cache must never drive booking decisions.
+                pass
+            else:
+                return cached
 
     live_error: str | None = None
     if provider in {"openmeteo", "auto"}:
