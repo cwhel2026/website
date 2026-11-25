@@ -31,11 +31,22 @@ def refresh_weather_hq(self) -> dict:
         try:
             rows = fetch_openmeteo_hourly_sync(lat, lon, hours=48)
             source = "openmeteo"
-        except Exception:
+            live = True
+        except Exception as exc:
             rows = simulate_hourly_forecast(lat, lon, hours=48)
             source = "simulation"
-        detail = {"source": source, "hours": len(rows), "lat": lat, "lon": lon}
-        finish_run(session, run, status=JobRunStatus.SUCCEEDED, detail=detail)
+            live = False
+        detail = {
+            "source": source,
+            "live_forecast": live,
+            "booking_safe": live,
+            "hours": len(rows),
+            "lat": lat,
+            "lon": lon,
+        }
+        status = JobRunStatus.SUCCEEDED if live else JobRunStatus.FAILED
+        error = None if live else "Live HQ weather unavailable; cache refreshed with simulation only (not for booking)."
+        finish_run(session, run, status=status, detail=detail, error=error)
         return detail
     except Exception as exc:
         finish_run(session, run, status=JobRunStatus.FAILED, error=str(exc))
@@ -66,18 +77,32 @@ def appointment_weather_risk(self) -> dict:
         ).scalars().all()
         checked = 0
         flagged = 0
+        live_failures = 0
         for appt in appts:
             lat = appt.latitude or 53.5977
             lon = appt.longitude or -2.8407
             try:
                 forecast = fetch_openmeteo_hourly_sync(lat, lon, hours=72)
             except Exception:
-                forecast = simulate_hourly_forecast(lat, lon, hours=72)
+                forecast = None
             activity = (
                 WorkActivity.WASHING
                 if appt.appointment_type == AppointmentType.PREPARATION
                 else WorkActivity.COATING
             )
+            if forecast is None:
+                appt.weather_suitable = None
+                appt.weather_notes = json.dumps(
+                    {
+                        "status": "unverified",
+                        "reason": "live_forecast_unavailable",
+                        "message": "Coating/wash suitability not updated — live weather required.",
+                    }
+                )
+                live_failures += 1
+                checked += 1
+                flagged += 1
+                continue
             result = score_window(
                 activity,
                 profile,
@@ -91,11 +116,62 @@ def appointment_weather_risk(self) -> dict:
             if not result.is_safe:
                 flagged += 1
         session.commit()
-        detail = {"checked": checked, "flagged_unsuitable": flagged}
+        detail = {
+            "checked": checked,
+            "flagged_unsuitable": flagged,
+            "live_failures": live_failures,
+        }
+        if live_failures:
+            from app.database import SessionLocal as AsyncSessionLocal
+            from app.services.notifications.outbox import notify_owner_telegram
+
+            async def _alert():
+                async with AsyncSessionLocal() as adb:
+                    await notify_owner_telegram(
+                        adb,
+                        title="Weather suitability unverified",
+                        body=(
+                            f"{live_failures} upcoming appointment(s) could not be checked against "
+                            "a live forecast. Coating approval is blocked until weather is verified."
+                        ),
+                        category="weather_risk",
+                        dedupe_key=f"weather-live-fail:{datetime.now(UTC).date().isoformat()}",
+                    )
+
+            asyncio.run(_alert())
+
         finish_run(session, run, status=JobRunStatus.SUCCEEDED, detail=detail)
         return detail
     except Exception as exc:
         session.commit()
+        finish_run(session, run, status=JobRunStatus.FAILED, error=str(exc))
+        raise
+    finally:
+        session.close()
+
+
+@celery_app.task(name="rmd.deliver_notification_outbox", bind=True)
+def deliver_notification_outbox(self) -> dict:
+    session = SessionLocal()
+    run = start_run(
+        session,
+        "deliver_notification_outbox",
+        dedupe_key=None,
+        worker_id=_worker_id(),
+    )
+    try:
+        from app.database import SessionLocal as AsyncSessionLocal
+        from app.services.notifications.outbox import process_pending_telegram
+
+        async def _deliver():
+            async with AsyncSessionLocal() as adb:
+                return await process_pending_telegram(adb)
+
+        count = asyncio.run(_deliver())
+        detail = {"delivered": count}
+        finish_run(session, run, status=JobRunStatus.SUCCEEDED, detail=detail)
+        return detail
+    except Exception as exc:
         finish_run(session, run, status=JobRunStatus.FAILED, error=str(exc))
         raise
     finally:

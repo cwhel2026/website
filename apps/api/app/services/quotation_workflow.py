@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.service import Service, SurfaceType
 from app.schemas.quotation import QuotationSectionIn
 from app.services.pricing_engine import PricingInput, QuotationSectionInput, calculate_quotation
+from app.services.quotation_travel import travel_km_from_base
 from app.services.territory_lookup import resolve_territory_for_postcode
 
 PROVISIONAL_DISCLAIMER = (
@@ -94,6 +95,16 @@ def quotation_input_fingerprint(payload: dict[str, Any]) -> str:
     return hashlib.sha256(canonical.encode()).hexdigest()
 
 
+def public_pricing_breakdown(breakdown: dict | None) -> dict | None:
+    if not breakdown:
+        return None
+    lines = []
+    for line in breakdown.get("lines") or []:
+        if line.get("amount_gbp") is not None:
+            lines.append({"label": line["label"], "amount_gbp": line["amount_gbp"]})
+    return {"lines": lines} if lines else None
+
+
 async def price_quotation_inputs(
     db: AsyncSession,
     *,
@@ -105,11 +116,11 @@ async def price_quotation_inputs(
     customer_washed_already: bool,
     postcode: str,
     town: str | None,
-    distance_km_from_base: Decimal,
 ) -> tuple[Any, str, bool, str | None, Any]:
     supported, unsupported_reason = surface_supported(service, surface_type)
     sections_in = validate_sections(sections_raw)
     territory = await resolve_territory_for_postcode(db, postcode, town or "")
+    distance_km_from_base = await travel_km_from_base(db, postcode)
     section_dicts = [
         {
             "label": s.label,
@@ -133,6 +144,11 @@ async def price_quotation_inputs(
         distance_km_from_base=distance_km_from_base,
     )
     fingerprint = quotation_input_fingerprint(fingerprint_basis)
+    if territory is None:
+        unsupported_reason = (
+            unsupported_reason or "We do not currently offer online booking for this location."
+        )
+        return None, fingerprint, supported, unsupported_reason, None
     if not supported:
         return None, fingerprint, False, unsupported_reason, territory
 

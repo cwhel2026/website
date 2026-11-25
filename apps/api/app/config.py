@@ -27,7 +27,11 @@ class Settings(BaseSettings):
     ai_provider: str = "auto"
     ai_daily_spend_limit_gbp: Decimal = Decimal("2.50")
     telegram_bot_token: str | None = None
+    telegram_webhook_secret: str | None = None
     telegram_admin_ids: str = ""
+    telegram_owner_chat_id: int | None = None
+    notification_morning_briefing_time: str = "06:30"
+    notification_timezone: str = "Europe/London"
     global_emergency_stop: bool = False
     meta_access_token: str | None = None
     meta_ad_account_id: str | None = None

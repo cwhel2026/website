@@ -7,6 +7,7 @@ from app.models.service import SurfaceType
 from app.schemas.quotation import QuotationSectionIn
 from app.services.quotation_workflow import (
     pricing_payload_dict,
+    public_pricing_breakdown,
     quotation_input_fingerprint,
     validate_sections,
 )
@@ -35,6 +36,23 @@ def test_fingerprint_changes_when_measurements_change():
         {"label": "Main", "length_m": "12", "width_m": "4", "area_sqm": "48"},
     ]
     assert quotation_input_fingerprint(base) != quotation_input_fingerprint(changed)
+
+
+def test_public_breakdown_strips_internal_costs():
+    internal = {
+        "profile_id": "abc",
+        "lines": [
+            {"label": "Surface restoration", "amount_gbp": 720.0},
+            {"label": "Travel", "amount_gbp": 40.0},
+        ],
+        "costs": {"labour_gbp": 200.0, "materials_gbp": 80.0},
+        "margin_ratio": 0.42,
+    }
+    public = public_pricing_breakdown(internal)
+    assert public is not None
+    assert "costs" not in public
+    assert "margin_ratio" not in public
+    assert len(public["lines"]) == 2
 
 
 def test_section_area_from_length_width():
