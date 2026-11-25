@@ -15,16 +15,14 @@ Telegram webhook URL becomes:
 
 `https://YOUR-RAILWAY-URL.up.railway.app/api/v1/telegram/webhook`
 
-## Switch your existing website service
+## Switch your existing website service (variables stay where they are)
+
+You **do not** need to move env vars off “website”. You only change **how the image is built** (two clicks):
 
 1. Open your **website** service in Railway.
-2. **Settings → Source → Root directory:** clear it (use **repo root**, not `apps/web`).
-3. **Settings → Build → Dockerfile path:** `apps/combined/Dockerfile`  
-   (or add a config file — Railway reads `apps/combined/railway.toml` if you set root to `apps/combined` **only if** you copy monorepo paths; **recommended: repo root + dockerfile path above**).
-
-   If Railway only allows root `apps/combined`, set root to **repository root** in the UI (blank or `/`).
-
-4. **Variables** (all on this one service):
+2. **Settings → Source → Root directory:** delete `apps/web` so it is **empty** (repository root). This is required so the build can include both `apps/web` and `apps/api` — the same as shipping frontend + API from one repo in other projects.
+3. Redeploy. Railway will use the repo-root **`railway.toml`**, which builds **`apps/combined/Dockerfile`** (one container: Next + FastAPI).
+4. **Variables** (keep on this service — no shuffle):
 
 | Variable | Value |
 |----------|--------|

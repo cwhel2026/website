@@ -1,4 +1,7 @@
-# In Railway: set this service Root Directory to apps/web, then redeploy.
+# Web-only image (Next.js). Telegram and FastAPI will NOT run with this config.
+#
+# For one-service deploys (variables on "website"), use the repo-root railway.toml
+# and Dockerfile apps/combined/Dockerfile — see RAILWAY_COMBINED.md.
 
 [build]
 builder = "DOCKERFILE"

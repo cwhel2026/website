@@ -1,10 +1,13 @@
-/** Empty = same origin (combined Railway service with Next.js → FastAPI proxy). */
-const API_URL = (
-  process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"
-).replace(/\/$/, "");
+/** Same-origin when NEXT_PUBLIC_API_URL is unset (combined Railway deploy). */
+export function resolveApiUrl(): string {
+  const configured = (process.env.NEXT_PUBLIC_API_URL ?? "").trim();
+  if (configured) return configured.replace(/\/$/, "");
+  if (typeof window !== "undefined") return "";
+  return (process.env.API_INTERNAL_URL ?? "http://localhost:8000").replace(/\/$/, "");
+}
 
 export async function apiGet<T>(path: string, token?: string): Promise<T> {
-  const res = await fetch(`${API_URL}${path}`, {
+  const res = await fetch(`${resolveApiUrl()}${path}`, {
     headers: token ? { Authorization: `Bearer ${token}` } : undefined,
     next: { revalidate: 60 },
   });
@@ -19,7 +22,7 @@ export async function apiPost<T>(
   body: unknown,
   token?: string,
 ): Promise<T> {
-  const res = await fetch(`${API_URL}${path}`, {
+  const res = await fetch(`${resolveApiUrl()}${path}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -34,4 +37,5 @@ export async function apiPost<T>(
   return res.json() as Promise<T>;
 }
 
-export { API_URL };
+/** @deprecated use resolveApiUrl() — empty on combined same-origin deploys */
+export const API_URL = resolveApiUrl();
