@@ -27,10 +27,12 @@ from app.routers import (
     marketing,
     marketing_public,
     public,
+    accountant,
     analytics,
     business_director,
     company,
     finance,
+    finance_insights,
     health,
     inventory,
     jobs,
@@ -121,6 +123,8 @@ app.include_router(finance.router, prefix=prefix)
 app.include_router(bookkeeping.router, prefix=prefix)
 app.include_router(tax_centre.router, prefix=prefix)
 app.include_router(remuneration.router, prefix=prefix)
+app.include_router(finance_insights.router, prefix=prefix)
+app.include_router(accountant.router, prefix=prefix)
 app.include_router(inventory.router, prefix=prefix)
 app.include_router(analytics.router, prefix=prefix)
 app.include_router(business_director.router, prefix=prefix)

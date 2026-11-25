@@ -241,7 +241,13 @@ async def telegram_webhook(
         reply_meta = {}
     else:
         try:
-            reply, reply_meta = await answer_question(db, text)
+            from app.services.finance.telegram_finance import answer_finance_question
+
+            finance_reply = await answer_finance_question(db, text)
+            if finance_reply:
+                reply, reply_meta = finance_reply, {}
+            else:
+                reply, reply_meta = await answer_question(db, text)
             outbound_text = reply[:4096]
         except Exception as exc:
             logger.exception("Assistant failed for Telegram message")

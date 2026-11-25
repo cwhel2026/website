@@ -44,6 +44,10 @@ celery_app.conf.update(
             "task": "rmd.bookkeeping_categorize",
             "schedule": crontab(minute=40, hour="*/4"),
         },
+        "financial-watchdog-daily": {
+            "task": "rmd.financial_watchdog",
+            "schedule": crontab(minute=0, hour=7),
+        },
     },
     timezone="Europe/London",
 )
