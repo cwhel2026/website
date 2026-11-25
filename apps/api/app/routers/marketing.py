@@ -28,12 +28,15 @@ from app.services.audit import record_audit
 from app.models.marketing_experiment import MarketingExperiment
 from app.models.marketing_research import MarketingResearchFinding
 from app.services.marketing.capacity_engine import territory_demand_insights
-from app.models.marketing_ops import CommercialProspect, MarketingBudgetPolicy
+from app.models.marketing_ops import CommercialProspect, MarketingBudgetPolicy, OutreachMessage, OutreachMessageStatus
 from app.services.marketing.budget_controls import (
+    emergency_pause_connected_platforms,
     get_or_create_budget_policy,
     validate_campaign_spend,
     weekly_spend_summary,
 )
+from app.services.marketing.email.outreach_mailer import approve_and_send
+from app.services.marketing.research.prospect_orchestrator import run_territory_research
 from app.services.marketing.commercial_prospect_engine import search_companies_house
 from app.services.marketing.director import build_daily_marketing_plan, build_weekly_marketing_plan
 from app.services.marketing.marketing_profitability import marketing_profitability_snapshot
@@ -150,6 +153,9 @@ class BudgetPolicyUpdate(BaseModel):
     monthly_limit_gbp: Decimal | None = None
     meta_daily_limit_gbp: Decimal | None = None
     google_daily_limit_gbp: Decimal | None = None
+    research_api_daily_limit_gbp: Decimal | None = None
+    outreach_email_enabled: bool | None = None
+    outreach_daily_cap: int | None = None
 
 
 @router.get("/budget")
@@ -174,6 +180,9 @@ def _policy_dict(policy: MarketingBudgetPolicy) -> dict:
         "monthly_limit_gbp": float(policy.monthly_limit_gbp),
         "meta_daily_limit_gbp": float(policy.meta_daily_limit_gbp),
         "google_daily_limit_gbp": float(policy.google_daily_limit_gbp),
+        "research_api_daily_limit_gbp": float(policy.research_api_daily_limit_gbp),
+        "outreach_email_enabled": policy.outreach_email_enabled,
+        "outreach_daily_cap": policy.outreach_daily_cap,
     }
 
 
@@ -567,10 +576,73 @@ async def flyer_pack(
     return {"order_pack_json": pack}
 
 
+class TerritoryResearchIn(BaseModel):
+    territory_id: UUID
+    category: str = "commercial_surface"
+    places_query: str | None = None
+
+
+@router.post("/research/territory")
+async def territory_research(
+    body: TerritoryResearchIn,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    user: Annotated[User, Depends(get_current_admin)],
+) -> dict:
+    result = await run_territory_research(
+        db,
+        territory_id=body.territory_id,
+        category=body.category,
+        places_query=body.places_query or "",
+    )
+    await record_audit(db, actor_type="user", actor_id=str(user.id), action="marketing.territory_research", entity_id=None)
+    await db.commit()
+    return result
+
+
+@router.post("/emergency-pause")
+async def emergency_pause(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    user: Annotated[User, Depends(get_current_admin)],
+) -> dict:
+    policy = await get_or_create_budget_policy(db)
+    policy.emergency_pause_all = True
+    platforms = await emergency_pause_connected_platforms()
+    await record_audit(db, actor_type="user", actor_id=str(user.id), action="marketing.emergency_pause", entity_id=policy.id)
+    await db.commit()
+    return {"policy": _policy_dict(policy), "platforms": platforms}
+
+
+@router.post("/outreach/{message_id}/send-approved")
+async def send_outreach(
+    message_id: UUID,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    user: Annotated[User, Depends(get_current_admin)],
+) -> dict:
+    msg = await db.get(OutreachMessage, message_id)
+    if msg is None:
+        raise HTTPException(404)
+    prospect = await db.get(CommercialProspect, msg.prospect_id)
+    if prospect is None:
+        raise HTTPException(404)
+    msg.status = OutreachMessageStatus.APPROVED
+    msg.approved_by = str(user.id)
+    result = await approve_and_send(db, msg, prospect)
+    await record_audit(db, actor_type="user", actor_id=str(user.id), action="marketing.outreach_send", entity_id=msg.id)
+    await db.commit()
+    if not result.get("ok"):
+        raise HTTPException(400, result.get("message"))
+    return result
+
+
 class AttributionIn(BaseModel):
     source: str
     medium: str = "unknown"
     content: str | None = None
+    utm_campaign: str | None = None
+    utm_source: str | None = None
+    utm_medium: str | None = None
+    utm_content: str | None = None
+    utm_term: str | None = None
     campaign_id: UUID | None = None
     flyer_campaign_id: UUID | None = None
 
@@ -582,9 +654,14 @@ async def track_attribution(
 ) -> dict[str, str]:
     db.add(
         AttributionEvent(
-            source=body.source,
-            medium=body.medium,
-            content=body.content,
+            source=body.utm_source or body.source,
+            medium=body.utm_medium or body.medium,
+            content=body.utm_content or body.content,
+            utm_campaign=body.utm_campaign,
+            utm_source=body.utm_source,
+            utm_medium=body.utm_medium,
+            utm_content=body.utm_content,
+            utm_term=body.utm_term,
             campaign_id=body.campaign_id,
             flyer_campaign_id=body.flyer_campaign_id,
         )

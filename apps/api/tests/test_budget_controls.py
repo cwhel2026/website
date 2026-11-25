@@ -18,6 +18,9 @@ async def test_live_spend_blocked_by_default():
         monthly_limit_gbp=Decimal("0"),
         meta_daily_limit_gbp=Decimal("0"),
         google_daily_limit_gbp=Decimal("0"),
+        research_api_daily_limit_gbp=Decimal("5"),
+        outreach_email_enabled=False,
+        outreach_daily_cap=20,
     )
     db = AsyncMock()
     db.execute = AsyncMock(
@@ -44,6 +47,9 @@ async def test_simulation_allowed_without_live_approval():
         monthly_limit_gbp=Decimal("0"),
         meta_daily_limit_gbp=Decimal("0"),
         google_daily_limit_gbp=Decimal("0"),
+        research_api_daily_limit_gbp=Decimal("5"),
+        outreach_email_enabled=False,
+        outreach_daily_cap=20,
     )
     db = AsyncMock()
     db.execute = AsyncMock(
@@ -69,6 +75,9 @@ async def test_emergency_pause_blocks_all():
         monthly_limit_gbp=Decimal("0"),
         meta_daily_limit_gbp=Decimal("100"),
         google_daily_limit_gbp=Decimal("100"),
+        research_api_daily_limit_gbp=Decimal("5"),
+        outreach_email_enabled=False,
+        outreach_daily_cap=20,
     )
     db = AsyncMock()
     db.execute = AsyncMock(

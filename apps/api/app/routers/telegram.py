@@ -188,6 +188,42 @@ async def telegram_webhook(
         return JSONResponse({"status": "unauthorised", "delivered_hint": True})
 
     photo_id = _largest_photo_file_id(message)
+    caption = (message.get("caption") or "").strip()
+    if photo_id and caption.lower().startswith("#marketing"):
+        from app.services.finance.bookkeeping.receipt_processor import download_telegram_file
+        from app.services.marketing.before_after import ingest_marketing_photo
+
+        db.add(
+            TelegramProcessedUpdate(
+                update_id=update.update_id,
+                chat_id=chat_id,
+                message_text="[marketing_photo]",
+            )
+        )
+        try:
+            data, fname = await download_telegram_file(photo_id)
+            is_before = "before" in caption.lower()
+            asset = await ingest_marketing_photo(
+                db,
+                data=data,
+                filename=fname or "telegram.jpg",
+                job_id=None,
+                telegram_file_id=photo_id,
+                is_before=is_before,
+                customer_permission="permission" in caption.lower(),
+            )
+            await db.commit()
+            await _safe_send(
+                chat_id,
+                f"Marketing photo stored ({asset.category}). "
+                "Link to a job in Content studio or send paired before/after with customer permission.",
+            )
+            return JSONResponse({"status": "marketing_media_ok", "asset_id": str(asset.id)})
+        except Exception as exc:
+            await db.rollback()
+            await _safe_send(chat_id, f"Could not store marketing photo: {str(exc)[:120]}")
+            return JSONResponse({"status": "marketing_media_failed"})
+
     if photo_id and not text:
         from app.services.finance.bookkeeping.receipt_processor import (
             ingest_telegram_receipt,

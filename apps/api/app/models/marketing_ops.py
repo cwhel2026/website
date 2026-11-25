@@ -55,6 +55,9 @@ class MarketingBudgetPolicy(Base):
     meta_daily_limit_gbp: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal("0"))
     google_daily_limit_gbp: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal("0"))
     max_single_increase_pct: Mapped[Decimal] = mapped_column(Numeric(5, 2), default=Decimal("20"))
+    research_api_daily_limit_gbp: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal("5"))
+    outreach_email_enabled: Mapped[bool] = mapped_column(default=False)
+    outreach_daily_cap: Mapped[int] = mapped_column(Integer, default=20)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
@@ -90,6 +93,10 @@ class CommercialProspect(Base):
     is_corporate_subscriber: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     opt_out: Mapped[bool] = mapped_column(default=False)
     evidence_json: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    google_place_id: Mapped[str | None] = mapped_column(String(120), unique=True, nullable=True)
+    registered_address: Mapped[str | None] = mapped_column(Text, nullable=True)
+    trading_premises_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    responsible_org_hint: Mapped[str | None] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -110,6 +117,72 @@ class OutreachMessage(Base):
     )
     approved_by: Mapped[str | None] = mapped_column(String(120), nullable=True)
     sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    sequence_step: Mapped[int] = mapped_column(Integer, default=1)
+    provider_message_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    delivery_status: Mapped[str] = mapped_column(String(40), default="pending")
+    bounced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    replied_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
+class MarketingEmailSuppression(Base):
+    __tablename__ = "marketing_email_suppressions"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    email_normalized: Mapped[str] = mapped_column(String(320), unique=True, index=True)
+    reason: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
+class MarketingProspectResearchRun(Base):
+    __tablename__ = "marketing_prospect_research_runs"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    territory_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("territories.id"), nullable=True
+    )
+    category: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    sources_json: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    imported_count: Mapped[int] = mapped_column(Integer, default=0)
+    api_cost_estimate_gbp: Mapped[Decimal] = mapped_column(Numeric(10, 4), default=Decimal("0"))
+    status: Mapped[str] = mapped_column(String(40), default="completed")
+    detail_json: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    ran_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
+class MarketingIntegrationSecret(Base):
+    __tablename__ = "marketing_integration_secrets"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    provider: Mapped[str] = mapped_column(String(40), unique=True)
+    encrypted_payload: Mapped[str | None] = mapped_column(Text, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class MarketingBeforeAfterPackage(Base):
+    __tablename__ = "marketing_before_after_packages"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    job_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    before_asset_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("marketing_media_assets.id"), nullable=True
+    )
+    after_asset_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("marketing_media_assets.id"), nullable=True
+    )
+    layout_status: Mapped[str] = mapped_column(String(40), default="pending")
+    content_item_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("marketing_content_items.id"), nullable=True
+    )
+    customer_permission: Mapped[bool] = mapped_column(default=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -127,6 +200,8 @@ class MarketingMediaAsset(Base):
     source: Mapped[str] = mapped_column(String(40), default="upload")
     customer_permission: Mapped[bool] = mapped_column(default=False)
     is_ai_generated: Mapped[bool] = mapped_column(default=False)
+    category: Mapped[str] = mapped_column(String(40), default="general")
+    telegram_file_id: Mapped[str | None] = mapped_column(String(200), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

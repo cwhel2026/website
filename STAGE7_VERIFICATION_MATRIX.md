@@ -15,4 +15,15 @@
 | Marketing hub UI | Yes | Manual | N/A | N/A | N/A | — |
 | Telegram marketing tools | Yes | Partial | N/A | N/A | N/A | — |
 | Content calendar publish | Schema | No | No | No | No | Meta/GBP write APIs |
-| Celery marketing daily report | Planned | No | N/A | N/A | N/A | Beat schedule |
+| Celery marketing daily report | Yes | No | N/A | N/A | N/A | Beat schedule enabled |
+| Multi-source prospect research | Yes | Partial | With API keys | With API keys | N/A | CH + Places + OSM |
+| Google Places research | Yes | Partial | With key | With key | N/A | GOOGLE_PLACES_API_KEY |
+| OSM Overpass research | Yes | Yes | N/A | N/A | N/A | Attribution required |
+| SMTP outreach send | Yes | Partial | With SMTP | With SMTP | Requires approval | outreach_email_enabled |
+| Meta paused campaign create | Yes | No | With token | With token | App review | PAUSED default |
+| Meta emergency pause | Yes | No | With token | With token | — | |
+| Google Ads search (transport) | Yes | Partial | With refresh | With refresh | OAuth | Dry-run default |
+| Content studio AI drafts | Yes | No | With OpenAI | With OpenAI | — | Approval queue |
+| Telegram #marketing photos | Yes | No | N/A | N/A | — | Volume for media |
+| Integration setup centre UI | Yes | Manual | N/A | N/A | N/A | |
+| GBP / GA4 / GSC | Scaffold | No | No | No | No | Credentials TBD |
