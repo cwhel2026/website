@@ -24,6 +24,6 @@
 | Security audit endpoint | Full | Partial | — | Config evidence |
 | Auto payments / HMRC file | Unsupported | — | — | Never |
 
-**Merge path:** PRs #20 → #28 (6.2 stacks on #27). Migration **0010** after **0009**.
+**Merge path:** PRs #20 → #29 (6.2 stacks on #27). Migration **0010** after **0009**.
 
 **Tests (local):** `pytest` in `apps/api`; Playwright `apps/web/e2e/finance-hub.spec.ts`.

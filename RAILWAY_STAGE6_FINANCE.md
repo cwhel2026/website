@@ -11,7 +11,7 @@ export DATABASE_MIGRATIONS_MANAGED=true
 cd apps/api && alembic upgrade head
 ```
 
-Apply revisions **20251125_0004** through **20251125_0010** in order after merging PRs #20–#28.
+Apply revisions **20251125_0004** through **20251125_0010** in order after merging PRs #20–#29.
 
 For a single variable reference see **`RAILWAY_FINANCE_ENV.md`**.
 
