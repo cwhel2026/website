@@ -13,7 +13,7 @@ from app.database import get_db
 from app.models.remuneration import DividendProposal, DividendProposalStatus
 from app.models.user import User
 from app.services.audit import record_audit
-from app.services.finance.freeagent_reports import distributable_profit_from_freeagent
+from app.services.finance.distributable_reserves import compute_distributable_reserves
 from app.services.finance.tax_reserves import compute_tax_reserves
 from app.services.remuneration.directors_loan import loan_balance, sync_directors_loan_from_reviews
 from app.services.remuneration.optimizer import RemunerationInputs, optimise_remuneration
@@ -36,27 +36,29 @@ async def optimise_pay(
     _: Annotated[User, Depends(get_current_admin)],
 ) -> dict:
     reserves_payload = await compute_tax_reserves(db)
-    fa_dist = await distributable_profit_from_freeagent(db)
+    dist = await compute_distributable_reserves(db)
     profit = body.annual_company_profit_gbp or Decimal(str(reserves_payload.get("profit_estimate_gbp", 0)))
-    if fa_dist.get("available") and fa_dist.get("distributable_profit_gbp") is not None:
-        reserves = body.distributable_reserves_gbp or Decimal(str(fa_dist["distributable_profit_gbp"]))
-    else:
-        reserves = body.distributable_reserves_gbp or profit
+
+    if not dist.get("available"):
+        return {
+            "blocked": True,
+            "blocked_reason": dist.get("message", "FreeAgent reserves not available."),
+            "requires_accountant_review": True,
+            "distributable_reserves": dist,
+        }
+
+    reserves = body.distributable_reserves_gbp or Decimal(
+        str(dist.get("after_tax_and_pending_dividends_gbp") or dist.get("distributable_profit_gbp") or 0)
+    )
     cash = body.company_cash_gbp or reserves
+
+    block_reasons: list[str] = []
+    if dist.get("blocked"):
+        block_reasons.append(dist.get("message") or "P&L vs balance sheet mismatch or provisional data.")
     if reserves_payload.get("is_provisional"):
-        out = optimise_remuneration(
-            RemunerationInputs(
-                desired_monthly_net_gbp=body.desired_monthly_net_gbp,
-                annual_company_profit_before_remuneration_gbp=profit,
-                distributable_reserves_gbp=reserves,
-                company_cash_gbp=cash,
-                other_personal_income_gbp=body.other_personal_income_gbp,
-            )
-        )
-        out["blocked"] = True
-        out["blocked_reason"] = "Accounting data provisional — obtain accountant approval before acting."
-        out["requires_accountant_review"] = True
-        return out
+        block_reasons.append("Accounting data provisional.")
+    if reserves <= 0 and profit <= 0:
+        block_reasons.append("No verified profit or reserves.")
 
     out = optimise_remuneration(
         RemunerationInputs(
@@ -67,9 +69,12 @@ async def optimise_pay(
             other_personal_income_gbp=body.other_personal_income_gbp,
         )
     )
-    out["distributable_profit"] = fa_dist
+    out["distributable_reserves"] = dist
     out["company_cash_gbp"] = float(cash)
     out["requires_accountant_review"] = True
+    if block_reasons:
+        out["blocked"] = True
+        out["blocked_reason"] = " ".join(block_reasons)
     return out
 
 

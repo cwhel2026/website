@@ -165,10 +165,15 @@ async def sync_bills_and_expenses(db: AsyncSession) -> dict:
         token = await ensure_fresh_token(db, row, settings)
         bills = await freeagent_client.fetch_bills(settings, token)
         expenses = await freeagent_client.fetch_expenses(settings, token)
+        categories = await freeagent_client.fetch_categories(settings, token)
     except (httpx.HTTPError, ValueError) as exc:
         return {"bills": 0, "expenses": 0, "message": str(exc)}
 
-    for key, payload in (("bills_cache", {"bills": bills}), ("expenses_cache", {"expenses": expenses})):
+    for key, payload in (
+        ("bills_cache", {"bills": bills}),
+        ("expenses_cache", {"expenses": expenses}),
+        ("categories_cache", categories),
+    ):
         result = await db.execute(
             select(FreeAgentResourceCache).where(FreeAgentResourceCache.resource_key == key)
         )

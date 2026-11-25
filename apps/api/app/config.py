@@ -59,6 +59,8 @@ class Settings(BaseSettings):
     finance_receipts_backup_dir: str | None = None
     finance_telegram_ingest_key: str | None = None
     finance_receipt_freeagent_attach: bool = False
+    finance_receipt_freeagent_expense: bool = False
+    freeagent_default_expense_category_url: str | None = None
     public_dashboard_base_url: str | None = None
 
     @property

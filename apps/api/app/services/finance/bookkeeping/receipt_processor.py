@@ -237,13 +237,20 @@ async def ingest_telegram_receipt(
         summary.append(f"Suggested category: {cat.category.value} ({cat.confidence}% confidence).")
         if cat.vat_likely:
             summary.append("Likely VAT — keep receipt for records.")
-    if receipt.matched_bank_transaction_id and get_settings().finance_receipt_freeagent_attach:
-        from app.services.finance.freeagent_receipt_attach import attach_receipt_to_freeagent
+    from app.services.finance.receipt_accounting import classify_receipt_route, push_receipt_to_freeagent
 
-        attach = await attach_receipt_to_freeagent(db, receipt)
-        summary.append(
-            "Attached in FreeAgent." if attach.get("attached") else f"FreeAgent attach: {attach.get('reason')}."
-        )
+    txn = matched
+    route = classify_receipt_route(receipt, txn)
+    receipt.accounting_route = route.value
+    summary.append(f"Accounting route: {route.value}.")
+    if get_settings().finance_receipt_freeagent_attach or get_settings().finance_receipt_freeagent_expense:
+        attach = await push_receipt_to_freeagent(db, receipt, approved=False)
+        if attach.get("ok"):
+            summary.append("FreeAgent ready after approval.")
+        elif attach.get("reason") == "approval_required":
+            summary.append("Approve in dashboard to post to FreeAgent.")
+        else:
+            summary.append(f"FreeAgent: {attach.get('reason', attach.get('message', 'queued'))}.")
     return receipt, " ".join(summary)
 
 

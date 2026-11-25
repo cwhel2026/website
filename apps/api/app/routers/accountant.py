@@ -7,7 +7,12 @@ from app.auth import get_current_accountant_or_admin
 from app.database import get_db
 from app.models.user import User
 from app.services.compliance.engine import upcoming_reminders
-from app.services.finance.exports import export_expenses_csv, export_invoices_csv, year_end_pack_metadata
+from app.services.finance.exports import (
+    export_bank_transactions_csv,
+    export_expenses_csv,
+    export_invoices_csv,
+    year_end_pack_metadata,
+)
 from app.services.finance.bookkeeping.review_queue import list_pending_reviews
 from app.services.finance.tax_reserves import compute_tax_reserves
 
@@ -65,4 +70,17 @@ async def export_expenses(
         content=csv_text,
         media_type="text/csv",
         headers={"Content-Disposition": "attachment; filename=expenses.csv"},
+    )
+
+
+@router.get("/export/bank.csv")
+async def export_bank(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[User, Depends(get_current_accountant_or_admin)],
+) -> Response:
+    csv_text = await export_bank_transactions_csv(db)
+    return Response(
+        content=csv_text,
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=bank_transactions.csv"},
     )

@@ -27,7 +27,7 @@ Architecture rule: **FreeAgent is authoritative**; local rows are cache/review l
 | Operation | Method | Notes |
 |-----------|--------|-------|
 | Bank transaction explanation + attachment | `PUT /v2/bank_transaction_explanations/{id}` | Base64 attachment ≤5MB in JSON body |
-| Expense + attachment | `POST /v2/expenses` | Attachment in payload per FA docs |
+| Expense + attachment | `POST /v2/expenses` | Director personal reimbursement; `FINANCE_RECEIPT_FREEAGENT_EXPENSE` + approval |
 | Bill + attachment | `POST` or `PUT /v2/bills` | No separate upload endpoint |
 
 Writes are only called from **approved** receipt reconciliation flows; failures are logged, never fabricated as success.

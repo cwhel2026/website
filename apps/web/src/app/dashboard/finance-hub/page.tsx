@@ -14,8 +14,18 @@ type ReviewItem = {
   duplicate: boolean;
 };
 
+type FinanceTask = {
+  title: string;
+  why: string;
+  when: string;
+  how: string;
+  professional_assistance: boolean;
+  severity: string;
+};
+
 export default function FinanceHubPage() {
   const [queue, setQueue] = useState<ReviewItem[]>([]);
+  const [tasks, setTasks] = useState<FinanceTask[]>([]);
   const [status, setStatus] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -25,6 +35,9 @@ export default function FinanceHubPage() {
     apiGet<ReviewItem[]>("/api/v1/finance/bookkeeping/review-queue", token)
       .then(setQueue)
       .catch(() => setQueue([]));
+    apiGet<{ tasks: FinanceTask[] }>("/api/v1/finance/insights/tasks", token)
+      .then((r) => setTasks(r.tasks.slice(0, 6)))
+      .catch(() => setTasks([]));
   }, []);
 
   useEffect(() => {
@@ -90,6 +103,23 @@ export default function FinanceHubPage() {
         </a>
       </div>
       {status ? <p className="mt-2 text-sm text-slate-600">{status}</p> : null}
+
+      {tasks.length > 0 ? (
+        <section className="mt-6 rounded-xl border border-emerald-100 bg-emerald-50/60 p-4">
+          <h2 className="text-sm font-semibold text-emerald-950">What to do next</h2>
+          <ul className="mt-2 space-y-2 text-sm text-slate-700">
+            {tasks.map((t) => (
+              <li key={t.title}>
+                <span className="font-medium">{t.title}</span>
+                {t.professional_assistance ? " · accountant" : null} — {t.when}
+              </li>
+            ))}
+          </ul>
+          <a href="/dashboard/tax-centre" className="mt-3 inline-block text-xs font-semibold text-emerald-800">
+            Open tax centre
+          </a>
+        </section>
+      ) : null}
 
       <section className="mt-6">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">

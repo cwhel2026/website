@@ -3,7 +3,7 @@ import uuid
 from datetime import date, datetime
 from decimal import Decimal
 
-from sqlalchemy import Boolean, Date, DateTime, Enum, Integer, String, Text, func
+from sqlalchemy import Boolean, Date, DateTime, Enum, Integer, Numeric, String, Text, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -71,6 +71,9 @@ class CompanyProfile(Base):
     accountant_email: Mapped[str | None] = mapped_column(String(320), nullable=True)
     shareholders_json: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     directors_json: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    director_desired_monthly_net_gbp: Mapped[Decimal | None] = mapped_column(
+        Numeric(12, 2), nullable=True
+    )
     mettle_account_hint: Mapped[str | None] = mapped_column(String(255), nullable=True)
     freeagent_configured: Mapped[bool] = mapped_column(Boolean, default=False)
     onboarding_completed_at: Mapped[datetime | None] = mapped_column(

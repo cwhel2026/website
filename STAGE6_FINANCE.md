@@ -13,8 +13,9 @@ Architecture: **Mettle → FreeAgent → Revive AI Finance Director**. FreeAgent
 | E Watchdog + Telegram finance | [#25](https://github.com/cwhel2026/website/pull/25) | — | Yes |
 | F Accountant + exports | [#26](https://github.com/cwhel2026/website/pull/26) | 0008 | Yes |
 | 6.1 FreeAgent completion + reports | [#27](https://github.com/cwhel2026/website/pull/27) (stack) | 0009 | Yes |
+| 6.2 Production readiness | [#29](https://github.com/cwhel2026/website/pull/29) (stack) | 0010 | Yes |
 
-See also `STAGE6_VERIFICATION_MATRIX.md` and `RAILWAY_STAGE6_FINANCE.md`.
+See `STAGE6_VERIFICATION_MATRIX.md`, `RAILWAY_FINANCE_ENV.md`, and `RAILWAY_STAGE6_FINANCE.md`.
 
 **Production verified:** owner must merge stack, run migrations 0004–0008, set env vars, connect FreeAgent, and confirm Telegram/worker on API service.
 

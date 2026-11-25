@@ -94,24 +94,25 @@ async def get_cached_report(db: AsyncSession, key: str) -> dict | None:
 
 
 async def distributable_profit_from_freeagent(db: AsyncSession) -> dict:
-    pl = await get_cached_report(db, "pl_summary_ytd")
-    if pl is None:
+    from app.services.finance.distributable_reserves import compute_distributable_reserves
+
+    detailed = await compute_distributable_reserves(db)
+    if not detailed.get("available"):
         return {
             "source": "freeagent",
             "available": False,
-            "message": "Run FreeAgent report sync first — no cached P&L.",
+            "message": detailed.get("message", "Run FreeAgent report sync first."),
+            "requires_accountant_review": True,
         }
-    retained = _extract_retained_profit(pl)
     return {
         "source": "freeagent",
-        "available": retained is not None,
-        "distributable_profit_gbp": float(retained) if retained is not None else None,
-        "provisional": False,
-        "message": (
-            "From FreeAgent P&L retained profit carried forward — confirm with accountant before dividends."
-            if retained is not None
-            else "FreeAgent P&L did not include retained profit field — use accountant figures."
-        ),
+        "available": True,
+        "distributable_profit_gbp": detailed.get("after_tax_and_pending_dividends_gbp"),
+        "retained_profit_gbp": detailed.get("distributable_profit_gbp"),
+        "provisional": detailed.get("blocked", False),
+        "message": detailed.get("plain_english"),
+        "detail": detailed,
+        "requires_accountant_review": True,
     }
 
 

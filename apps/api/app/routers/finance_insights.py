@@ -6,7 +6,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth import get_current_admin
 from app.database import get_db
 from app.models.user import User
-from app.services.finance.cashflow import simple_cashflow_forecast
+from app.services.finance.cashflow import multi_horizon_cashflow, simple_cashflow_forecast
+from app.services.finance.distributable_reserves import compute_distributable_reserves
+from app.services.finance.finance_security_audit import run_finance_security_audit
+from app.services.finance.financial_task_centre import build_financial_tasks, task_centre_plain_summary
 from app.services.finance.profitability import territory_profitability
 from app.services.finance.financial_reports import (
     generate_annual_finance_report,
@@ -146,4 +149,42 @@ async def cashflow(
     _: Annotated[User, Depends(get_current_admin)],
     days: int = 30,
 ) -> dict:
+    if days in (7, 30, 90, 365):
+        full = await multi_horizon_cashflow(db)
+        return full["horizons"].get(str(days), await simple_cashflow_forecast(db, days=days))
     return await simple_cashflow_forecast(db, days=days)
+
+
+@router.get("/cashflow/scenarios")
+async def cashflow_scenarios(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[User, Depends(get_current_admin)],
+) -> dict:
+    return await multi_horizon_cashflow(db)
+
+
+@router.get("/distributable-reserves")
+async def distributable_reserves(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[User, Depends(get_current_admin)],
+) -> dict:
+    payload = await compute_distributable_reserves(db)
+    await db.commit()
+    return payload
+
+
+@router.get("/tasks")
+async def finance_tasks(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[User, Depends(get_current_admin)],
+) -> dict:
+    tasks = await build_financial_tasks(db)
+    return {"tasks": tasks, "summary": await task_centre_plain_summary(db)}
+
+
+@router.get("/security-audit")
+async def finance_security_audit(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[User, Depends(get_current_admin)],
+) -> dict:
+    return await run_finance_security_audit(db)

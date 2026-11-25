@@ -1,34 +1,29 @@
-# Stage 6 requirement verification matrix
+# Stage 6 / 6.1 / 6.2 — final verification matrix
 
-Legend: **Full** · **Partial** · **Tests** · **Prod** · **Blocked** · **Unsupported** · **Accountant**
+**Prod verified** = owner evidence on Railway only (we do not mark it here).
 
-| Requirement | Status | Tests | Prod | Notes |
-|-------------|--------|-------|------|-------|
-| UK Ltd onboarding wizard | Full | Yes | Blocked | Needs merge + migration 0004 |
-| FreeAgent OAuth + encrypted tokens | Full | Yes | Blocked | Credentials on API |
-| Bank + invoice sync | Full | Yes | Blocked | |
-| Bills + expenses cache | Full | Partial | Blocked | GET /v2/bills, /expenses |
-| P&L / balance sheet / trial balance | Full | Partial | Blocked | Accounting summary endpoints |
-| Distributable profit from FA | Partial | Partial | Blocked | From P&L retained profit field when present |
-| Receipt Telegram ingest | Full | Yes | Blocked | API or API_INTERNAL_URL forward |
-| Receipt OCR | Partial | — | Blocked | Needs OPENAI_API_KEY |
-| FreeAgent receipt attach | Partial | — | Blocked | PUT explanation; needs explanation URL + approval |
-| Bookkeeping categorisation + queue | Full | Yes | Blocked | |
-| Tax engine (versioned rules) | Full | Yes | Accountant | Provisional planning only |
-| VAT monitor + tax reserves | Full | Yes | Blocked | |
-| Compliance calendar | Full | Partial | Blocked | Dates from company profile |
-| Salary/dividend optimiser | Partial | Yes | Accountant | Uses FA distributable when cached |
-| Dividend proposals (no payment) | Full | Partial | Accountant | |
-| Director's loan | Partial | Yes | Blocked | From flagged personal txns |
-| FreeAgent payroll read | Partial | — | Blocked | No RTI submit — **Unsupported** |
-| Financial watchdog + Telegram | Full | Partial | Blocked | |
-| Daily / weekly finance reports | Partial | — | Blocked | Monthly/annual via API generate |
-| Cash flow forecast | Partial | Yes | Blocked | Conservative invoice/expense model |
-| Job/territory profitability | Partial | Yes | Blocked | Existing engine |
-| Accountant role + CSV export | Full | Partial | Blocked | Migration 0008 |
-| Automated bank payments | Unsupported | — | — | Never implemented |
-| HMRC filing via platform | Unsupported | — | — | FreeAgent / accountant |
+| Requirement | Implemented | Automated tests | Prod verified | Notes |
+|-------------|-------------|-----------------|---------------|-------|
+| UK Ltd onboarding | Full | Yes | — | |
+| FreeAgent OAuth + sync | Full | Partial | — | |
+| Bills/expenses/reports cache | Full | Partial | — | |
+| Distributable reserves (P&L+BS−tax−motion between fields; dividends) | Full | Partial | — | Blocked when mismatch |
+| Receipt Telegram ingest | Full | Yes | — | Website → API |
+| Receipt OCR | Partial | — | Blocked | Needs `OPENAI_API_KEY` |
+| FA explanation attach | Full | Partial | — | `FINANCE_RECEIPT_FREEAGENT_ATTACH` |
+| FA personal expense POST | Full | — | — | `FINANCE_RECEIPT_FREEAGENT_EXPENSE` + approval |
+| Supplier bills via API | Unsupported | — | — | Manual in FA |
+| Bookkeeping queue + approvals | Full | Yes | — | |
+| Tax engine v2 | Full | Yes | Accountant | |
+| Remuneration optimiser + blockers | Full | Yes | Accountant | |
+| Cashflow 7/30/90/365 scenarios | Full | Partial | — | Provisional models |
+| Daily/weekly/monthly/annual reports + Telegram | Full | Partial | — | Celery scheduled |
+| Finance task centre | Full | Partial | — | Mon Telegram |
+| Payroll FA read + guidance | Partial | — | — | No RTI submit |
+| Accountant role + CSV (incl. bank) | Full | Partial | — | |
+| Security audit endpoint | Full | Partial | — | Config evidence |
+| Auto payments / HMRC file | Unsupported | — | — | Never |
 
-**Production verified** = empty until owner completes `RAILWAY_STAGE6_FINANCE.md` checklist on live Railway.
+**Merge path:** PRs #20 → #29 (6.2 stacks on #27). Migration **0010** after **0009**.
 
-**Next hardening:** FreeAgent expense creation from receipts (POST /v2/expenses), payslip PDF fetch when payroll enabled, monthly report Celery schedule, expanded Playwright finance smoke tests.
+**Tests (local):** `pytest` in `apps/api`; Playwright `apps/web/e2e/finance-hub.spec.ts`.
