@@ -10,8 +10,11 @@ Do **not** paste secrets into chat. Configure these as Railway (or `.env`) varia
 | `TELEGRAM_WEBHOOK_SECRET` | Random string; set the same value when calling `setWebhook` with `secret_token` |
 | `TELEGRAM_ADMIN_IDS` | Comma-separated numeric Telegram user IDs allowed to message the bot |
 | `TELEGRAM_OWNER_CHAT_ID` | Optional pinned private chat ID for outbound alerts |
+| `PUBLIC_API_BASE_URL` | FastAPI public origin only, e.g. `https://<api-service>.up.railway.app` (no `/api/v1`) |
 
-Webhook URL (production API host): `https://<api-host>/api/v1/telegram/webhook`
+Register webhook: run `python scripts/register_telegram_webhook.py` on the **API** service (see [RAILWAY_TELEGRAM.md](./RAILWAY_TELEGRAM.md)).
+
+Webhook URL (derived): `{PUBLIC_API_BASE_URL}/api/v1/telegram/webhook`
 
 ## Weather (already live)
 

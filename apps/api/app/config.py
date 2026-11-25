@@ -29,6 +29,7 @@ class Settings(BaseSettings):
     telegram_bot_token: str | None = None
     telegram_webhook_secret: str | None = None
     telegram_admin_ids: str = ""
+    public_api_base_url: str | None = None
     telegram_owner_chat_id: int | None = None
     notification_morning_briefing_time: str = "06:30"
     notification_timezone: str = "Europe/London"
