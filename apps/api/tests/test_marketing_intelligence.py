@@ -23,15 +23,23 @@ def test_commercial_lead_score_commercial_category():
 
 
 @pytest.mark.asyncio
-async def test_budget_monthly_limit():
+async def test_budget_monthly_limit(monkeypatch):
+    async def _allow(*_a, **_k):
+        return {"allowed": True}
+
+    monkeypatch.setattr(
+        "app.services.marketing.budget_controls.validate_campaign_spend",
+        _allow,
+    )
     campaign = RegionalCampaign(
         name="test",
         platform=AdPlatform.META,
         daily_budget_gbp=Decimal("10"),
         monthly_budget_gbp=Decimal("100"),
         spent_gbp=Decimal("95"),
+        simulation_only=True,
     )
-    ok, msg = await check_budget_headroom(campaign, Decimal("10"))
+    ok, msg = await check_budget_headroom(object(), campaign, Decimal("10"))
     assert ok is False
     assert "monthly" in msg.lower()
 

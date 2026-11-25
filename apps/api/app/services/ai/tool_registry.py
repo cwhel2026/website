@@ -89,6 +89,30 @@ OPENAI_TOOL_SPECS: list[dict[str, Any]] = [
             "parameters": {"type": "object", "properties": {}, "additionalProperties": False},
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "marketing_weekly_spend",
+            "description": "Recorded advertising spend in the last 7 days by platform.",
+            "parameters": {"type": "object", "properties": {}, "additionalProperties": False},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "marketing_director_plan",
+            "description": "Daily marketing director plan with budget policy, capacity and priority actions.",
+            "parameters": {"type": "object", "properties": {}, "additionalProperties": False},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "marketing_profitability",
+            "description": "30-day provisional marketing funnel and ROAS metrics.",
+            "parameters": {"type": "object", "properties": {}, "additionalProperties": False},
+        },
+    },
 ]
 
 

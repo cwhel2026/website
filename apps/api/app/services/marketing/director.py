@@ -9,7 +9,55 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.marketing import AttributionEvent, RegionalCampaign
 from app.models.marketing_research import MarketingResearchFinding
 from app.services.marketing.capacity_engine import territory_demand_insights
+from app.services.marketing.budget_controls import get_or_create_budget_policy, weekly_spend_summary
 from app.services.marketing.integration_registry import integration_snapshot_json
+from app.services.marketing.marketing_profitability import marketing_profitability_snapshot
+
+
+async def build_daily_marketing_plan(db: AsyncSession) -> dict[str, Any]:
+    weekly = await build_weekly_marketing_plan(db)
+    policy = await get_or_create_budget_policy(db)
+    profitability = await marketing_profitability_snapshot(db, days=7)
+    return {
+        **weekly,
+        "horizon": "daily",
+        "budget_policy": {
+            "live_paid_spend_approved": policy.live_paid_spend_approved,
+            "emergency_pause_all": policy.emergency_pause_all,
+            "daily_limit_gbp": float(policy.daily_limit_gbp),
+        },
+        "profitability_7d": profitability,
+        "priority_actions": _priority_actions(weekly, policy),
+    }
+
+
+def _priority_actions(weekly: dict[str, Any], policy) -> list[dict]:
+    actions: list[dict] = []
+    if not policy.live_paid_spend_approved:
+        actions.append(
+            {
+                "action": "Approve live paid spend or keep campaigns in simulation",
+                "reason": "Default blocks real ad spend until owner enables budget policy",
+                "certainty": "verified",
+            }
+        )
+    for p in weekly.get("proposed_campaign_tests", [])[:3]:
+        actions.append(
+            {
+                "action": f"Test {p['territory_name']} at £{p['suggested_daily_budget_gbp']}/day (simulation)",
+                "reason": p.get("rationale"),
+                "certainty": "estimate",
+            }
+        )
+    if weekly.get("global_capacity", {}).get("spare_slots", 0) == 0:
+        actions.append(
+            {
+                "action": "Pause or reduce geo-targeted ads in fully booked territories",
+                "reason": "No spare diary capacity detected",
+                "certainty": "verified",
+            }
+        )
+    return actions
 
 
 async def build_weekly_marketing_plan(db: AsyncSession) -> dict[str, Any]:
@@ -74,5 +122,6 @@ async def build_weekly_marketing_plan(db: AsyncSession) -> dict[str, Any]:
             for r in research
         ],
         "integrations": integration_snapshot_json(),
+        "weekly_spend": await weekly_spend_summary(db),
         "disclaimer": "No external ads will launch without approval. Figures are from live database records.",
     }

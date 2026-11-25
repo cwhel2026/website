@@ -40,6 +40,8 @@ class Settings(BaseSettings):
     meta_ad_account_id: str | None = None
     google_ads_customer_id: str | None = None
     google_ads_developer_token: str | None = None
+    companies_house_api_key: str | None = None
+    marketing_media_dir: str = "data/marketing_media"
     marketing_simulation_default: bool = True
     freeagent_client_id: str | None = None
     freeagent_client_secret: str | None = None

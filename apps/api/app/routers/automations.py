@@ -80,6 +80,7 @@ TASK_CATALOG = [
     {"task_name": "appointment_weather_risk", "description": "Re-score upcoming appointments vs live weather"},
     {"task_name": "morning_briefing", "description": "Generate morning briefing payload"},
     {"task_name": "marketing_capacity_snapshot", "description": "Snapshot global marketing capacity"},
+    {"task_name": "marketing_daily_brief", "description": "Daily marketing director brief (DB-backed)"},
 ]
 
 
@@ -141,6 +142,7 @@ async def trigger_worker_task(
         "appointment_weather_risk": worker_tasks.appointment_weather_risk,
         "morning_briefing": worker_tasks.morning_briefing,
         "marketing_capacity_snapshot": worker_tasks.marketing_capacity_snapshot,
+        "marketing_daily_brief": worker_tasks.marketing_daily_brief,
     }
     task = mapping.get(task_name)
     if task is None:

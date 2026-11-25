@@ -453,6 +453,35 @@ def freeagent_sync_incremental(self) -> dict:
         session.close()
 
 
+@celery_app.task(name="rmd.marketing_daily_brief", bind=True)
+def marketing_daily_brief(self) -> dict:
+    session = SessionLocal()
+    run = start_run(session, "marketing_daily_brief", dedupe_key=None, worker_id=_worker_id())
+    try:
+        from app.database import SessionLocal as AsyncSessionLocal
+        from app.services.marketing.director import build_daily_marketing_plan
+
+        async def _plan():
+            async with AsyncSessionLocal() as adb:
+                plan = await build_daily_marketing_plan(adb)
+                await adb.commit()
+                return plan
+
+        plan = asyncio.run(_plan())
+        brief = {
+            "priority_actions": plan.get("priority_actions", [])[:5],
+            "weekly_spend": plan.get("weekly_spend"),
+            "attribution_events_7d": plan.get("attribution_events_7d"),
+        }
+        finish_run(session, run, status=JobRunStatus.SUCCEEDED, detail=brief)
+        return brief
+    except Exception as exc:
+        finish_run(session, run, status=JobRunStatus.FAILED, error=str(exc))
+        raise
+    finally:
+        session.close()
+
+
 @celery_app.task(name="rmd.marketing_capacity_snapshot", bind=True)
 def marketing_capacity_snapshot(self) -> dict:
     session = SessionLocal()

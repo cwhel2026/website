@@ -12,6 +12,7 @@ const nav = [
   { href: "/dashboard/approvals", label: "Approvals" },
   { href: "/dashboard/briefings", label: "Briefings" },
   { href: "/dashboard/automations", label: "Automations" },
+  { href: "/dashboard/marketing-hub", label: "Marketing hub" },
   { href: "/dashboard/marketing", label: "Marketing" },
   { href: "/dashboard/website", label: "Website" },
   { href: "/dashboard/advertising", label: "Advertising" },

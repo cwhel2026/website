@@ -28,7 +28,18 @@ from app.services.audit import record_audit
 from app.models.marketing_experiment import MarketingExperiment
 from app.models.marketing_research import MarketingResearchFinding
 from app.services.marketing.capacity_engine import territory_demand_insights
-from app.services.marketing.director import build_weekly_marketing_plan
+from app.models.marketing_ops import CommercialProspect, MarketingBudgetPolicy
+from app.services.marketing.budget_controls import (
+    get_or_create_budget_policy,
+    validate_campaign_spend,
+    weekly_spend_summary,
+)
+from app.services.marketing.commercial_prospect_engine import search_companies_house
+from app.services.marketing.director import build_daily_marketing_plan, build_weekly_marketing_plan
+from app.services.marketing.marketing_profitability import marketing_profitability_snapshot
+from app.services.marketing.meta_ads_client import fetch_account_insights
+from app.services.marketing.outreach_compliance import create_outreach_draft
+from app.services.marketing.territory_intelligence import list_territory_intelligence, recompute_territory_intelligence
 from app.services.marketing.integration_registry import integration_snapshot_json
 from app.services.marketing_intelligence import (
     check_budget_headroom,
@@ -121,6 +132,164 @@ async def marketing_director_weekly_plan(
     _: Annotated[User, Depends(get_current_admin)],
 ) -> dict:
     return await build_weekly_marketing_plan(db)
+
+
+@router.get("/director/daily-plan")
+async def marketing_director_daily_plan(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[User, Depends(get_current_admin)],
+) -> dict:
+    return await build_daily_marketing_plan(db)
+
+
+class BudgetPolicyUpdate(BaseModel):
+    live_paid_spend_approved: bool | None = None
+    emergency_pause_all: bool | None = None
+    daily_limit_gbp: Decimal | None = None
+    weekly_limit_gbp: Decimal | None = None
+    monthly_limit_gbp: Decimal | None = None
+    meta_daily_limit_gbp: Decimal | None = None
+    google_daily_limit_gbp: Decimal | None = None
+
+
+@router.get("/budget")
+async def get_marketing_budget(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[User, Depends(get_current_admin)],
+) -> dict:
+    policy = await get_or_create_budget_policy(db)
+    spend = await weekly_spend_summary(db)
+    return {
+        "policy": _policy_dict(policy),
+        "weekly_spend": spend,
+    }
+
+
+def _policy_dict(policy: MarketingBudgetPolicy) -> dict:
+    return {
+        "live_paid_spend_approved": policy.live_paid_spend_approved,
+        "emergency_pause_all": policy.emergency_pause_all,
+        "daily_limit_gbp": float(policy.daily_limit_gbp),
+        "weekly_limit_gbp": float(policy.weekly_limit_gbp),
+        "monthly_limit_gbp": float(policy.monthly_limit_gbp),
+        "meta_daily_limit_gbp": float(policy.meta_daily_limit_gbp),
+        "google_daily_limit_gbp": float(policy.google_daily_limit_gbp),
+    }
+
+
+@router.patch("/budget")
+async def patch_marketing_budget(
+    body: BudgetPolicyUpdate,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    user: Annotated[User, Depends(get_current_admin)],
+) -> dict:
+    policy = await get_or_create_budget_policy(db)
+    for field, value in body.model_dump(exclude_unset=True).items():
+        setattr(policy, field, value)
+    await record_audit(
+        db, actor_type="user", actor_id=str(user.id), action="marketing.budget_update", entity_id=policy.id
+    )
+    await db.commit()
+    return {"policy": _policy_dict(policy)}
+
+
+@router.get("/profitability")
+async def marketing_profitability(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[User, Depends(get_current_admin)],
+    days: int = 30,
+) -> dict:
+    return await marketing_profitability_snapshot(db, days=days)
+
+
+@router.get("/territory-intelligence")
+async def territory_intelligence(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[User, Depends(get_current_admin)],
+    refresh: bool = False,
+) -> dict:
+    rows = await recompute_territory_intelligence(db) if refresh else await list_territory_intelligence(db)
+    await db.commit()
+    return {"territories": rows}
+
+
+@router.get("/meta/insights")
+async def meta_insights(
+    _: Annotated[User, Depends(get_current_admin)],
+) -> dict:
+    return await fetch_account_insights()
+
+
+class ProspectSearchIn(BaseModel):
+    query: str = Field(min_length=2)
+    limit: int = Field(default=20, le=50)
+
+
+@router.post("/commercial-prospects/search")
+async def commercial_prospect_search(
+    body: ProspectSearchIn,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    user: Annotated[User, Depends(get_current_admin)],
+) -> dict:
+    result = await search_companies_house(db, query=body.query, limit=body.limit)
+    await record_audit(
+        db,
+        actor_type="user",
+        actor_id=str(user.id),
+        action="marketing.ch_search",
+        entity_id=None,
+    )
+    await db.commit()
+    return result
+
+
+@router.get("/commercial-prospects")
+async def list_commercial_prospects(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[User, Depends(get_current_admin)],
+) -> list[dict]:
+    rows = (
+        await db.execute(
+            select(CommercialProspect).order_by(CommercialProspect.lead_score.desc()).limit(200)
+        )
+    ).scalars().all()
+    return [
+        {
+            "id": str(p.id),
+            "business_name": p.business_name,
+            "postcode": p.postcode,
+            "lead_score": p.lead_score,
+            "source_name": p.source_name,
+            "verified_on": p.verified_on.isoformat() if p.verified_on else None,
+            "confidence": p.confidence,
+            "outreach_status": p.outreach_status.value,
+            "opt_out": p.opt_out,
+        }
+        for p in rows
+    ]
+
+
+@router.post("/commercial-prospects/{prospect_id}/outreach-draft")
+async def outreach_draft(
+    prospect_id: UUID,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    user: Annotated[User, Depends(get_current_admin)],
+) -> dict:
+    prospect = await db.get(CommercialProspect, prospect_id)
+    if prospect is None:
+        raise HTTPException(404, "Prospect not found")
+    msg, detail = await create_outreach_draft(db, prospect)
+    if msg is None:
+        raise HTTPException(400, detail)
+    await record_audit(
+        db,
+        actor_type="user",
+        actor_id=str(user.id),
+        action="marketing.outreach_draft",
+        entity_id=msg.id,
+    )
+    await db.commit()
+    return {"message_id": str(msg.id), "status": msg.status.value, "detail": detail}
 
 
 class ResearchFindingIn(BaseModel):
@@ -223,6 +392,14 @@ async def create_campaign(
     db: Annotated[AsyncSession, Depends(get_db)],
     user: Annotated[User, Depends(get_current_admin)],
 ) -> RegionalCampaign:
+    gate = await validate_campaign_spend(
+        db,
+        platform=body.platform,
+        daily_budget_gbp=body.daily_budget_gbp or Decimal("0"),
+        simulation_only=body.simulation_only,
+    )
+    if not gate.get("allowed") and (body.daily_budget_gbp or 0) > 0:
+        raise HTTPException(400, gate.get("reason", "Budget blocked"))
     if body.daily_budget_gbp > 0 and body.daily_budget_gbp > Decimal("50") and not body.simulation_only:
         raise HTTPException(400, "High daily budgets require simulation_only until explicitly authorised")
     campaign = RegionalCampaign(**body.model_dump(), status=CampaignStatus.DRAFT)
@@ -244,7 +421,7 @@ async def request_launch(
     campaign = await db.get(RegionalCampaign, campaign_id)
     if campaign is None:
         raise HTTPException(404, "Campaign not found")
-    ok, msg = await check_budget_headroom(campaign, campaign.daily_budget_gbp or Decimal("1"))
+    ok, msg = await check_budget_headroom(db, campaign, campaign.daily_budget_gbp or Decimal("1"))
     if not ok:
         raise HTTPException(400, msg)
     campaign.status = CampaignStatus.PENDING_APPROVAL
