@@ -14,6 +14,7 @@ from app.models.background_job import BackgroundJobRun, JobRunStatus
 from app.models.service import Service
 from app.models.territory import PostcodeDistrict, Territory, TerritoryLocality
 from app.models.bookkeeping import BookkeepingReviewItem
+from app.models.compliance import ComplianceObligation, TaxReserveSnapshot
 from app.models.company import CompanyOnboardingTask, CompanyProfile
 from app.models.finance_sync import FinanceSyncRun
 from app.models.user import User, UserRole

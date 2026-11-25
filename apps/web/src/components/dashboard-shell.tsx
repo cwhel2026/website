@@ -19,6 +19,7 @@ const nav = [
   { href: "/dashboard/flyers", label: "Flyers" },
   { href: "/dashboard/company-setup", label: "Company setup" },
   { href: "/dashboard/finance-hub", label: "Money hub" },
+  { href: "/dashboard/tax-centre", label: "Tax & compliance" },
   { href: "/dashboard/finance", label: "Finance" },
   { href: "/dashboard/invoices", label: "Invoices" },
   { href: "/dashboard/expenses", label: "Expenses" },
