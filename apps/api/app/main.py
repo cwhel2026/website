@@ -19,6 +19,7 @@ from app.routers import (
     assistant,
     auth,
     automations,
+    bookkeeping,
     briefings,
     calendar,
     communications,
@@ -115,6 +116,7 @@ app.include_router(marketing_public.router, prefix=prefix)
 app.include_router(public.router, prefix=prefix)
 app.include_router(company.router, prefix=prefix)
 app.include_router(finance.router, prefix=prefix)
+app.include_router(bookkeeping.router, prefix=prefix)
 app.include_router(inventory.router, prefix=prefix)
 app.include_router(analytics.router, prefix=prefix)
 app.include_router(business_director.router, prefix=prefix)

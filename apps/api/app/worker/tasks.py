@@ -204,6 +204,30 @@ def morning_briefing(self) -> dict:
         session.close()
 
 
+@celery_app.task(name="rmd.bookkeeping_categorize", bind=True)
+def bookkeeping_categorize(self) -> dict:
+    session = SessionLocal()
+    run = start_run(session, "bookkeeping_categorize", dedupe_key=None, worker_id=_worker_id())
+    try:
+        from app.database import SessionLocal as AsyncSessionLocal
+        from app.services.finance.bookkeeping.review_queue import categorize_uncategorized_transactions
+
+        async def _cat():
+            async with AsyncSessionLocal() as adb:
+                result = await categorize_uncategorized_transactions(adb)
+                await adb.commit()
+                return result
+
+        detail = asyncio.run(_cat())
+        finish_run(session, run, status=JobRunStatus.SUCCEEDED, detail=detail)
+        return detail
+    except Exception as exc:
+        finish_run(session, run, status=JobRunStatus.FAILED, error=str(exc))
+        raise
+    finally:
+        session.close()
+
+
 @celery_app.task(name="rmd.freeagent_sync_incremental", bind=True)
 def freeagent_sync_incremental(self) -> dict:
     session = SessionLocal()

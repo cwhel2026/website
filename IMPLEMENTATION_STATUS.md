@@ -14,7 +14,8 @@ Status legend: **Not started** · **Scaffolded** · **Implemented** · **Tested 
 | FreeAgent bank sync + audit | **Implemented** | `freeagent_sync.py`, migration **0004** |
 | Scheduled FreeAgent sync | **Implemented** | `rmd.freeagent_sync_incremental` |
 | Corporation tax planning stub | **Implemented** | `tax_engine/` — provisional rates only |
-| Salary/dividend optimiser, receipts, tax reserves | **Not started** | Phases B–F (`STAGE6_FINANCE.md`) |
+| Intelligent bookkeeping Phase B | **Tested locally** | PR stack — bookkeeping, Telegram receipts, Money hub |
+| Salary/dividend optimiser, tax reserves, Phases C–F | **In progress** | `STAGE6_FINANCE.md` |
 
 ## Stage 5 (in progress)
 

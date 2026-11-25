@@ -29,7 +29,8 @@ router = APIRouter(prefix="/telegram", tags=["telegram"])
 
 START_MESSAGE = (
     "Revive My Drive assistant is connected.\n\n"
-    "Ask about today's jobs, weather, quotations, or marketing — private owner access only."
+    "Ask about jobs, weather, quotations, marketing, or finance.\n"
+    "Photograph a receipt and send it here for automatic processing (when OCR is configured)."
 )
 
 
@@ -38,6 +39,14 @@ class TelegramUpdate(BaseModel):
 
     update_id: int
     message: dict[str, Any] | None = None
+
+
+def _largest_photo_file_id(message: dict[str, Any]) -> str | None:
+    photos = message.get("photo") or []
+    if not photos:
+        return None
+    best = max(photos, key=lambda p: p.get("file_size") or 0)
+    return best.get("file_id")
 
 
 def _extract_message(update: TelegramUpdate) -> dict[str, Any] | None:
@@ -178,8 +187,37 @@ async def telegram_webhook(
         await _safe_send(chat_id, hint)
         return JSONResponse({"status": "unauthorised", "delivered_hint": True})
 
+    photo_id = _largest_photo_file_id(message)
+    if photo_id and not text:
+        from app.services.finance.bookkeeping.receipt_processor import (
+            ingest_telegram_receipt,
+            summarise_receipt_reply,
+        )
+
+        db.add(
+            TelegramProcessedUpdate(
+                update_id=update.update_id,
+                chat_id=chat_id,
+                message_text="[receipt_photo]",
+            )
+        )
+        try:
+            receipt, detail = await ingest_telegram_receipt(db, photo_id)
+            outbound_text = summarise_receipt_reply(receipt, detail)
+            await db.commit()
+            await _safe_send(chat_id, outbound_text)
+            return JSONResponse({"status": "receipt_ok", "receipt_id": str(receipt.id)})
+        except Exception as exc:
+            logger.exception("Receipt ingest failed")
+            await db.rollback()
+            await _safe_send(
+                chat_id,
+                "Could not process that receipt — try a clearer photo or check API logs.",
+            )
+            return JSONResponse({"status": "receipt_failed", "error": str(exc)[:200]})
+
     if not text:
-        await _safe_send(chat_id, "Send a text message or use /start")
+        await _safe_send(chat_id, "Send text, a receipt photo, or /start")
         return JSONResponse({"status": "no_text", "delivered_hint": True})
 
     db.add(

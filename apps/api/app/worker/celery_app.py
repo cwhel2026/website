@@ -40,6 +40,10 @@ celery_app.conf.update(
             "task": "rmd.freeagent_sync_incremental",
             "schedule": crontab(minute=20, hour=5),
         },
+        "bookkeeping-categorize": {
+            "task": "rmd.bookkeeping_categorize",
+            "schedule": crontab(minute=40, hour="*/4"),
+        },
     },
     timezone="Europe/London",
 )
