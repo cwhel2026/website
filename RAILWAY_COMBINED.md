@@ -40,6 +40,13 @@ You **do not** need to move env vars off “website”. You only change **how th
 
 7. Message Telegram bot — webhook auto-registers on API boot.
 
+## Web-only fallback (root still `apps/web`)
+
+If you **cannot** switch root directory yet, **`main`** includes a **Next.js** Telegram webhook at  
+`/api/v1/telegram/webhook` that uses the same `TELEGRAM_*` variables on the **website** service (auto-registers on container start). Dashboard/DB features still need the combined or separate API later.
+
+---
+
 ## Limits
 
 - **Worker/Celery** still needs a **second** service (or skip background jobs until you add one).

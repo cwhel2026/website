@@ -29,16 +29,21 @@ export async function GET() {
   }
 
   const publicApi = (process.env.NEXT_PUBLIC_API_URL ?? "").trim();
+  const telegramOnWeb = Boolean(process.env.TELEGRAM_BOT_TOKEN?.trim());
+
   return NextResponse.json({
     service: "revive-my-drive",
+    telegram_native_webhook: telegramOnWeb,
     combined_sidecar: Boolean(internal),
     api_internal_url_set: Boolean(internal),
     next_public_api_url_host: publicApi ? safeHost(publicApi) : null,
     api,
     telegram_hint:
       internal && (api as { reachable?: boolean }).reachable
-        ? "FastAPI is up — Telegram webhook should hit /api/v1/telegram/webhook on this same host."
-        : "Redeploy with repo root + apps/combined/Dockerfile (see RAILWAY_COMBINED.md).",
+        ? "FastAPI is up — Telegram webhook hits /api/v1/telegram/webhook."
+        : telegramOnWeb
+          ? "Web-native Telegram handler active (apps/web). Redeploy sets webhook on boot via instrumentation."
+          : "Set TELEGRAM_BOT_TOKEN on this service and redeploy.",
   });
 }
 
