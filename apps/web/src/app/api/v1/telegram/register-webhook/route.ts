@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 
+export const runtime = "nodejs";
+
 import { registerTelegramWebhook } from "@/lib/telegram/server";
 
 /** Re-register webhook (no secrets in response). Protect with setup key if set. */

@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
+import re
 import urllib.error
 import urllib.request
 
@@ -15,6 +17,15 @@ TELEGRAM_API = "https://api.telegram.org"
 
 class WebhookRegistrationError(RuntimeError):
     pass
+
+
+def normalise_telegram_webhook_secret(raw: str) -> str:
+    trimmed = (raw or "").strip()
+    if not trimmed:
+        return ""
+    if re.fullmatch(r"[A-Za-z0-9_-]+", trimmed):
+        return trimmed
+    return hashlib.sha256(trimmed.encode("utf-8")).hexdigest()
 
 
 def _api_base_url() -> str:
@@ -84,7 +95,7 @@ def public_webhook_info(info: dict) -> dict:
 def register_telegram_webhook(*, drop_pending: bool = True) -> dict:
     settings = get_settings()
     token = (settings.telegram_bot_token or "").strip()
-    secret = (settings.telegram_webhook_secret or "").strip()
+    secret = normalise_telegram_webhook_secret(settings.telegram_webhook_secret or "")
     if not token:
         raise WebhookRegistrationError("TELEGRAM_BOT_TOKEN not set")
     if not secret:
