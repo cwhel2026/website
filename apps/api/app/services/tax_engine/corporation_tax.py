@@ -1,6 +1,6 @@
 from decimal import Decimal
 
-from app.services.tax_engine.rules_uk_ltd import ACTIVE_RULES
+from app.services.tax_engine.marginal_relief import corporation_tax_with_marginal_relief
 
 
 def estimate_corporation_tax(
@@ -8,20 +8,15 @@ def estimate_corporation_tax(
     *,
     uses_small_profits_rate: bool = False,
 ) -> dict:
-    """Deterministic placeholder — marginal relief not yet implemented."""
-    profit = max(Decimal("0"), taxable_profit_gbp)
-    rate = (
-        ACTIVE_RULES.corporation_tax_small_profits_rate_pct
-        if uses_small_profits_rate
-        else ACTIVE_RULES.corporation_tax_main_rate_pct
-    )
-    tax = (profit * rate / Decimal("100")).quantize(Decimal("0.01"))
+    """Delegates to marginal relief engine (legacy query param ignored)."""
+    del uses_small_profits_rate
+    result = corporation_tax_with_marginal_relief(taxable_profit_gbp)
     return {
-        "taxable_profit_gbp": profit,
-        "rate_pct": float(rate),
-        "estimated_corporation_tax_gbp": tax,
-        "rule_version": ACTIVE_RULES.version,
-        "sources": ACTIVE_RULES.sources,
+        "taxable_profit_gbp": result["taxable_profit_gbp"],
+        "estimated_corporation_tax_gbp": Decimal(str(result["corporation_tax_gbp"])),
+        "rule_version": result["rule_version"],
+        "sources": result["sources"],
+        "marginal_relief_applied": result.get("marginal_relief_applied"),
         "confidence": "provisional",
         "requires_accountant_review": True,
     }

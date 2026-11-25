@@ -38,7 +38,20 @@ python apps/api/scripts/generate_finance_token_encryption_key.py
 
 Paste the single line into Railway on the **API** service (minimum 16 characters; script emits a URL-safe 48-byte token).
 
-## Phase C–F — in progress
+## Phase C (stack) — tax engine & compliance
+
+| Feature | Status |
+|---------|--------|
+| Versioned rules (`rules_uk_ltd` draft 2) | Implemented |
+| Corporation tax + marginal relief | Implemented |
+| Personal income tax & dividend tax bands | Implemented |
+| VAT rolling turnover monitor | Implemented |
+| Tax reserve snapshots (provisional flag) | Implemented |
+| Compliance calendar with plain English | Implemented |
+| Tax centre API + dashboard | Implemented |
+| Migration **0006** | Required |
+
+## Phase D–F — in progress
 
 Intelligent bookkeeping, Telegram receipts, versioned tax engine (VAT, PAYE, dividends), remuneration optimiser, director's loan, cash flow, job profitability, accountant role, financial dashboard sections, automated reports.
 
