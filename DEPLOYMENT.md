@@ -32,6 +32,8 @@ Create **two** services from the same GitHub repo (`cwhel2026/website`), branch 
 |---------|---------------------------|--------|
 | `web` | `apps/web` | Dockerfile → `node server.js` |
 | `api` | `apps/api` | Dockerfile → uvicorn on `$PORT` |
+
+**Important:** Telegram, database, JWT, and OpenAI variables must live on **api**, not **web**. Putting them on the website service does nothing. See **[RAILWAY_VARIABLES.md](./RAILWAY_VARIABLES.md)**.
 | `worker` | `apps/api` | Same image → `celery -A app.worker.celery_app worker --beat` |
 | `postgres` | (plugin) | Enable PostGIS when needed |
 | `redis` | (plugin) | Stage 3 workers + beat |

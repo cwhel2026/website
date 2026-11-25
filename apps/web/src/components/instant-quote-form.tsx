@@ -42,7 +42,7 @@ export function InstantQuoteForm() {
   const [result, setResult] = useState<QuotationResult | null>(null);
 
   useEffect(() => {
-    fetch(`${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"}/api/v1/services`)
+    fetch(`${(process.env.NEXT_PUBLIC_API_URL ?? "").replace(/\/$/, "") || ""}/api/v1/services`)
       .then((r) => r.json())
       .then(setServices)
       .catch(() => setServices([]));
