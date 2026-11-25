@@ -16,7 +16,11 @@ from app.models.user import User
 from app.services.assistant_brain import answer_question
 from app.services.notifications.outbox import enqueue_notification
 from app.services.telegram.client import TelegramApiError, send_message
-from app.services.telegram.register import WebhookRegistrationError, register_telegram_webhook
+from app.services.telegram.register import (
+    WebhookRegistrationError,
+    normalise_telegram_webhook_secret,
+    register_telegram_webhook,
+)
 from app.services.telegram.webhook_info import fetch_webhook_info
 
 logger = logging.getLogger(__name__)
@@ -136,7 +140,8 @@ async def telegram_webhook(
     cfg = get_settings()
     if not cfg.telegram_bot_token:
         raise HTTPException(503, "Telegram not configured")
-    if cfg.telegram_webhook_secret and secret != cfg.telegram_webhook_secret:
+    expected = normalise_telegram_webhook_secret(cfg.telegram_webhook_secret or "")
+    if expected and secret != expected:
         raise HTTPException(401, "Invalid Telegram webhook secret")
 
     message = _extract_message(update)

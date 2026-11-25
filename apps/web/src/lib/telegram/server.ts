@@ -1,6 +1,13 @@
 /** Telegram Bot API helpers for Next.js (single Railway web service). */
 
+import { normaliseTelegramWebhookSecret } from "@/lib/telegram/secret";
+
 const TELEGRAM_API = "https://api.telegram.org";
+
+export function expectedWebhookSecret(): string {
+  const raw = process.env.TELEGRAM_WEBHOOK_SECRET?.trim() ?? "";
+  return normaliseTelegramWebhookSecret(raw);
+}
 
 export function telegramAdminIds(): number[] {
   const raw = process.env.TELEGRAM_ADMIN_IDS ?? "";
@@ -39,7 +46,8 @@ export async function registerTelegramWebhook(): Promise<{
   error?: string;
 }> {
   const token = process.env.TELEGRAM_BOT_TOKEN?.trim();
-  const secret = process.env.TELEGRAM_WEBHOOK_SECRET?.trim();
+  const rawSecret = process.env.TELEGRAM_WEBHOOK_SECRET?.trim();
+  const secret = rawSecret ? normaliseTelegramWebhookSecret(rawSecret) : "";
   const base = publicSiteBaseUrl();
   if (!token || !secret || !base) {
     return { ok: false, error: "TELEGRAM_BOT_TOKEN, TELEGRAM_WEBHOOK_SECRET, or site URL missing" };

@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 
+export const runtime = "nodejs";
+
 import { assistantLiteReply } from "@/lib/telegram/assistant-lite";
 import {
   TELEGRAM_START_MESSAGE,
+  expectedWebhookSecret,
   markUpdateSeen,
   telegramAdminIds,
   telegramSendMessage,
@@ -22,7 +25,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ status: "telegram_not_configured" }, { status: 503 });
   }
 
-  const expectedSecret = process.env.TELEGRAM_WEBHOOK_SECRET?.trim();
+  const expectedSecret = expectedWebhookSecret();
   if (expectedSecret) {
     const got = request.headers.get("X-Telegram-Bot-Api-Secret-Token") ?? "";
     if (got !== expectedSecret) {
