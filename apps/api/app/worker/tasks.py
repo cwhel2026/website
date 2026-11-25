@@ -204,6 +204,67 @@ def morning_briefing(self) -> dict:
         session.close()
 
 
+@celery_app.task(name="rmd.finance_report_daily", bind=True)
+def finance_report_daily(self) -> dict:
+    session = SessionLocal()
+    run = start_run(
+        session,
+        "finance_report_daily",
+        dedupe_key=datetime.now(UTC).date().isoformat(),
+        worker_id=_worker_id(),
+    )
+    try:
+        from app.database import SessionLocal as AsyncSessionLocal
+        from app.services.finance.financial_reports import (
+            deliver_report_telegram,
+            generate_daily_finance_report,
+        )
+
+        async def _run():
+            async with AsyncSessionLocal() as adb:
+                record = await generate_daily_finance_report(adb)
+                await deliver_report_telegram(adb, record)
+                await adb.commit()
+                return {"report_id": str(record.id)}
+
+        detail = asyncio.run(_run())
+        finish_run(session, run, status=JobRunStatus.SUCCEEDED, detail=detail)
+        return detail
+    except Exception as exc:
+        finish_run(session, run, status=JobRunStatus.FAILED, error=str(exc))
+        raise
+    finally:
+        session.close()
+
+
+@celery_app.task(name="rmd.finance_report_weekly", bind=True)
+def finance_report_weekly(self) -> dict:
+    session = SessionLocal()
+    run = start_run(session, "finance_report_weekly", dedupe_key=None, worker_id=_worker_id())
+    try:
+        from app.database import SessionLocal as AsyncSessionLocal
+        from app.services.finance.financial_reports import (
+            deliver_report_telegram,
+            generate_weekly_finance_report,
+        )
+
+        async def _run():
+            async with AsyncSessionLocal() as adb:
+                record = await generate_weekly_finance_report(adb)
+                await deliver_report_telegram(adb, record)
+                await adb.commit()
+                return {"report_id": str(record.id)}
+
+        detail = asyncio.run(_run())
+        finish_run(session, run, status=JobRunStatus.SUCCEEDED, detail=detail)
+        return detail
+    except Exception as exc:
+        finish_run(session, run, status=JobRunStatus.FAILED, error=str(exc))
+        raise
+    finally:
+        session.close()
+
+
 @celery_app.task(name="rmd.financial_watchdog", bind=True)
 def financial_watchdog(self) -> dict:
     session = SessionLocal()

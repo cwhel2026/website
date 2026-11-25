@@ -9,6 +9,14 @@ from app.services.finance.watchdog import run_financial_watchdog
 from app.services.remuneration.optimizer import RemunerationInputs, optimise_remuneration
 
 
+async def proactive_finance_nudge(db: AsyncSession) -> str | None:
+    issues = await run_financial_watchdog(db)
+    high = [i for i in issues if i["severity"] == "high"]
+    if not high:
+        return None
+    return "Heads up: " + high[0]["title"] + " — " + high[0]["detail"][:200]
+
+
 async def answer_finance_question(db: AsyncSession, text: str) -> str | None:
     lower = text.lower()
     if "reserve" in lower and "tax" in lower:

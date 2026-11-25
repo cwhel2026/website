@@ -48,6 +48,14 @@ celery_app.conf.update(
             "task": "rmd.financial_watchdog",
             "schedule": crontab(minute=0, hour=7),
         },
+        "finance-report-daily": {
+            "task": "rmd.finance_report_daily",
+            "schedule": crontab(minute=45, hour=6),
+        },
+        "finance-report-weekly": {
+            "task": "rmd.finance_report_weekly",
+            "schedule": crontab(minute=0, hour=8, day_of_week="sun"),
+        },
     },
     timezone="Europe/London",
 )

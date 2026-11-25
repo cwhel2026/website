@@ -20,6 +20,8 @@ from app.services.finance.bookkeeping.receipt_processor import (
     ingest_telegram_receipt,
     summarise_receipt_reply,
 )
+from app.services.finance.freeagent_receipt_attach import attach_receipt_to_freeagent
+from app.config import get_settings
 
 router = APIRouter(prefix="/finance/bookkeeping", tags=["bookkeeping"])
 
@@ -68,6 +70,30 @@ async def review_queue(
     ]
 
 
+@router.post("/receipts/{receipt_id}/attach-freeagent")
+async def attach_receipt(
+    receipt_id: UUID,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    user: Annotated[User, Depends(get_current_admin)],
+) -> dict:
+    from app.models.finance import Receipt
+
+    receipt = await db.get(Receipt, receipt_id)
+    if receipt is None:
+        raise HTTPException(404, "Receipt not found")
+    result = await attach_receipt_to_freeagent(db, receipt)
+    await record_audit(
+        db,
+        actor_type="user",
+        actor_id=str(user.id),
+        action="receipt.attach_freeagent",
+        entity_id=receipt_id,
+        detail=result,
+    )
+    await db.commit()
+    return result
+
+
 @router.post("/review-queue/{item_id}/approve")
 async def approve_item(
     item_id: UUID,
@@ -76,9 +102,15 @@ async def approve_item(
     user: Annotated[User, Depends(get_current_admin)],
 ) -> dict[str, str]:
     try:
-        await approve_review_item(db, item_id, str(user.id), body.category)
+        item = await approve_review_item(db, item_id, str(user.id), body.category)
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
+    if item.receipt_id and get_settings().finance_receipt_freeagent_attach:
+        from app.models.finance import Receipt
+
+        receipt = await db.get(Receipt, item.receipt_id)
+        if receipt:
+            await attach_receipt_to_freeagent(db, receipt)
     await record_audit(
         db,
         actor_type="user",

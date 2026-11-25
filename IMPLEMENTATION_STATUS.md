@@ -16,7 +16,8 @@ Status legend: **Not started** · **Scaffolded** · **Implemented** · **Tested 
 | Corporation tax planning stub | **Implemented** | `tax_engine/` — provisional rates only |
 | Intelligent bookkeeping Phase B | **Tested locally** | PR stack — bookkeeping, Telegram receipts, Money hub |
 | Phases C–F (PR stack #23–#26) | **Tested locally** | See `STAGE6_FINANCE.md` verification matrix |
-| Stage 6 production sign-off | **Blocked** | Merge PRs #20→#26, run migrations 0004–0008, set env keys |
+| Stage 6.1 FreeAgent bills/reports/payroll read | **Tested locally** | PR stack #27, migration 0009, verification matrix |
+| Stage 6 production sign-off | **Blocked** | Merge PRs #20→#27, `RAILWAY_STAGE6_FINANCE.md` |
 
 ## Stage 5 (in progress)
 

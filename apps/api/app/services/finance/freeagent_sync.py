@@ -111,8 +111,11 @@ async def sync_bank_transactions_from_freeagent(db: AsyncSession) -> dict:
                     amount_dec = Decimal(str(amount))
                 except Exception:
                     continue
+                explanation = item.get("bank_transaction_explanation") or item.get("explanation")
                 txn = BankTransaction(
                     external_id=ext_id,
+                    freeagent_url=fa_url[:255] if fa_url else None,
+                    freeagent_explanation_url=str(explanation)[:255] if explanation else None,
                     description=description[:255],
                     amount_gbp=amount_dec,
                     transacted_at=_parse_fa_date(item.get("dated_on")),
@@ -148,7 +151,42 @@ async def sync_bank_transactions_from_freeagent(db: AsyncSession) -> dict:
     }
 
 
+async def sync_bills_and_expenses(db: AsyncSession) -> dict:
+    from app.models.freeagent_cache import FreeAgentResourceCache
+
+    settings = get_settings()
+    status = await freeagent_status(db)
+    if not status.can_sync:
+        return {"bills": 0, "expenses": 0, "message": status.message}
+    row = await get_connection_row(db)
+    if row is None:
+        return {"bills": 0, "expenses": 0, "message": "Not connected"}
+    try:
+        token = await ensure_fresh_token(db, row, settings)
+        bills = await freeagent_client.fetch_bills(settings, token)
+        expenses = await freeagent_client.fetch_expenses(settings, token)
+    except (httpx.HTTPError, ValueError) as exc:
+        return {"bills": 0, "expenses": 0, "message": str(exc)}
+
+    for key, payload in (("bills_cache", {"bills": bills}), ("expenses_cache", {"expenses": expenses})):
+        result = await db.execute(
+            select(FreeAgentResourceCache).where(FreeAgentResourceCache.resource_key == key)
+        )
+        cache = result.scalar_one_or_none()
+        text = json.dumps(payload, default=str)[:800000]
+        if cache is None:
+            db.add(FreeAgentResourceCache(resource_key=key, payload_json=text))
+        else:
+            cache.payload_json = text
+    await db.flush()
+    return {"bills": len(bills), "expenses": len(expenses), "message": "Cached bills and expenses from FreeAgent"}
+
+
 async def sync_all_freeagent(db: AsyncSession) -> dict:
+    from app.services.finance.freeagent_reports import sync_accounting_reports
+
     invoices = await sync_invoices_from_freeagent(db)
     bank = await sync_bank_transactions_from_freeagent(db)
-    return {"invoices": invoices, "bank": bank}
+    bills = await sync_bills_and_expenses(db)
+    reports = await sync_accounting_reports(db)
+    return {"invoices": invoices, "bank": bank, "bills_expenses": bills, "reports": reports}

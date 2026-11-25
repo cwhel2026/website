@@ -8,7 +8,17 @@ from app.database import get_db
 from app.models.user import User
 from app.services.finance.cashflow import simple_cashflow_forecast
 from app.services.finance.profitability import territory_profitability
+from app.services.finance.financial_reports import (
+    generate_annual_finance_report,
+    generate_daily_finance_report,
+    generate_monthly_finance_report,
+    generate_weekly_finance_report,
+)
+from app.services.finance.freeagent_reports import distributable_profit_from_freeagent, sync_accounting_reports
+from app.services.finance.payroll_freeagent import payroll_guidance, sync_payroll_status
 from app.services.finance.watchdog import run_financial_watchdog
+from sqlalchemy import select
+from app.models.freeagent_cache import FinancialReportRecord
 from app.services.notifications.outbox import enqueue_notification
 
 router = APIRouter(prefix="/finance/insights", tags=["finance-insights"])
@@ -54,6 +64,78 @@ async def job_profitability(
     rows = await territory_profitability(db)
     return [
         {"territory_code": r.territory_code, "estimated_profit_gbp": float(r.estimated_profit_gbp)}
+        for r in rows
+    ]
+
+
+@router.post("/freeagent/reports/sync")
+async def sync_fa_reports(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[User, Depends(get_current_admin)],
+) -> dict:
+    result = await sync_accounting_reports(db)
+    await db.commit()
+    return result
+
+
+@router.get("/freeagent/distributable-profit")
+async def distributable_profit(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[User, Depends(get_current_admin)],
+) -> dict:
+    return await distributable_profit_from_freeagent(db)
+
+
+@router.get("/payroll/status")
+async def payroll_status(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[User, Depends(get_current_admin)],
+) -> dict:
+    data = await sync_payroll_status(db)
+    await db.commit()
+    data["guidance_doc"] = payroll_guidance()
+    return data
+
+
+@router.post("/reports/generate/{period}")
+async def generate_report(
+    period: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[User, Depends(get_current_admin)],
+) -> dict:
+    if period == "daily":
+        record = await generate_daily_finance_report(db)
+    elif period == "weekly":
+        record = await generate_weekly_finance_report(db)
+    elif period == "monthly":
+        record = await generate_monthly_finance_report(db)
+    elif period == "annual":
+        record = await generate_annual_finance_report(db)
+    else:
+        from fastapi import HTTPException
+        raise HTTPException(400, "period must be daily|weekly|monthly|annual")
+    await db.commit()
+    return {"id": str(record.id), "period": record.period, "title": record.title}
+
+
+@router.get("/reports/latest")
+async def latest_reports(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[User, Depends(get_current_admin)],
+) -> list[dict]:
+    result = await db.execute(
+        select(FinancialReportRecord).order_by(FinancialReportRecord.generated_at.desc()).limit(10)
+    )
+    rows = list(result.scalars().all())
+    return [
+        {
+            "id": str(r.id),
+            "period": r.period,
+            "title": r.title,
+            "generated_at": r.generated_at.isoformat(),
+            "dashboard_path": r.dashboard_path,
+            "telegram_sent": r.telegram_sent,
+        }
         for r in rows
     ]
 
