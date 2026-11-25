@@ -40,15 +40,20 @@ export default function MarketingHubPage() {
   };
 
   useEffect(() => {
-    reload();
+    if (!token) return;
+    apiGet<DailyPlan>("/api/v1/marketing/director/daily-plan", token).then(setPlan).catch(() => setPlan(null));
+    apiGet<Budget>("/api/v1/marketing/budget", token).then(setBudget).catch(() => setBudget(null));
+    apiGet<Array<{ business_name: string; lead_score: number }>>("/api/v1/marketing/commercial-prospects", token)
+      .then(setProspects)
+      .catch(() => setProspects([]));
   }, [token]);
 
   const toggleLiveSpend = async () => {
     if (!token || !budget) return;
     await apiPatch(
       "/api/v1/marketing/budget",
-      token,
       { live_paid_spend_approved: !budget.policy.live_paid_spend_approved },
+      token,
     );
     reload();
   };
@@ -58,8 +63,8 @@ export default function MarketingHubPage() {
     setSearchMsg(null);
     const res = await apiPost<{ ok?: boolean; imported?: number; message?: string }>(
       "/api/v1/marketing/commercial-prospects/search",
-      token,
       { query: searchQuery, limit: 20 },
+      token,
     );
     setSearchMsg(res.message || (res.ok ? `Imported ${res.imported} prospects` : "Search finished"));
     reload();
