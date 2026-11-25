@@ -482,6 +482,66 @@ def marketing_daily_brief(self) -> dict:
         session.close()
 
 
+@celery_app.task(name="rmd.marketing_prospect_research", bind=True)
+def marketing_prospect_research(self) -> dict:
+    session = SessionLocal()
+    run = start_run(session, "marketing_prospect_research", dedupe_key=None, worker_id=_worker_id())
+    try:
+        from app.database import SessionLocal as AsyncSessionLocal
+        from app.models.territory import Territory
+        from app.services.marketing.research.prospect_orchestrator import run_territory_research
+
+        async def _run():
+            async with AsyncSessionLocal() as adb:
+                terr = (
+                    await adb.execute(
+                        select(Territory).where(Territory.is_active.is_(True)).order_by(Territory.code).limit(1)
+                    )
+                ).scalar_one_or_none()
+                if terr is None:
+                    return {"ok": False, "message": "No active territory"}
+                return await run_territory_research(
+                    adb,
+                    territory_id=terr.id,
+                    category="commercial_surface",
+                    places_query=f"car park {terr.name}",
+                )
+
+        detail = asyncio.run(_run())
+        finish_run(session, run, status=JobRunStatus.SUCCEEDED, detail=detail)
+        return detail
+    except Exception as exc:
+        finish_run(session, run, status=JobRunStatus.FAILED, error=str(exc))
+        raise
+    finally:
+        session.close()
+
+
+@celery_app.task(name="rmd.marketing_weekly_strategy", bind=True)
+def marketing_weekly_strategy(self) -> dict:
+    session = SessionLocal()
+    run = start_run(session, "marketing_weekly_strategy", dedupe_key=None, worker_id=_worker_id())
+    try:
+        from app.database import SessionLocal as AsyncSessionLocal
+        from app.services.marketing.director import build_weekly_marketing_plan
+        from app.services.marketing.marketing_profitability import marketing_profitability_snapshot
+
+        async def _run():
+            async with AsyncSessionLocal() as adb:
+                plan = await build_weekly_marketing_plan(adb)
+                profit = await marketing_profitability_snapshot(adb, days=30)
+                return {"plan": plan, "profitability": profit}
+
+        detail = asyncio.run(_run())
+        finish_run(session, run, status=JobRunStatus.SUCCEEDED, detail={"summary": "weekly strategy generated"})
+        return {"ok": True, "attribution_events_7d": detail["plan"].get("attribution_events_7d")}
+    except Exception as exc:
+        finish_run(session, run, status=JobRunStatus.FAILED, error=str(exc))
+        raise
+    finally:
+        session.close()
+
+
 @celery_app.task(name="rmd.marketing_capacity_snapshot", bind=True)
 def marketing_capacity_snapshot(self) -> dict:
     session = SessionLocal()

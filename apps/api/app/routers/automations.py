@@ -81,6 +81,8 @@ TASK_CATALOG = [
     {"task_name": "morning_briefing", "description": "Generate morning briefing payload"},
     {"task_name": "marketing_capacity_snapshot", "description": "Snapshot global marketing capacity"},
     {"task_name": "marketing_daily_brief", "description": "Daily marketing director brief (DB-backed)"},
+    {"task_name": "marketing_prospect_research", "description": "Scheduled multi-source commercial research (one territory)"},
+    {"task_name": "marketing_weekly_strategy", "description": "Weekly marketing director + profitability review"},
 ]
 
 
@@ -143,6 +145,8 @@ async def trigger_worker_task(
         "morning_briefing": worker_tasks.morning_briefing,
         "marketing_capacity_snapshot": worker_tasks.marketing_capacity_snapshot,
         "marketing_daily_brief": worker_tasks.marketing_daily_brief,
+        "marketing_prospect_research": worker_tasks.marketing_prospect_research,
+        "marketing_weekly_strategy": worker_tasks.marketing_weekly_strategy,
     }
     task = mapping.get(task_name)
     if task is None:

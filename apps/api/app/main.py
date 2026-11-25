@@ -25,7 +25,10 @@ from app.routers import (
     communications,
     crm,
     marketing,
+    marketing_content,
+    marketing_integrations,
     marketing_public,
+    marketing_webhooks,
     public,
     accountant,
     analytics,
@@ -116,6 +119,9 @@ app.include_router(automations.router, prefix=prefix)
 app.include_router(communications.router, prefix=prefix)
 app.include_router(telegram.router, prefix=prefix)
 app.include_router(marketing.router, prefix=prefix)
+app.include_router(marketing_integrations.router, prefix=prefix)
+app.include_router(marketing_content.router, prefix=prefix)
+app.include_router(marketing_webhooks.router, prefix=prefix)
 app.include_router(marketing_public.router, prefix=prefix)
 app.include_router(public.router, prefix=prefix)
 app.include_router(company.router, prefix=prefix)

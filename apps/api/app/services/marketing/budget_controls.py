@@ -10,6 +10,15 @@ from app.models.marketing import AdPlatform, RegionalCampaign
 from app.models.marketing_ops import MarketingBudgetPolicy
 
 
+async def emergency_pause_connected_platforms() -> dict:
+    from app.services.marketing.google_ads.google_ads_service import GoogleAdsClient
+    from app.services.marketing.meta.meta_campaign_service import pause_all_campaigns
+
+    meta = await pause_all_campaigns()
+    google = await (GoogleAdsClient().pause_all_active())
+    return {"meta": meta, "google_ads": {"ok": google.ok, "message": google.message, "payload": google.payload}}
+
+
 async def get_or_create_budget_policy(db: AsyncSession) -> MarketingBudgetPolicy:
     row = await db.execute(select(MarketingBudgetPolicy).limit(1))
     policy = row.scalar_one_or_none()
@@ -70,6 +79,9 @@ def _policy_dict(policy: MarketingBudgetPolicy) -> dict:
         "monthly_limit_gbp": float(policy.monthly_limit_gbp),
         "meta_daily_limit_gbp": float(policy.meta_daily_limit_gbp),
         "google_daily_limit_gbp": float(policy.google_daily_limit_gbp),
+        "research_api_daily_limit_gbp": float(policy.research_api_daily_limit_gbp),
+        "outreach_email_enabled": policy.outreach_email_enabled,
+        "outreach_daily_cap": policy.outreach_daily_cap,
     }
 
 

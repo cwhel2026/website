@@ -170,6 +170,11 @@ class AttributionEvent(Base):
     source: Mapped[str] = mapped_column(String(80))
     medium: Mapped[str] = mapped_column(String(80), default="unknown")
     content: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    utm_campaign: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    utm_source: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    utm_medium: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    utm_content: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    utm_term: Mapped[str | None] = mapped_column(String(120), nullable=True)
     landed_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

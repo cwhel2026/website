@@ -68,6 +68,18 @@ celery_app.conf.update(
             "task": "rmd.finance_task_centre_notify",
             "schedule": crontab(minute=15, hour=8, day_of_week="mon"),
         },
+        "marketing-prospect-research-daily": {
+            "task": "rmd.marketing_prospect_research",
+            "schedule": crontab(minute=30, hour=5),
+        },
+        "marketing-weekly-strategy": {
+            "task": "rmd.marketing_weekly_strategy",
+            "schedule": crontab(minute=0, hour=7, day_of_week="mon"),
+        },
+        "marketing-daily-brief": {
+            "task": "rmd.marketing_daily_brief",
+            "schedule": crontab(minute=15, hour=6),
+        },
     },
     timezone="Europe/London",
 )

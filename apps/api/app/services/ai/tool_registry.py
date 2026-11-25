@@ -113,6 +113,14 @@ OPENAI_TOOL_SPECS: list[dict[str, Any]] = [
             "parameters": {"type": "object", "properties": {}, "additionalProperties": False},
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "marketing_integrations",
+            "description": "Integration setup centre status for all marketing channels.",
+            "parameters": {"type": "object", "properties": {}, "additionalProperties": False},
+        },
+    },
 ]
 
 
