@@ -204,6 +204,48 @@ def morning_briefing(self) -> dict:
         session.close()
 
 
+@celery_app.task(name="rmd.financial_watchdog", bind=True)
+def financial_watchdog(self) -> dict:
+    session = SessionLocal()
+    run = start_run(
+        session,
+        "financial_watchdog",
+        dedupe_key=datetime.now(UTC).date().isoformat(),
+        worker_id=_worker_id(),
+    )
+    try:
+        from app.database import SessionLocal as AsyncSessionLocal
+        from app.services.finance.watchdog import run_financial_watchdog
+        from app.services.notifications.outbox import enqueue_notification
+
+        async def _watch():
+            async with AsyncSessionLocal() as adb:
+                issues = await run_financial_watchdog(adb)
+                high = [i for i in issues if i["severity"] == "high"]
+                if high:
+                    body = "\n".join(f"• {i['title']}" for i in high[:6])
+                    await enqueue_notification(
+                        adb,
+                        channel="telegram",
+                        title="Urgent finance alerts",
+                        body=body,
+                        category="finance_watchdog",
+                        dedupe_key=f"watchdog-auto:{datetime.now(UTC).date().isoformat()}",
+                        priority="high",
+                    )
+                await adb.commit()
+                return {"issues": len(issues), "urgent": len(high)}
+
+        detail = asyncio.run(_watch())
+        finish_run(session, run, status=JobRunStatus.SUCCEEDED, detail=detail)
+        return detail
+    except Exception as exc:
+        finish_run(session, run, status=JobRunStatus.FAILED, error=str(exc))
+        raise
+    finally:
+        session.close()
+
+
 @celery_app.task(name="rmd.bookkeeping_categorize", bind=True)
 def bookkeeping_categorize(self) -> dict:
     session = SessionLocal()
