@@ -19,7 +19,7 @@ If deploy fails with **`/app/start.sh` could not be found**, Railway built the *
 
 Keep on this same service:
 
-- `DATABASE_URL`, `SYNC_DATABASE_URL`, `JWT_SECRET`, `ENVIRONMENT=production`
+- `DATABASE_URL`, `SYNC_DATABASE_URL`, `JWT_SECRET`, `ENVIRONMENT=production` (`postgresql://…` URLs are auto-normalised to asyncpg + psycopg3)
 - `DEFAULT_ADMIN_EMAIL`, `DEFAULT_ADMIN_PASSWORD` (the email/password you use on the login screen)
 - `CORS_ORIGINS` = your public site URL, e.g. `https://website-production-….up.railway.app`
 - `PUBLIC_API_BASE_URL` = same URL (for Telegram)
