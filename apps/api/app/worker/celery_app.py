@@ -1,5 +1,6 @@
 from celery import Celery
 from celery.schedules import crontab
+from celery.signals import worker_init, worker_process_init
 
 from app.config import get_settings
 
@@ -10,7 +11,8 @@ celery_app = Celery(
     "revive_my_drive",
     broker=broker,
     backend=broker,
-    include=["app.worker.tasks"],
+    include=["app.worker.tasks", "app.worker.heartbeat"],
+    task_cls="app.worker.guard:GuardedTask",
 )
 
 celery_app.conf.update(
@@ -19,7 +21,14 @@ celery_app.conf.update(
     worker_prefetch_multiplier=1,
     task_soft_time_limit=300,
     task_time_limit=360,
+    result_expires=86400,
+    broker_connection_retry_on_startup=True,
     beat_schedule={
+        "scheduler-heartbeat": {
+            "task": "rmd.scheduler_heartbeat",
+            "schedule": crontab(minute="*"),
+            "options": {"expires": 55},
+        },
         "refresh-weather-hq": {
             "task": "rmd.refresh_weather_hq",
             "schedule": crontab(minute=0, hour="*/3"),
@@ -87,3 +96,18 @@ celery_app.conf.update(
     },
     timezone="Europe/London",
 )
+
+@worker_init.connect
+@worker_process_init.connect
+def _use_unpooled_async_engine(**_):
+    """Tasks call asyncio.run() per invocation; pooled asyncpg connections are bound to the
+    loop that opened them, so worker processes must not reuse connections across runs."""
+    from sqlalchemy.ext.asyncio import create_async_engine
+    from sqlalchemy.pool import NullPool
+
+    from app import database
+
+    if isinstance(database.engine.pool, NullPool):
+        return
+    database.engine = create_async_engine(settings.database_url, poolclass=NullPool)
+    database.SessionLocal.configure(bind=database.engine)

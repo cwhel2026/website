@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { apiGet, apiPost } from "@/lib/api";
 import { getToken } from "@/lib/auth-client";
 import { MarketingCard } from "@/components/marketing-director-shell";
+import { withLoadError } from "@/lib/load-errors";
 
 export default function IntegrationsPage() {
   const [wizard, setWizard] = useState<Record<string, unknown> | null>(null);
@@ -12,7 +13,7 @@ export default function IntegrationsPage() {
   useEffect(() => {
     const token = getToken();
     if (!token) return;
-    apiGet<Record<string, unknown>>("/api/v1/marketing/surfacecoat/meta/wizard", token).then(setWizard).catch(() => null);
+    apiGet<Record<string, unknown>>("/api/v1/marketing/surfacecoat/meta/wizard", token).then(setWizard).catch(withLoadError(() => null));
   }, []);
 
   async function runTest() {

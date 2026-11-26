@@ -50,8 +50,18 @@ async def run_financial_watchdog(db: AsyncSession) -> list[dict]:
             }
         )
 
-    rec = float(reserves.get("recommended_reserve_gbp", 0))
-    if rec > 0:
+    raw_rec = reserves.get("recommended_reserve_gbp")
+    rec = float(raw_rec) if raw_rec is not None else 0.0
+    if raw_rec is None:
+        issues.append(
+            {
+                "severity": "medium",
+                "code": "tax_reserve_unknown",
+                "title": "Tax reserve cannot be calculated yet",
+                "detail": "Not enough confirmed income and expense data to estimate a reserve.",
+            }
+        )
+    elif rec > 0:
         issues.append(
             {
                 "severity": "low",

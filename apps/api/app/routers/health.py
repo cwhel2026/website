@@ -31,4 +31,27 @@ async def ready(db: AsyncSession = Depends(get_db)):
             status_code=503,
             content={"status": "unavailable", "detail": "database"},
         )
-    return {"status": "ready", "database": "ok"}
+    try:
+        current = (await db.execute(text("SELECT version_num FROM alembic_version"))).scalar()
+    except Exception:
+        await db.rollback()
+        current = None
+    head = _alembic_head()
+    if current != head:
+        return JSONResponse(
+            status_code=503,
+            content={"status": "unavailable", "detail": "schema", "schema_revision": current, "schema_head": head},
+        )
+    return {"status": "ready", "database": "ok", "schema_revision": current}
+
+
+def _alembic_head() -> str | None:
+    global _HEAD
+    if _HEAD is None:
+        from app.schema.audit import alembic_head
+
+        _HEAD = alembic_head()
+    return _HEAD
+
+
+_HEAD: str | None = None

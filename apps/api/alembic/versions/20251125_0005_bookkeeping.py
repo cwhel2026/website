@@ -11,6 +11,8 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
 
+from app.schema import ops as safe
+
 revision: str = "20251125_0005"
 down_revision: Union[str, None] = "20251125_0004"
 branch_labels: Union[str, Sequence[str], None] = None
@@ -24,22 +26,22 @@ def upgrade() -> None:
         "EXCEPTION WHEN duplicate_object THEN null; END $$;"
     )
 
-    op.add_column("receipts", sa.Column("content_sha256", sa.String(64), nullable=True))
-    op.add_column("receipts", sa.Column("telegram_file_id", sa.String(128), nullable=True))
-    op.add_column("receipts", sa.Column("extracted_net_gbp", sa.Numeric(12, 2), nullable=True))
-    op.add_column("receipts", sa.Column("extracted_vat_gbp", sa.Numeric(12, 2), nullable=True))
-    op.add_column("receipts", sa.Column("extracted_vat_number", sa.String(32), nullable=True))
-    op.add_column("receipts", sa.Column("extracted_date", sa.Date(), nullable=True))
-    op.add_column("receipts", sa.Column("payment_method", sa.String(80), nullable=True))
-    op.add_column(
+    safe.add_column("receipts", sa.Column("content_sha256", sa.String(64), nullable=True))
+    safe.add_column("receipts", sa.Column("telegram_file_id", sa.String(128), nullable=True))
+    safe.add_column("receipts", sa.Column("extracted_net_gbp", sa.Numeric(12, 2), nullable=True))
+    safe.add_column("receipts", sa.Column("extracted_vat_gbp", sa.Numeric(12, 2), nullable=True))
+    safe.add_column("receipts", sa.Column("extracted_vat_number", sa.String(32), nullable=True))
+    safe.add_column("receipts", sa.Column("extracted_date", sa.Date(), nullable=True))
+    safe.add_column("receipts", sa.Column("payment_method", sa.String(80), nullable=True))
+    safe.add_column(
         "receipts",
         sa.Column("matched_bank_transaction_id", postgresql.UUID(as_uuid=True), nullable=True),
     )
-    op.add_column("receipts", sa.Column("processing_status", sa.String(40), server_default="pending"))
-    op.add_column("receipts", sa.Column("raw_extraction_json", sa.Text(), nullable=True))
-    op.create_index("ix_receipts_content_sha256", "receipts", ["content_sha256"])
+    safe.add_column("receipts", sa.Column("processing_status", sa.String(40), server_default="pending"))
+    safe.add_column("receipts", sa.Column("raw_extraction_json", sa.Text(), nullable=True))
+    safe.create_index("ix_receipts_content_sha256", "receipts", ["content_sha256"])
 
-    op.add_column(
+    safe.add_column(
         "bank_transactions",
         sa.Column(
             "suggested_category",
@@ -57,14 +59,14 @@ def upgrade() -> None:
             nullable=True,
         ),
     )
-    op.add_column("bank_transactions", sa.Column("categorisation_confidence", sa.Integer(), nullable=True))
-    op.add_column("bank_transactions", sa.Column("review_item_id", postgresql.UUID(as_uuid=True), nullable=True))
-    op.add_column(
+    safe.add_column("bank_transactions", sa.Column("categorisation_confidence", sa.Integer(), nullable=True))
+    safe.add_column("bank_transactions", sa.Column("review_item_id", postgresql.UUID(as_uuid=True), nullable=True))
+    safe.add_column(
         "bank_transactions",
         sa.Column("is_reconciled", sa.Boolean(), server_default="false", nullable=False),
     )
 
-    op.create_table(
+    safe.create_table(
         "bookkeeping_review_items",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
         sa.Column(
@@ -120,12 +122,12 @@ def upgrade() -> None:
         sa.Column("resolved_by", sa.String(80), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
     )
-    op.create_index(
+    safe.create_index(
         "ix_bookkeeping_review_items_bank_transaction_id",
         "bookkeeping_review_items",
         ["bank_transaction_id"],
     )
-    op.create_index(
+    safe.create_index(
         "ix_bookkeeping_review_items_receipt_id", "bookkeeping_review_items", ["receipt_id"]
     )
 

@@ -9,6 +9,8 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
+from app.schema import ops as safe
+
 revision: str = "20251125_0010"
 down_revision: str | Sequence[str] | None = "20251125_0009"
 branch_labels: str | Sequence[str] | None = None
@@ -16,15 +18,15 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    op.add_column(
+    safe.add_column(
         "company_profiles",
         sa.Column("director_desired_monthly_net_gbp", sa.Numeric(12, 2), nullable=True),
     )
-    op.add_column(
+    safe.add_column(
         "receipts",
         sa.Column("freeagent_expense_url", sa.String(255), nullable=True),
     )
-    op.add_column(
+    safe.add_column(
         "receipts",
         sa.Column("accounting_route", sa.String(40), nullable=True),
     )

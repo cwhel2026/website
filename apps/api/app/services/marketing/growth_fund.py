@@ -9,7 +9,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.finance import BankTransaction, Invoice
-from app.models.marketing import RegionalCampaign
+from app.models.marketing import CampaignStatus, RegionalCampaign
 from app.models.marketing_growth_fund import (
     GrowthFundEntryType,
     MarketingGrowthFundLedger,
@@ -65,7 +65,9 @@ async def committed_ad_budget(db: AsyncSession) -> Decimal:
         await db.execute(
             select(RegionalCampaign).where(
                 RegionalCampaign.simulation_only.is_(False),
-                RegionalCampaign.status.in_(("active", "paused", "draft")),
+                RegionalCampaign.status.in_(
+                    (CampaignStatus.LIVE, CampaignStatus.APPROVED, CampaignStatus.PAUSED, CampaignStatus.DRAFT)
+                ),
             )
         )
     ).scalars().all()

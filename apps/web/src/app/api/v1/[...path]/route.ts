@@ -28,9 +28,13 @@ async function proxy(request: NextRequest, apiPath: string): Promise<NextRespons
   }
   const responseHeaders = new Headers();
   upstream.headers.forEach((value, key) => {
-    if (key === "transfer-encoding") return;
+    if (key === "transfer-encoding" || key === "set-cookie") return;
     responseHeaders.set(key, value);
   });
+  // `set` would keep only the last cookie; the session and CSRF cookies arrive together.
+  for (const cookie of upstream.headers.getSetCookie()) {
+    responseHeaders.append("set-cookie", cookie);
+  }
   return new NextResponse(upstream.body, { status: upstream.status, headers: responseHeaders });
 }
 

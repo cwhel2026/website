@@ -10,6 +10,8 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects.postgresql import JSONB
 
+from app.schema import ops as safe
+
 revision: str = "20251125_0011"
 down_revision: str | Sequence[str] | None = "20251125_0010"
 branch_labels: str | Sequence[str] | None = None
@@ -17,7 +19,7 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    op.create_table(
+    safe.create_table(
         "marketing_budget_policies",
         sa.Column("id", sa.UUID(), primary_key=True),
         sa.Column("live_paid_spend_approved", sa.Boolean(), server_default="false"),
@@ -45,7 +47,7 @@ def upgrade() -> None:
         "('draft','pending_approval','approved','sent','replied','suppressed','failed'); "
         "EXCEPTION WHEN duplicate_object THEN null; END $$;"
     )
-    op.create_table(
+    safe.create_table(
         "commercial_prospects",
         sa.Column("id", sa.UUID(), primary_key=True),
         sa.Column("dedupe_key", sa.String(64), unique=True, index=True),
@@ -75,7 +77,7 @@ def upgrade() -> None:
         sa.Column("evidence_json", JSONB),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
     )
-    op.create_table(
+    safe.create_table(
         "outreach_messages",
         sa.Column("id", sa.UUID(), primary_key=True),
         sa.Column("prospect_id", sa.UUID(), sa.ForeignKey("commercial_prospects.id", ondelete="CASCADE")),
@@ -98,7 +100,7 @@ def upgrade() -> None:
         sa.Column("sent_at", sa.DateTime(timezone=True)),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
     )
-    op.create_table(
+    safe.create_table(
         "marketing_media_assets",
         sa.Column("id", sa.UUID(), primary_key=True),
         sa.Column("storage_key", sa.String(255)),
@@ -111,7 +113,7 @@ def upgrade() -> None:
         sa.Column("is_ai_generated", sa.Boolean(), server_default="false"),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
     )
-    op.create_table(
+    safe.create_table(
         "marketing_content_items",
         sa.Column("id", sa.UUID(), primary_key=True),
         sa.Column(
@@ -146,7 +148,7 @@ def upgrade() -> None:
         sa.Column("publish_error", sa.Text()),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
     )
-    op.create_table(
+    safe.create_table(
         "territory_intelligence_scores",
         sa.Column("id", sa.UUID(), primary_key=True),
         sa.Column("territory_id", sa.UUID(), sa.ForeignKey("territories.id"), unique=True),

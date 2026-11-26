@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { apiGet, apiPost } from "@/lib/api";
 import { getToken } from "@/lib/auth-client";
+import { withLoadError } from "@/lib/load-errors";
 
 type Item = { id: string; platform: string; title: string; status: string };
 
@@ -14,7 +15,7 @@ export default function ContentStudioPage() {
   const reload = () => {
     const token = getToken();
     if (!token) return;
-    apiGet<Item[]>("/api/v1/marketing/content/items", token).then(setItems).catch(() => setItems([]));
+    apiGet<Item[]>("/api/v1/marketing/content/items", token).then(setItems).catch(withLoadError(() => setItems([])));
   };
 
   useEffect(() => {

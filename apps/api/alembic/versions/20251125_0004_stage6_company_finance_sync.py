@@ -11,6 +11,8 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
 
+from app.schema import ops as safe
+
 revision: str = "20251125_0004"
 down_revision: Union[str, None] = "20251125_0003"
 branch_labels: Union[str, Sequence[str], None] = None
@@ -49,7 +51,7 @@ def upgrade() -> None:
         "EXCEPTION WHEN duplicate_object THEN null; END $$;"
     )
 
-    op.create_table(
+    safe.create_table(
         "company_profiles",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
         sa.Column(
@@ -100,7 +102,7 @@ def upgrade() -> None:
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
     )
 
-    op.create_table(
+    safe.create_table(
         "company_onboarding_tasks",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
         sa.Column("slug", sa.String(80), nullable=False, unique=True),
@@ -128,9 +130,9 @@ def upgrade() -> None:
         sa.Column("sort_order", sa.Integer(), nullable=False, server_default="0"),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
     )
-    op.create_index("ix_company_onboarding_tasks_slug", "company_onboarding_tasks", ["slug"])
+    safe.create_index("ix_company_onboarding_tasks_slug", "company_onboarding_tasks", ["slug"])
 
-    op.create_table(
+    safe.create_table(
         "finance_sync_runs",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
         sa.Column(
@@ -174,9 +176,9 @@ def upgrade() -> None:
             nullable=True,
         ),
     )
-    op.create_index("ix_finance_sync_runs_kind", "finance_sync_runs", ["kind"])
-    op.create_index("ix_finance_sync_runs_status", "finance_sync_runs", ["status"])
-    op.create_index("ix_finance_sync_runs_dedupe_key", "finance_sync_runs", ["dedupe_key"])
+    safe.create_index("ix_finance_sync_runs_kind", "finance_sync_runs", ["kind"])
+    safe.create_index("ix_finance_sync_runs_status", "finance_sync_runs", ["status"])
+    safe.create_index("ix_finance_sync_runs_dedupe_key", "finance_sync_runs", ["dedupe_key"])
 
 
 def downgrade() -> None:

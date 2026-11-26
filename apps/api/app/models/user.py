@@ -14,6 +14,8 @@ class UserRole(str, enum.Enum):
     ADMIN = "admin"
     ACCOUNTANT = "accountant"
     STAFF = "staff"
+    # Read-only portal access for automated browser tests and reviewers.
+    AUDITOR = "auditor"
 
 
 class User(Base):

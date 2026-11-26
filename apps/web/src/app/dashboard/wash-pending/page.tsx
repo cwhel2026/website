@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { apiGet } from "@/lib/api";
 import { getToken } from "@/lib/auth-client";
+import { withLoadError } from "@/lib/load-errors";
 
 type Job = {
   reference: string;
@@ -18,7 +19,7 @@ export default function WashPendingPage() {
   useEffect(() => {
     const token = getToken();
     if (!token) return;
-    apiGet<Job[]>("/api/v1/jobs/wash-pending-coat", token).then(setJobs).catch(() => setJobs([]));
+    apiGet<Job[]>("/api/v1/jobs/wash-pending-coat", token).then(setJobs).catch(withLoadError(() => setJobs([])));
   }, []);
 
   return (

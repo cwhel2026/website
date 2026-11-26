@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { apiGet, ApiError } from "@/lib/api";
 import { getToken } from "@/lib/auth-client";
 import { EmptyState, MarketingCard } from "@/components/marketing-director-shell";
+import { gbp } from "@/lib/format";
 
 type Overview = {
   pre_launch_mode?: boolean;
@@ -66,7 +67,7 @@ export default function MarketingOverviewPage() {
       <MarketingCard title="This week">
         <dl className="grid grid-cols-2 gap-3">
           <Stat label="Weekly cap" value={`£${data?.weekly_budget_gbp ?? "—"}`} />
-          <Stat label="Remaining (est.)" value={`£${data?.remaining_budget_estimate_gbp?.toFixed(2) ?? "—"}`} />
+          <Stat label="Remaining (est.)" value={gbp(data?.remaining_budget_estimate_gbp, "—")} />
           <Stat label="Meta spend (7d)" value={formatSpend(data)} />
           <Stat label="Organic posts" value={String(data?.organic_posts_total ?? 0)} />
         </dl>
@@ -77,8 +78,8 @@ export default function MarketingOverviewPage() {
       {data?.growth_fund ? (
         <MarketingCard title="Growth fund">
           <p className="text-sm">
-            Virtual reserve £{data.growth_fund.virtual_reserve_balance_gbp?.toFixed(2) ?? "0"} · Available £
-            {data.growth_fund.available_uncommitted_gbp?.toFixed(2) ?? "0"}
+            Virtual reserve {gbp(data.growth_fund.virtual_reserve_balance_gbp, "Unavailable")} · Available{" "}
+            {gbp(data.growth_fund.available_uncommitted_gbp, "Unavailable")}
           </p>
         </MarketingCard>
       ) : (
@@ -106,5 +107,5 @@ function Stat({ label, value }: { label: string; value: string }) {
 
 function formatSpend(data: Overview | null) {
   if (data?.meta_account_spend_7d_gbp == null) return "Not connected";
-  return `£${data.meta_account_spend_7d_gbp.toFixed(2)}`;
+  return gbp(data.meta_account_spend_7d_gbp);
 }

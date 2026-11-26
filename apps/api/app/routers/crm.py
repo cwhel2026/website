@@ -56,7 +56,9 @@ async def list_enquiries(
 
 @router.post("/enquiries", response_model=EnquiryOut)
 async def create_enquiry(
-    body: EnquiryCreate, db: Annotated[AsyncSession, Depends(get_db)]
+    body: EnquiryCreate,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[User, Depends(get_current_admin)],
 ) -> Enquiry:
     customer = await upsert_customer(
         db,

@@ -10,6 +10,8 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects.postgresql import JSONB
 
+from app.schema import ops as safe
+
 revision: str = "20251126_0016"
 down_revision: str | Sequence[str] | None = "20251126_0015"
 branch_labels: str | Sequence[str] | None = None
@@ -23,7 +25,7 @@ def upgrade() -> None:
         "'refund_adjustment','manual_contribution','reversal','transfer_recommendation'"
         "); EXCEPTION WHEN duplicate_object THEN null; END $$;"
     )
-    op.create_table(
+    safe.create_table(
         "marketing_growth_fund_settings",
         sa.Column("id", sa.UUID(), primary_key=True),
         sa.Column("enabled", sa.Boolean(), server_default="true", nullable=False),
@@ -34,7 +36,7 @@ def upgrade() -> None:
         sa.Column("notes", sa.Text()),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
     )
-    op.create_table(
+    safe.create_table(
         "marketing_growth_fund_ledger",
         sa.Column("id", sa.UUID(), primary_key=True),
         sa.Column(
@@ -64,8 +66,8 @@ def upgrade() -> None:
         sa.Column("metadata_json", JSONB),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
     )
-    op.create_index("ix_growth_fund_ledger_created", "marketing_growth_fund_ledger", ["created_at"])
-    op.add_column(
+    safe.create_index("ix_growth_fund_ledger_created", "marketing_growth_fund_ledger", ["created_at"])
+    safe.add_column(
         "company_profiles",
         sa.Column("marketing_revenue_allocation_pct", sa.Numeric(5, 2), server_default="5"),
     )

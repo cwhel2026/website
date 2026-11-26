@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { apiGet, apiPost } from "@/lib/api";
 import { getToken } from "@/lib/auth-client";
+import { withLoadError } from "@/lib/load-errors";
 
 type Approval = {
   id: string;
@@ -18,7 +19,7 @@ export default function ApprovalsPage() {
   function reload() {
     const token = getToken();
     if (!token) return;
-    apiGet<Approval[]>("/api/v1/approvals", token).then(setItems).catch(() => setItems([]));
+    apiGet<Approval[]>("/api/v1/approvals", token).then(setItems).catch(withLoadError(() => setItems([])));
   }
 
   useEffect(reload, []);

@@ -89,16 +89,21 @@ async def send_approved_outreach(db: AsyncSession, message: OutreachMessage, *, 
         body += f"\n\nReply STOP to opt out. {settings.outreach_from_name}."
     em.set_content(body)
 
+    if not (settings.smtp_host and settings.smtp_user and settings.smtp_password):
+        message.delivery_status = "not_sent_smtp_unconfigured"
+        return {
+            "ok": False,
+            "live": False,
+            "message": "Not sent: SMTP is not configured. The message remains approved and unsent.",
+        }
+
     try:
-        if settings.smtp_host:
-            provider_id = await asyncio.to_thread(_smtp_send, em)
-        else:
-            provider_id = f"dry-run-{uuid.uuid4().hex[:8]}"
+        provider_id = await asyncio.to_thread(_smtp_send, em)
         message.status = OutreachMessageStatus.SENT
         message.sent_at = datetime.now(UTC)
         message.provider_message_id = provider_id
-        message.delivery_status = "sent" if settings.smtp_host else "dry_run"
-        return {"ok": True, "provider_message_id": provider_id, "live": bool(settings.smtp_host)}
+        message.delivery_status = "sent"
+        return {"ok": True, "provider_message_id": provider_id, "live": True}
     except Exception as exc:
         message.status = OutreachMessageStatus.FAILED
         message.delivery_status = "failed"

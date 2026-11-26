@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { apiGet, apiPost } from "@/lib/api";
 import { getToken } from "@/lib/auth-client";
+import { withLoadError } from "@/lib/load-errors";
 
 type Agent = {
   slug: string;
@@ -27,10 +28,10 @@ export default function AutomationsPage() {
   useEffect(() => {
     const token = getToken();
     if (!token) return;
-    apiGet<Agent[]>("/api/v1/automations/agents", token).then(setAgents).catch(() => setAgents([]));
+    apiGet<Agent[]>("/api/v1/automations/agents", token).then(setAgents).catch(withLoadError(() => setAgents([])));
     apiGet<{ tasks: WorkerTask[] }>("/api/v1/automations/workers/runs", token)
       .then((d) => setWorkers(d.tasks))
-      .catch(() => setWorkers([]));
+      .catch(withLoadError(() => setWorkers([])));
   }, []);
 
   async function emergencyStop() {

@@ -16,9 +16,13 @@ const ROUTES = [
 
 const OUT = path.join("test-results", "portal-screenshots");
 
-/** Layout-only: stubs a signed-in session and empty API responses (no backend needed). */
+/**
+ * Layout-only: stubs a signed-in session and empty API responses (no backend needed).
+ * Real-backend coverage lives in e2e/authenticated.
+ */
 async function signedInWithEmptyApi(page: Page) {
-  await page.addInitScript(() => localStorage.setItem("rmd_auth_token", "layout-test"));
+  const base = new URL(test.info().project.use.baseURL ?? "http://127.0.0.1:3000");
+  await page.context().addCookies([{ name: "sc_csrf", value: "layout-test", domain: base.hostname, path: "/" }]);
   await page.route("**/api/v1/**", (route) =>
     route.request().url().includes("/auth/me")
       ? route.fulfill({ json: { email: "layout@test.local", role: "admin" } })

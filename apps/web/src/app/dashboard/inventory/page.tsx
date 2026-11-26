@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { apiGet } from "@/lib/api";
 import { getToken } from "@/lib/auth-client";
+import { withLoadError } from "@/lib/load-errors";
 
 type Stock = { sku: string; name: string; quantity_on_hand: number; reorder_level: number; unit: string };
 
@@ -13,8 +14,8 @@ export default function InventoryPage() {
   useEffect(() => {
     const token = getToken();
     if (!token) return;
-    apiGet<Stock[]>("/api/v1/inventory/items", token).then(setItems).catch(() => setItems([]));
-    apiGet<typeof forecast>("/api/v1/inventory/forecast?days=7", token).then(setForecast).catch(() => setForecast(null));
+    apiGet<Stock[]>("/api/v1/inventory/items", token).then(setItems).catch(withLoadError(() => setItems([])));
+    apiGet<typeof forecast>("/api/v1/inventory/forecast?days=7", token).then(setForecast).catch(withLoadError(() => setForecast(null)));
   }, []);
 
   return (

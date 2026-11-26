@@ -1,5 +1,7 @@
 # Railway — Redis + Celery worker (Stage 3)
 
+> **Superseded:** use [`RAILWAY_WORKERS.md`](RAILWAY_WORKERS.md). The worker now runs from the combined image with `apps/combined/railway.worker.toml`.
+
 **Prerequisite:** `main` includes [PR #11](https://github.com/cwhel2026/website/pull/11) (weather + Celery).
 
 You already added **Redis**. You need **four running services**: Postgres, Redis, **api**, **worker**, and **web** (Postgres + Redis are plugins; three are your repo).

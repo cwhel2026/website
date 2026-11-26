@@ -39,12 +39,21 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
     env:
+      REDIS_URL: redis://localhost:6379/0
+      REDIS_TEST_URL: redis://localhost:6379/1
       DATABASE_URL: postgresql+asyncpg://rmd:rmd_ci_password@localhost:5432/revive_my_drive
       SYNC_DATABASE_URL: postgresql://rmd:rmd_ci_password@localhost:5432/revive_my_drive
       JWT_SECRET: ci-integration-test-secret-at-least-thirty-two-chars
       RUN_INTEGRATION_TESTS: "1"
       ENVIRONMENT: test
+      # Disposable CI database only — not a real account.
+      E2E_AUDITOR_EMAIL: e2e-auditor@example.com
+      E2E_AUDITOR_PASSWORD: ci-only-auditor-password-0123456789
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -55,9 +64,33 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+      - name: Migrate (Alembic is the only schema authority)
+        working-directory: apps/api
+        run: python -m app.schema.cli upgrade
       - name: Integration smoke
         working-directory: apps/api
-        run: pytest -q tests/test_smoke_integration.py
+        run: pytest -q tests/test_smoke_integration.py tests/test_auth_login.py tests/test_session_security_integration.py tests/test_worker_guard_integration.py tests/test_campaign_approval_integration.py
+      - name: Worker smoke (real Celery worker + beat writes a heartbeat)
+        working-directory: apps/api
+        run: |
+          celery -A app.worker.celery_app worker --beat --concurrency=1 --loglevel=info -s /tmp/celerybeat-schedule > /tmp/celery.log 2>&1 &
+          PID=$!
+          ok=0
+          for i in $(seq 1 75); do
+            n=$(PGPASSWORD=rmd_ci_password psql -h localhost -U rmd -d revive_my_drive -tAc "select count(*) from scheduler_heartbeats where component='beat'")
+            if [ "$n" = "1" ]; then ok=1; break; fi
+            sleep 2
+          done
+          kill $PID || true
+          cat /tmp/celery.log | tail -40
+          test "$ok" = "1"
+      - name: Migration paths (empty, legacy create_all, model drift, idempotency)
+        working-directory: apps/api
+        env:
+          MIGRATION_TEST_DATABASE_URL: postgresql://rmd:rmd_ci_password@localhost:5432/rmd_migration_test
+        run: |
+          PGPASSWORD=rmd_ci_password psql -h localhost -U rmd -d revive_my_drive -c "CREATE DATABASE rmd_migration_test"
+          pytest -q tests/test_migrations_integration.py
 
   web-build:
     runs-on: ubuntu-latest
@@ -76,6 +109,83 @@ jobs:
         env:
           NEXT_PUBLIC_API_URL: http://localhost:8000
 
+  web-e2e-authenticated:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: rmd
+          POSTGRES_PASSWORD: rmd_ci_password
+          POSTGRES_DB: revive_my_drive
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U rmd -d revive_my_drive"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+    env:
+      DATABASE_URL: postgresql+asyncpg://rmd:rmd_ci_password@localhost:5432/revive_my_drive
+      SYNC_DATABASE_URL: postgresql://rmd:rmd_ci_password@localhost:5432/revive_my_drive
+      REDIS_URL: redis://localhost:6379/0
+      JWT_SECRET: ci-e2e-secret-at-least-thirty-two-characters-long
+      ENVIRONMENT: test
+      # Disposable CI database only — not a real account.
+      E2E_AUDITOR_EMAIL: e2e-auditor@example.com
+      E2E_AUDITOR_PASSWORD: ci-only-auditor-password-0123456789
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - name: Install API
+        working-directory: apps/api
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Migrate and start API
+        working-directory: apps/api
+        run: |
+          python -m app.schema.cli upgrade
+          nohup uvicorn app.main:app --host 127.0.0.1 --port 8000 > /tmp/api.log 2>&1 &
+          for i in $(seq 1 60); do curl -sf http://127.0.0.1:8000/health && break; sleep 2; done
+      - name: Build and start web (same-origin proxy, as on Railway)
+        working-directory: apps/web
+        run: |
+          npm ci
+          npm run build
+          API_INTERNAL_URL=http://127.0.0.1:8000 nohup npx next start -H 127.0.0.1 -p 3000 > /tmp/web.log 2>&1 &
+          for i in $(seq 1 60); do curl -sf http://127.0.0.1:3000/dashboard/login > /dev/null && break; sleep 2; done
+      - name: Install Playwright browser
+        working-directory: apps/web
+        run: npx playwright install --with-deps chromium
+      - name: Authenticated suite (auditor, read-only)
+        working-directory: apps/web
+        env:
+          E2E_EMAIL: e2e-auditor@example.com
+          E2E_PASSWORD: ci-only-auditor-password-0123456789
+          E2E_EXPECT_ROLE: AUDITOR
+        run: npx playwright test --project=authenticated-mobile --project=authenticated-desktop --reporter=list
+      - name: Server logs
+        if: failure()
+        run: tail -100 /tmp/api.log; tail -50 /tmp/web.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: authenticated-screenshots
+          path: apps/web/test-results/authenticated-screenshots/
+          if-no-files-found: ignore
+
   combined-docker:
     runs-on: ubuntu-latest
     steps:
@@ -85,6 +195,8 @@ jobs:
       - name: Verify image layout
         run: |
           docker run --rm rmd-combined:ci test -f /app/start.sh
+          docker run --rm rmd-combined:ci test -x /app/worker.sh
+          docker run --rm rmd-combined:ci sh -c 'cd /api && python -c "import app.worker.celery_app, app.worker.heartbeat; from kombu.transport import redis"'
           docker run --rm rmd-combined:ci test -f /app/server.js
           docker run --rm rmd-combined:ci test -f /api/app/main.py
           docker run --rm rmd-combined:ci sh -c 'grep -q "HOSTNAME=0.0.0.0" /app/start.sh'

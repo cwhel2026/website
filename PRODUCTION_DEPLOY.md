@@ -24,7 +24,7 @@ Do **not** use Root Directory `apps/web` for production login (isolated context 
 | FastAPI (uvicorn) | `127.0.0.1:8000` | API; proxied via Next rewrites + `/api/v1/*` routes |
 
 `API_INTERNAL_URL` must be `http://127.0.0.1:8000` **without a trailing slash** (startup script strips one if present).
-| Alembic | on start only if `DATABASE_MIGRATIONS_MANAGED=true` or `ALEMBIC_ON_START=1` | Never resets data; runs `upgrade head` only |
+| Alembic | always on start (`python -m app.schema.cli upgrade`); start fails closed | Additive only; never resets data |
 
 Startup logs: prefix `[rmd]`, `[rmd-web]`, `[rmd-api]` on stdout (Railway deploy logs).
 
@@ -39,7 +39,7 @@ Startup logs: prefix `[rmd]`, `[rmd-web]`, `[rmd-api]` on stdout (Railway deploy
 | `CORS_ORIGINS` | `https://<your>.up.railway.app` |
 | `PUBLIC_API_BASE_URL` | Same public URL |
 
-Migrations: enable `ALEMBIC_ON_START=1` once to apply new revisions without deleting data, or run `alembic upgrade head` once via CLI.
+Migrations: applied automatically on start. Run `python -m app.schema.cli dry-run` against production before deploying (see `MIGRATIONS.md`).
 
 ## Health endpoints
 

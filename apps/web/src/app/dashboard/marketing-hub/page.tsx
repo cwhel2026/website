@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { apiGet, apiPatch, apiPost } from "@/lib/api";
 import { getToken } from "@/lib/auth-client";
+import { gbp } from "@/lib/format";
+import { withLoadError } from "@/lib/load-errors";
 
 type DailyPlan = {
   priority_actions?: Array<{ action: string; reason?: string; certainty?: string }>;
@@ -42,21 +44,21 @@ export default function MarketingHubPage() {
 
   const reload = () => {
     if (!token) return;
-    apiGet<DailyPlan>("/api/v1/marketing/director/daily-plan", token).then(setPlan).catch(() => setPlan(null));
-    apiGet<Budget>("/api/v1/marketing/budget", token).then(setBudget).catch(() => setBudget(null));
+    apiGet<DailyPlan>("/api/v1/marketing/director/daily-plan", token).then(setPlan).catch(withLoadError(() => setPlan(null)));
+    apiGet<Budget>("/api/v1/marketing/budget", token).then(setBudget).catch(withLoadError(() => setBudget(null)));
     apiGet<Array<{ business_name: string; lead_score: number; pipeline_stage?: string }>>(
       "/api/v1/marketing/commercial-prospects",
       token,
     )
       .then(setProspects)
-      .catch(() => setProspects([]));
-    apiGet<BrandProfile>("/api/v1/marketing/launch/brand", token).then(setBrand).catch(() => setBrand(null));
+      .catch(withLoadError(() => setProspects([])));
+    apiGet<BrandProfile>("/api/v1/marketing/launch/brand", token).then(setBrand).catch(withLoadError(() => setBrand(null)));
     apiGet<{ findings: CompetitorRow[] }>("/api/v1/marketing/launch/competitors", token)
       .then((r) => setCompetitors(r.findings || []))
-      .catch(() => setCompetitors([]));
+      .catch(withLoadError(() => setCompetitors([])));
     apiGet<Profitability>("/api/v1/marketing/launch/profitability?days=90", token)
       .then(setProfit)
-      .catch(() => setProfit(null));
+      .catch(withLoadError(() => setProfit(null)));
   };
 
   useEffect(() => {
@@ -118,7 +120,7 @@ export default function MarketingHubPage() {
               {budget.policy.live_paid_spend_approved ? "Revoke live spend approval" : "Approve live spend"}
             </button>
             {plan?.weekly_spend && (
-              <p className="text-slate-600">Recorded spend (7d): £{plan.weekly_spend.total_spent_gbp.toFixed(2)}</p>
+              <p className="text-slate-600">Recorded spend (7d): {gbp(plan.weekly_spend.total_spent_gbp)}</p>
             )}
           </div>
         )}

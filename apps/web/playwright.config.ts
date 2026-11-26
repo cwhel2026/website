@@ -1,5 +1,12 @@
 import { defineConfig, devices } from "@playwright/test";
 
+/**
+ * Authenticated projects run only when E2E_EMAIL / E2E_PASSWORD are supplied through
+ * protected environment variables (CI secrets). See docs/E2E_TESTING.md.
+ */
+const authenticated = Boolean(process.env.E2E_EMAIL && process.env.E2E_PASSWORD);
+const AUTH_STATE = "test-results/.auth/session.json";
+
 export default defineConfig({
   testDir: "e2e",
   timeout: 60_000,
@@ -8,7 +15,24 @@ export default defineConfig({
     trace: "on-first-retry",
   },
   projects: [
-    { name: "mobile", use: { ...devices["iPhone 13"] } },
-    { name: "desktop", use: { ...devices["Desktop Chrome"] } },
+    { name: "mobile", testIgnore: /authenticated\//, use: { ...devices["iPhone 13"] } },
+    { name: "desktop", testIgnore: /authenticated\//, use: { ...devices["Desktop Chrome"] } },
+    ...(authenticated
+      ? [
+          { name: "auth-setup", testMatch: /authenticated\/auth\.setup\.ts/ },
+          {
+            name: "authenticated-mobile",
+            testMatch: /authenticated\/.*\.spec\.ts/,
+            dependencies: ["auth-setup"],
+            use: { ...devices["Pixel 7"], storageState: AUTH_STATE },
+          },
+          {
+            name: "authenticated-desktop",
+            testMatch: /authenticated\/.*\.spec\.ts/,
+            dependencies: ["auth-setup"],
+            use: { ...devices["Desktop Chrome"], storageState: AUTH_STATE },
+          },
+        ]
+      : []),
   ],
 });

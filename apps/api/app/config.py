@@ -25,6 +25,8 @@ class Settings(BaseSettings):
     default_admin_email: str = "admin@revivemydrive.co.uk"
     default_admin_password: str = "ChangeMe-RMD-2025!"
     admin_setup_key: str | None = None
+    e2e_auditor_email: str | None = None
+    e2e_auditor_password: str | None = None
     openai_api_key: str | None = None
     openai_model: str = "gpt-4o-mini"
     anthropic_api_key: str | None = None
@@ -51,6 +53,7 @@ class Settings(BaseSettings):
     meta_instagram_actor_id: str | None = None
     meta_webhook_verify_token: str | None = None
     meta_app_secret: str | None = None
+    email_inbound_webhook_secret: str | None = None
     meta_pixel_id: str | None = None
     meta_capi_dataset_token: str | None = None
     google_ads_refresh_token: str | None = None
@@ -80,7 +83,6 @@ class Settings(BaseSettings):
     weather_allow_simulation_for_booking: bool = False
     freeagent_api_base: str = "https://api.freeagent.com"
     rate_limit_storage_redis: bool = False
-    database_migrations_managed: bool = False
     finance_token_encryption_key: str | None = None
     finance_receipts_dir: str | None = None
     finance_receipts_backup_dir: str | None = None

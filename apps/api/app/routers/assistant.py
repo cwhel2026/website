@@ -7,7 +7,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth import get_current_user
+from app.auth import get_current_admin
 from app.config import get_settings
 from app.database import get_db
 from app.models.agents import AgentProfile
@@ -36,7 +36,7 @@ class ChatOut(BaseModel):
 async def chat(
     body: ChatIn,
     db: Annotated[AsyncSession, Depends(get_db)],
-    user: Annotated[User, Depends(get_current_user)],
+    user: Annotated[User, Depends(get_current_admin)],
 ) -> ChatOut:
     paused = await db.execute(
         select(AgentProfile).where(AgentProfile.slug == "personal_assistant")

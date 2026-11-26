@@ -23,6 +23,11 @@ class UserOut(BaseModel):
     is_active: bool
 
 
+class SessionOut(BaseModel):
+    ok: bool
+    user: UserOut
+
+
 class OwnerPasswordResetRequest(BaseModel):
     setup_key: str
     new_password: str

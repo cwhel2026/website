@@ -1,0 +1,46 @@
+name: Production read-only checks
+
+# Manual only. Signs in as the read-only auditor account and runs GET-only checks; every
+# mutating browser request is aborted by e2e/authenticated/guard.ts. See docs/E2E_TESTING.md.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  production-readonly:
+    runs-on: ubuntu-latest
+    env:
+      PLAYWRIGHT_BASE_URL: ${{ secrets.PROD_BASE_URL }}
+      E2E_EMAIL: ${{ secrets.PROD_E2E_EMAIL }}
+      E2E_PASSWORD: ${{ secrets.PROD_E2E_PASSWORD }}
+      E2E_EXPECT_ROLE: AUDITOR
+    steps:
+      - uses: actions/checkout@v4
+      - name: Require secrets
+        run: |
+          for v in PLAYWRIGHT_BASE_URL E2E_EMAIL E2E_PASSWORD; do
+            if [ -z "$(printenv $v)" ]; then echo "::error::missing secret for $v (see docs/E2E_TESTING.md)"; exit 1; fi
+          done
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - name: Install
+        working-directory: apps/web
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+      - name: Read-only authenticated suite
+        working-directory: apps/web
+        run: npx playwright test --project=authenticated-mobile --project=authenticated-desktop --reporter=list,html
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: production-readonly-report
+          path: |
+            apps/web/playwright-report/
+            apps/web/test-results/authenticated-screenshots/
+          if-no-files-found: ignore

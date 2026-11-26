@@ -10,6 +10,8 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects.postgresql import JSONB
 
+from app.schema import ops as safe
+
 revision: str = "20251125_0012"
 down_revision: str | Sequence[str] | None = "20251125_0011"
 branch_labels: str | Sequence[str] | None = None
@@ -17,36 +19,36 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    op.add_column("commercial_prospects", sa.Column("google_place_id", sa.String(120), nullable=True))
-    op.add_column("commercial_prospects", sa.Column("registered_address", sa.Text(), nullable=True))
-    op.add_column("commercial_prospects", sa.Column("trading_premises_note", sa.Text(), nullable=True))
-    op.add_column("commercial_prospects", sa.Column("responsible_org_hint", sa.String(255), nullable=True))
-    op.create_index("ix_commercial_prospects_google_place_id", "commercial_prospects", ["google_place_id"], unique=True)
+    safe.add_column("commercial_prospects", sa.Column("google_place_id", sa.String(120), nullable=True))
+    safe.add_column("commercial_prospects", sa.Column("registered_address", sa.Text(), nullable=True))
+    safe.add_column("commercial_prospects", sa.Column("trading_premises_note", sa.Text(), nullable=True))
+    safe.add_column("commercial_prospects", sa.Column("responsible_org_hint", sa.String(255), nullable=True))
+    safe.create_index("ix_commercial_prospects_google_place_id", "commercial_prospects", ["google_place_id"], unique=True)
 
-    op.add_column("outreach_messages", sa.Column("sequence_step", sa.Integer(), server_default="1"))
-    op.add_column("outreach_messages", sa.Column("provider_message_id", sa.String(255), nullable=True))
-    op.add_column("outreach_messages", sa.Column("delivery_status", sa.String(40), server_default="pending"))
-    op.add_column("outreach_messages", sa.Column("bounced_at", sa.DateTime(timezone=True), nullable=True))
-    op.add_column("outreach_messages", sa.Column("replied_at", sa.DateTime(timezone=True), nullable=True))
+    safe.add_column("outreach_messages", sa.Column("sequence_step", sa.Integer(), server_default="1"))
+    safe.add_column("outreach_messages", sa.Column("provider_message_id", sa.String(255), nullable=True))
+    safe.add_column("outreach_messages", sa.Column("delivery_status", sa.String(40), server_default="pending"))
+    safe.add_column("outreach_messages", sa.Column("bounced_at", sa.DateTime(timezone=True), nullable=True))
+    safe.add_column("outreach_messages", sa.Column("replied_at", sa.DateTime(timezone=True), nullable=True))
 
-    op.add_column("attribution_events", sa.Column("utm_campaign", sa.String(120), nullable=True))
-    op.add_column("attribution_events", sa.Column("utm_source", sa.String(80), nullable=True))
-    op.add_column("attribution_events", sa.Column("utm_medium", sa.String(80), nullable=True))
-    op.add_column("attribution_events", sa.Column("utm_content", sa.String(120), nullable=True))
-    op.add_column("attribution_events", sa.Column("utm_term", sa.String(120), nullable=True))
+    safe.add_column("attribution_events", sa.Column("utm_campaign", sa.String(120), nullable=True))
+    safe.add_column("attribution_events", sa.Column("utm_source", sa.String(80), nullable=True))
+    safe.add_column("attribution_events", sa.Column("utm_medium", sa.String(80), nullable=True))
+    safe.add_column("attribution_events", sa.Column("utm_content", sa.String(120), nullable=True))
+    safe.add_column("attribution_events", sa.Column("utm_term", sa.String(120), nullable=True))
 
-    op.add_column("marketing_budget_policies", sa.Column("research_api_daily_limit_gbp", sa.Numeric(12, 2), server_default="5"))
-    op.add_column("marketing_budget_policies", sa.Column("outreach_email_enabled", sa.Boolean(), server_default="false"))
-    op.add_column("marketing_budget_policies", sa.Column("outreach_daily_cap", sa.Integer(), server_default="20"))
+    safe.add_column("marketing_budget_policies", sa.Column("research_api_daily_limit_gbp", sa.Numeric(12, 2), server_default="5"))
+    safe.add_column("marketing_budget_policies", sa.Column("outreach_email_enabled", sa.Boolean(), server_default="false"))
+    safe.add_column("marketing_budget_policies", sa.Column("outreach_daily_cap", sa.Integer(), server_default="20"))
 
-    op.create_table(
+    safe.create_table(
         "marketing_email_suppressions",
         sa.Column("id", sa.UUID(), primary_key=True),
         sa.Column("email_normalized", sa.String(320), unique=True, index=True),
         sa.Column("reason", sa.String(120)),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
     )
-    op.create_table(
+    safe.create_table(
         "marketing_prospect_research_runs",
         sa.Column("id", sa.UUID(), primary_key=True),
         sa.Column("territory_id", sa.UUID(), sa.ForeignKey("territories.id"), nullable=True),
@@ -58,14 +60,14 @@ def upgrade() -> None:
         sa.Column("detail_json", JSONB),
         sa.Column("ran_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
     )
-    op.create_table(
+    safe.create_table(
         "marketing_integration_secrets",
         sa.Column("id", sa.UUID(), primary_key=True),
         sa.Column("provider", sa.String(40), unique=True),
         sa.Column("encrypted_payload", sa.Text()),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
     )
-    op.create_table(
+    safe.create_table(
         "marketing_before_after_packages",
         sa.Column("id", sa.UUID(), primary_key=True),
         sa.Column("job_id", sa.UUID(), nullable=True),
@@ -76,8 +78,8 @@ def upgrade() -> None:
         sa.Column("customer_permission", sa.Boolean(), server_default="false"),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
     )
-    op.add_column("marketing_media_assets", sa.Column("category", sa.String(40), server_default="general"))
-    op.add_column("marketing_media_assets", sa.Column("telegram_file_id", sa.String(200), nullable=True))
+    safe.add_column("marketing_media_assets", sa.Column("category", sa.String(40), server_default="general"))
+    safe.add_column("marketing_media_assets", sa.Column("telegram_file_id", sa.String(200), nullable=True))
 
 
 def downgrade() -> None:

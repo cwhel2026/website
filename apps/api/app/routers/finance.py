@@ -9,7 +9,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth import get_current_admin
+from app.auth import get_current_admin_writer, get_current_admin
 from app.database import get_db
 from app.models.finance import (
     BankTransaction,
@@ -272,7 +272,7 @@ async def profitability_job(
 @router.get("/freeagent/authorize")
 async def freeagent_authorize(
     db: Annotated[AsyncSession, Depends(get_db)],
-    user: Annotated[User, Depends(get_current_admin)],
+    user: Annotated[User, Depends(get_current_admin_writer)],
 ) -> dict:
     try:
         payload = await begin_oauth(db)

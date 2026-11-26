@@ -59,7 +59,7 @@ On the **API** service, set **`PUBLIC_API_BASE_URL`** to the same origin for Tel
 
 **FreeAgent (optional):** `FREEAGENT_CLIENT_ID`, `FREEAGENT_CLIENT_SECRET`, `FREEAGENT_REDIRECT_URI` → `https://<api-host>/api/v1/finance/freeagent/callback`
 
-**Migrations:** See `MIGRATIONS.md`. Set `DATABASE_MIGRATIONS_MANAGED=true` when using `alembic upgrade head` on deploy.
+**Migrations:** See `MIGRATIONS.md`. Alembic runs automatically on every start; run `python -m app.schema.cli dry-run` against production first.
 
 **Rate limits (multi-instance):** `RATE_LIMIT_STORAGE_REDIS=true` and `REDIS_URL` on API.
 

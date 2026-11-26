@@ -11,6 +11,8 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
 
+from app.schema import ops as safe
+
 revision: str = "20251125_0003"
 down_revision: Union[str, None] = "20251124_0002"
 branch_labels: Union[str, Sequence[str], None] = None
@@ -41,7 +43,7 @@ def upgrade() -> None:
         "EXCEPTION WHEN duplicate_object THEN null; END $$;"
     )
 
-    op.create_table(
+    safe.create_table(
         "notification_outbox",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
         sa.Column("dedupe_key", sa.String(160), nullable=True),
@@ -60,12 +62,12 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
     )
-    op.create_index("ix_notification_outbox_dedupe_key", "notification_outbox", ["dedupe_key"])
-    op.create_index("ix_notification_outbox_channel", "notification_outbox", ["channel"])
-    op.create_index("ix_notification_outbox_category", "notification_outbox", ["category"])
-    op.create_index("ix_notification_outbox_status", "notification_outbox", ["status"])
+    safe.create_index("ix_notification_outbox_dedupe_key", "notification_outbox", ["dedupe_key"])
+    safe.create_index("ix_notification_outbox_channel", "notification_outbox", ["channel"])
+    safe.create_index("ix_notification_outbox_category", "notification_outbox", ["category"])
+    safe.create_index("ix_notification_outbox_status", "notification_outbox", ["status"])
 
-    op.create_table(
+    safe.create_table(
         "telegram_processed_updates",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
         sa.Column("update_id", sa.Integer(), nullable=False),
@@ -74,9 +76,9 @@ def upgrade() -> None:
         sa.Column("processed_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
         sa.UniqueConstraint("update_id", name="uq_telegram_update_id"),
     )
-    op.create_index("ix_telegram_processed_updates_update_id", "telegram_processed_updates", ["update_id"])
+    safe.create_index("ix_telegram_processed_updates_update_id", "telegram_processed_updates", ["update_id"])
 
-    op.create_table(
+    safe.create_table(
         "telegram_conversation_messages",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
         sa.Column("chat_id", sa.Integer(), nullable=False),
@@ -86,7 +88,7 @@ def upgrade() -> None:
         sa.Column("outbox_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("notification_outbox.id"), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
     )
-    op.create_index("ix_telegram_conversation_messages_chat_id", "telegram_conversation_messages", ["chat_id"])
+    safe.create_index("ix_telegram_conversation_messages_chat_id", "telegram_conversation_messages", ["chat_id"])
 
 
 def downgrade() -> None:

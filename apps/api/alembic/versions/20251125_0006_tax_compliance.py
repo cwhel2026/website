@@ -11,6 +11,8 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
 
+from app.schema import ops as safe
+
 revision: str = "20251125_0006"
 down_revision: Union[str, None] = "20251125_0005"
 branch_labels: Union[str, Sequence[str], None] = None
@@ -25,7 +27,7 @@ def upgrade() -> None:
         "EXCEPTION WHEN duplicate_object THEN null; END $$;"
     )
 
-    op.create_table(
+    safe.create_table(
         "compliance_obligations",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
         sa.Column("slug", sa.String(80), nullable=False),
@@ -58,10 +60,10 @@ def upgrade() -> None:
         sa.Column("sort_order", sa.Integer(), server_default="0"),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
     )
-    op.create_index("ix_compliance_obligations_slug", "compliance_obligations", ["slug"])
-    op.create_index("ix_compliance_obligations_due_date", "compliance_obligations", ["due_date"])
+    safe.create_index("ix_compliance_obligations_slug", "compliance_obligations", ["slug"])
+    safe.create_index("ix_compliance_obligations_due_date", "compliance_obligations", ["due_date"])
 
-    op.create_table(
+    safe.create_table(
         "tax_reserve_snapshots",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
         sa.Column("computed_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
@@ -74,7 +76,7 @@ def upgrade() -> None:
         sa.Column("data_freshness_note", sa.Text(), nullable=False),
         sa.Column("is_provisional", sa.Boolean(), server_default="true"),
     )
-    op.create_index("ix_tax_reserve_snapshots_computed_at", "tax_reserve_snapshots", ["computed_at"])
+    safe.create_index("ix_tax_reserve_snapshots_computed_at", "tax_reserve_snapshots", ["computed_at"])
 
 
 def downgrade() -> None:

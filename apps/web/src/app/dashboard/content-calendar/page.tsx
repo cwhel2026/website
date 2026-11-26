@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { apiGet } from "@/lib/api";
 import { getToken } from "@/lib/auth-client";
+import { withLoadError } from "@/lib/load-errors";
 
 type Cal = {
   days: Record<string, Array<{ platform: string; title: string; status: string }>>;
@@ -15,7 +16,7 @@ export default function ContentCalendarPage() {
   useEffect(() => {
     const token = getToken();
     if (!token) return;
-    apiGet<Cal>("/api/v1/marketing/content/calendar", token).then(setData).catch(() => setData(null));
+    apiGet<Cal>("/api/v1/marketing/content/calendar", token).then(setData).catch(withLoadError(() => setData(null)));
   }, []);
 
   return (

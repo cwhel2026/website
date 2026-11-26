@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { apiGet, apiPost } from "@/lib/api";
 import { getToken } from "@/lib/auth-client";
+import { gbp } from "@/lib/format";
+import { withLoadError } from "@/lib/load-errors";
 
 type ReviewItem = {
   id: string;
@@ -37,13 +39,13 @@ export default function FinanceHubPage() {
     if (!token) return;
     apiGet<ReviewItem[]>("/api/v1/finance/bookkeeping/review-queue", token)
       .then(setQueue)
-      .catch(() => setQueue([]));
+      .catch(withLoadError(() => setQueue([])));
     apiGet<{ tasks: FinanceTask[] }>("/api/v1/finance/insights/tasks", token)
       .then((r) => setTasks(r.tasks.slice(0, 6)))
-      .catch(() => setTasks([]));
+      .catch(withLoadError(() => setTasks([])));
     apiGet<GrowthSummary>("/api/v1/finance/growth-fund/summary", token)
       .then(setGrowth)
-      .catch(() => setGrowth(null));
+      .catch(withLoadError(() => setGrowth(null)));
   }, []);
 
   useEffect(() => {
@@ -114,8 +116,8 @@ export default function FinanceHubPage() {
         <h2 className="text-sm font-semibold text-[#eab308]">SurfaceCoat Growth Fund</h2>
         <p className="mt-1 text-xs text-white/70">5% of eligible customer revenue → virtual marketing reserve (not a bank transfer).</p>
         <p className="mt-2 text-lg font-semibold">
-          £{growth?.virtual_reserve_balance_gbp?.toFixed(2) ?? "—"} · available £
-          {growth?.available_uncommitted_gbp?.toFixed(2) ?? "—"}
+          {gbp(growth?.virtual_reserve_balance_gbp, "—")} · available{" "}
+          {gbp(growth?.available_uncommitted_gbp, "—")}
         </p>
         <a href="/dashboard/marketing/growth-fund" className="mt-2 inline-block text-xs font-semibold text-[#eab308] underline">
           Open ledger

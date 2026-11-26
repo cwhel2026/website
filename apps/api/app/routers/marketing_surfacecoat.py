@@ -34,6 +34,15 @@ async def overview(
     policy = await get_or_create_budget_policy(db)
     await ensure_launch_programme(policy)
     await db.commit()
+    # Snapshot before the optional sections below: a rollback there expires `policy`,
+    # and lazy attribute loads are not possible on an AsyncSession.
+    snapshot = {
+        "live_paid_spend_approved": policy.live_paid_spend_approved,
+        "weekly_limit_gbp": float(policy.weekly_limit_gbp),
+        "director_mode": policy.director_operating_mode.value,
+        "emergency_pause": policy.emergency_pause_all,
+        "launch_programme": policy.launch_programme_json or DEFAULT_LAUNCH_PROGRAMME,
+    }
 
     spend = await account_spend_last_7d()
     meta_spend = float(spend.get("spend_gbp") or 0) if spend.get("ok") else None
@@ -58,15 +67,15 @@ async def overview(
         degraded.append("growth_fund_unavailable")
 
     return {
-        "pre_launch_mode": not policy.live_paid_spend_approved,
-        "weekly_budget_gbp": float(policy.weekly_limit_gbp),
-        "remaining_budget_estimate_gbp": max(0.0, float(policy.weekly_limit_gbp) - (meta_spend or 0)),
+        "pre_launch_mode": not snapshot["live_paid_spend_approved"],
+        "weekly_budget_gbp": snapshot["weekly_limit_gbp"],
+        "remaining_budget_estimate_gbp": max(0.0, snapshot["weekly_limit_gbp"] - (meta_spend or 0)),
         "meta_account_spend_7d_gbp": meta_spend,
         "meta_spend_source": meta_source,
         "organic_posts_total": posts,
-        "director_mode": policy.director_operating_mode.value,
-        "emergency_pause": policy.emergency_pause_all,
-        "launch_programme": policy.launch_programme_json or DEFAULT_LAUNCH_PROGRAMME,
+        "director_mode": snapshot["director_mode"],
+        "emergency_pause": snapshot["emergency_pause"],
+        "launch_programme": snapshot["launch_programme"],
         "growth_fund": growth,
         "degraded": degraded,
         "disclaimer": "Spend from Meta may lag; campaigns edited in Ads Manager may not appear immediately.",

@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { apiGet } from "@/lib/api";
 import { getToken } from "@/lib/auth-client";
+import { gbp } from "@/lib/format";
+import { withLoadError } from "@/lib/load-errors";
 
 type Inv = {
   invoice_number: string;
@@ -17,7 +19,7 @@ export default function InvoicesPage() {
   useEffect(() => {
     const token = getToken();
     if (!token) return;
-    apiGet<Inv[]>("/api/v1/finance/invoices", token).then(setItems).catch(() => setItems([]));
+    apiGet<Inv[]>("/api/v1/finance/invoices", token).then(setItems).catch(withLoadError(() => setItems([])));
   }, []);
 
   return (
@@ -40,8 +42,8 @@ export default function InvoicesPage() {
               <tr key={i.invoice_number} className="border-b">
                 <td className="py-2">{i.invoice_number}</td>
                 <td>{i.status}</td>
-                <td>£{i.total_inc_vat_gbp.toFixed(2)}</td>
-                <td>£{i.amount_paid_gbp.toFixed(2)}</td>
+                <td>{gbp(i.total_inc_vat_gbp)}</td>
+                <td>{gbp(i.amount_paid_gbp)}</td>
               </tr>
             ))}
           </tbody>

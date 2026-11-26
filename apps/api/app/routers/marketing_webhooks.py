@@ -1,20 +1,37 @@
-import hashlib
-import hmac
 import json
-from typing import Any
+from typing import Annotated, Any
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Query, Request
+
 from app.config import get_settings
+from app.security.webhooks import (
+    verify_meta_signature,
+    verify_shared_secret,
+    verify_subscription_challenge,
+)
 
 router = APIRouter(prefix="/marketing/webhooks", tags=["marketing-webhooks"])
 
 
+def _parse_json(body: bytes) -> dict:
+    try:
+        data = json.loads(body)
+    except ValueError as exc:
+        raise HTTPException(400, "Invalid JSON") from exc
+    if not isinstance(data, dict):
+        raise HTTPException(400, "Invalid payload")
+    return data
+
+
 @router.get("/meta/leads")
-async def meta_lead_verify(hub_mode: str = "", hub_verify_token: str = "", hub_challenge: str = "") -> Any:
-    settings = get_settings()
-    if hub_mode == "subscribe" and hub_verify_token == (settings.meta_webhook_verify_token or ""):
-        return int(hub_challenge)
-    raise HTTPException(403, "Verification failed")
+async def meta_lead_verify(
+    hub_mode: Annotated[str, Query(alias="hub.mode")] = "",
+    hub_verify_token: Annotated[str, Query(alias="hub.verify_token")] = "",
+    hub_challenge: Annotated[str, Query(alias="hub.challenge")] = "",
+) -> Any:
+    return verify_subscription_challenge(
+        get_settings().meta_webhook_verify_token, hub_mode, hub_verify_token, hub_challenge
+    )
 
 
 @router.post("/meta/leads")
@@ -22,16 +39,9 @@ async def meta_lead_ingest(request: Request) -> dict:
     from app.database import SessionLocal
     from app.services.marketing.meta_leads_service import ingest_meta_lead_payload
 
-    settings = get_settings()
     body = await request.body()
-    sig = request.headers.get("X-Hub-Signature-256", "")
-    if settings.meta_app_secret and sig.startswith("sha256="):
-        expected = hmac.new(settings.meta_app_secret.encode(), body, hashlib.sha256).hexdigest()
-        if not hmac.compare_digest(sig[7:], expected):
-            raise HTTPException(403, "Invalid signature")
-    elif settings.meta_app_secret and not sig:
-        raise HTTPException(403, "Missing signature")
-    payload = json.loads(body)
+    verify_meta_signature(get_settings().meta_app_secret, body, request.headers.get("X-Hub-Signature-256"))
+    payload = _parse_json(body)
     ingested: list[dict] = []
     async with SessionLocal() as db:
         for entry in payload.get("entry") or []:
@@ -44,11 +54,14 @@ async def meta_lead_ingest(request: Request) -> dict:
 
 
 @router.get("/meta/feed")
-async def meta_feed_verify(hub_mode: str = "", hub_verify_token: str = "", hub_challenge: str = "") -> Any:
-    settings = get_settings()
-    if hub_mode == "subscribe" and hub_verify_token == (settings.meta_webhook_verify_token or ""):
-        return int(hub_challenge)
-    raise HTTPException(403, "Verification failed")
+async def meta_feed_verify(
+    hub_mode: Annotated[str, Query(alias="hub.mode")] = "",
+    hub_verify_token: Annotated[str, Query(alias="hub.verify_token")] = "",
+    hub_challenge: Annotated[str, Query(alias="hub.challenge")] = "",
+) -> Any:
+    return verify_subscription_challenge(
+        get_settings().meta_webhook_verify_token, hub_mode, hub_verify_token, hub_challenge
+    )
 
 
 @router.post("/meta/feed")
@@ -57,14 +70,9 @@ async def meta_feed_change(request: Request) -> dict:
     from app.database import SessionLocal
     from app.services.marketing.organic_post_sync import sync_all_organic
 
-    settings = get_settings()
     body = await request.body()
-    sig = request.headers.get("X-Hub-Signature-256", "")
-    if settings.meta_app_secret and sig.startswith("sha256="):
-        expected = hmac.new(settings.meta_app_secret.encode(), body, hashlib.sha256).hexdigest()
-        if not hmac.compare_digest(sig[7:], expected):
-            raise HTTPException(403, "Invalid signature")
-    json.loads(body)
+    verify_meta_signature(get_settings().meta_app_secret, body, request.headers.get("X-Hub-Signature-256"))
+    _parse_json(body)
     async with SessionLocal() as db:
         result = await sync_all_organic(db)
         await db.commit()
@@ -73,17 +81,22 @@ async def meta_feed_change(request: Request) -> dict:
 
 @router.post("/email/inbound")
 async def email_inbound(request: Request) -> dict:
-    """Minimal inbound hook — mark replies and suppress follow-ups."""
+    """Inbound reply hook — mark replies and suppress follow-ups. Requires X-Webhook-Secret."""
     from app.database import SessionLocal
     from app.services.marketing.email.outreach_mailer import record_reply, suppress_email
 
-    data = await request.json()
+    verify_shared_secret(
+        get_settings().email_inbound_webhook_secret,
+        request.headers.get("X-Webhook-Secret"),
+        "EMAIL_INBOUND_WEBHOOK_SECRET",
+    )
+    data = _parse_json(await request.body())
     sender = (data.get("from") or data.get("sender") or "").strip()
     if not sender or "@" not in sender:
         return {"status": "ignored"}
     async with SessionLocal() as db:
-        await suppress_email(db, sender, "inbound_stop") if "stop" in (data.get("subject") or "").lower() else None
+        if "stop" in (data.get("subject") or "").lower():
+            await suppress_email(db, sender, "inbound_stop")
         updated = await record_reply(db, email=sender)
         await db.commit()
     return {"status": "ok", "threads_updated": updated}
-

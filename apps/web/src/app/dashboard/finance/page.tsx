@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { apiGet, apiPost } from "@/lib/api";
 import { getToken } from "@/lib/auth-client";
+import { gbp } from "@/lib/format";
+import { withLoadError } from "@/lib/load-errors";
 
 type FreeAgentInfo = {
   state: string;
@@ -26,16 +28,16 @@ export default function FinancePage() {
   const load = useCallback(() => {
     const token = getToken();
     if (!token) return;
-    apiGet<Record<string, unknown>>("/api/v1/finance/tax-estimate", token).then(setTax).catch(() => setTax(null));
+    apiGet<Record<string, unknown>>("/api/v1/finance/tax-estimate", token).then(setTax).catch(withLoadError(() => setTax(null)));
     apiGet<{ freeagent: FreeAgentInfo; mettle_feed: string }>("/api/v1/finance/status", token)
       .then(setStatus)
-      .catch(() => setStatus(null));
+      .catch(withLoadError(() => setStatus(null)));
     apiGet<Array<{ territory_code: string; estimated_profit_gbp: number }>>(
       "/api/v1/finance/profitability/territories",
       token,
     )
       .then(setTerritories)
-      .catch(() => setTerritories([]));
+      .catch(withLoadError(() => setTerritories([])));
   }, []);
 
   useEffect(() => {
@@ -154,7 +156,7 @@ export default function FinancePage() {
         <ul className="mt-2 text-sm">
           {territories.map((t) => (
             <li key={t.territory_code} className="border-b py-1">
-              {t.territory_code} — est. profit £{t.estimated_profit_gbp.toFixed(2)}
+              {t.territory_code} — est. profit {gbp(t.estimated_profit_gbp)}
             </li>
           ))}
         </ul>

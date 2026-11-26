@@ -14,8 +14,8 @@ from app.middleware.request_id import RequestIdMiddleware
 from app.middleware.security_headers import SecurityHeadersMiddleware
 from app.rate_limit import limiter
 from app.security.startup import validate_production_settings
-from app.database import Base, SessionLocal, engine
-from app.routers import growth_fund, marketing_surfacecoat
+from app.database import SessionLocal
+from app.routers import growth_fund, marketing_surfacecoat, ops
 from app.routers import (
     approvals,
     assistant,
@@ -73,11 +73,12 @@ def _try_register_telegram_webhook() -> None:
 
 
 async def _bootstrap_data() -> None:
-    """DB setup and seeding — runs in the background so /health can respond quickly."""
+    """Seeding — runs in the background so /health can respond quickly.
+
+    The schema is owned exclusively by Alembic (``alembic upgrade head`` runs
+    before the API starts); the API never creates or alters tables itself.
+    """
     try:
-        if not settings.database_migrations_managed:
-            async with engine.begin() as conn:
-                await conn.run_sync(Base.metadata.create_all)
         async with SessionLocal() as session:
             await seed_database(session)
         await asyncio.to_thread(_try_register_telegram_webhook)
@@ -156,4 +157,5 @@ app.include_router(accountant.router, prefix=prefix)
 app.include_router(inventory.router, prefix=prefix)
 app.include_router(analytics.router, prefix=prefix)
 app.include_router(business_director.router, prefix=prefix)
+app.include_router(ops.router, prefix=prefix)
 app.include_router(health.router)
