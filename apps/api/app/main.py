@@ -88,6 +88,11 @@ async def _bootstrap_data() -> None:
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     validate_production_settings(settings)
+    # CI integration tests (ENVIRONMENT=test) need a fully seeded DB before requests.
+    if settings.environment == "test":
+        await _bootstrap_data()
+        yield
+        return
     bootstrap = asyncio.create_task(_bootstrap_data())
     yield
     bootstrap.cancel()
