@@ -54,7 +54,16 @@ export default function DashboardLoginPage() {
           (API service or combined website service).
         </p>
         {hint && (
-          <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">{hint}</p>
+          <div className="mt-3 space-y-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+            <p>{hint}</p>
+            <p className="font-semibold">Railway fix (keep variables on website):</p>
+            <ol className="list-decimal pl-4">
+              <li>Settings → Build → Dockerfile path: <code className="text-[11px]">Dockerfile</code> (repo root)</li>
+              <li>Settings → Deploy → Custom start: <code className="text-[11px]">/app/start.sh</code></li>
+              <li>Health check path: <code className="text-[11px]">/health</code></li>
+              <li>Redeploy, then sign in with DEFAULT_ADMIN_EMAIL / DEFAULT_ADMIN_PASSWORD</li>
+            </ol>
+          </div>
         )}
         <label className="mt-6 block text-sm">
           Email
