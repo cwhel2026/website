@@ -244,12 +244,18 @@ async def seed_database(session: AsyncSession) -> None:
 
 async def _seed_admin(session: AsyncSession) -> None:
     result = await session.execute(select(User).where(User.email == settings.default_admin_email))
-    if result.scalar_one_or_none():
+    user = result.scalar_one_or_none()
+    desired_hash = hash_password(settings.default_admin_password)
+    if user:
+        if user.role != UserRole.OWNER:
+            user.role = UserRole.OWNER
+        if user.password_hash != desired_hash:
+            user.password_hash = desired_hash
         return
     session.add(
         User(
             email=settings.default_admin_email,
-            password_hash=hash_password(settings.default_admin_password),
+            password_hash=desired_hash,
             full_name="Revive My Drive Owner",
             role=UserRole.OWNER,
         )

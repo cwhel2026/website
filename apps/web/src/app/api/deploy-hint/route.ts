@@ -6,9 +6,16 @@ import { NextResponse } from "next/server";
  */
 export async function GET() {
   const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "";
+  const internal = Boolean(process.env.API_INTERNAL_URL?.trim());
+  const hasDb = Boolean(process.env.DATABASE_URL?.trim());
+  const combined = internal && hasDb;
+
   return NextResponse.json({
-    service: "revive-my-drive-web",
-    role: "Next.js frontend only — not the FastAPI API",
+    service: "revive-my-drive",
+    combined_deploy: combined,
+    role: combined
+      ? "Combined site + FastAPI (variables on this service are correct)"
+      : "Web-only image — dashboard login and DB features need the combined deploy",
     next_public_api_url_set: Boolean(apiUrl),
     next_public_api_url_host: (() => {
       if (!apiUrl) return null;
@@ -18,8 +25,8 @@ export async function GET() {
         return "invalid-url";
       }
     })(),
-    reminder:
-      "TELEGRAM_*, DATABASE_URL, JWT_SECRET, and PUBLIC_API_BASE_URL belong on the Railway API service (apps/api), not here.",
-    docs: "See RAILWAY_VARIABLES.md in the repo",
+    fix_when_login_fails:
+      "Railway → website → Settings → Source → Root directory: leave empty (repo root, not apps/web). Redeploy. Keep DATABASE_URL, JWT_SECRET, DEFAULT_ADMIN_* on this service.",
+    docs: "RAILWAY_COMBINED.md",
   });
 }

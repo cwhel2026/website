@@ -1,7 +1,13 @@
 /** Same-origin when NEXT_PUBLIC_API_URL is unset (combined Railway deploy). */
 export function resolveApiUrl(): string {
-  const configured = (process.env.NEXT_PUBLIC_API_URL ?? "").trim();
-  if (configured) return configured.replace(/\/$/, "");
+  const configured = (process.env.NEXT_PUBLIC_API_URL ?? "").trim().replace(/\/$/, "");
+  if (configured && typeof window !== "undefined") {
+    const origin = window.location.origin.replace(/\/$/, "");
+    if (configured === origin) {
+      return "";
+    }
+  }
+  if (configured) return configured;
   if (typeof window !== "undefined") return "";
   return (process.env.API_INTERNAL_URL ?? "http://localhost:8000").replace(/\/$/, "");
 }

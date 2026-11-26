@@ -1,14 +1,28 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { apiPost } from "@/lib/api";
 import { setToken } from "@/lib/auth-client";
 
 export default function DashboardLoginPage() {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
+  const [hint, setHint] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/ops/status")
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.combined_sidecar && d.api?.reachable) return;
+        setHint(
+          d.api?.reason ??
+            "FastAPI is not running. Use the combined Railway deploy (empty Root directory) — see RAILWAY_COMBINED.md.",
+        );
+      })
+      .catch(() => setHint(null));
+  }, []);
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -34,8 +48,12 @@ export default function DashboardLoginPage() {
       <form onSubmit={onSubmit} className="w-full max-w-md rounded-2xl border bg-white p-8 shadow-sm">
         <h1 className="text-xl font-semibold text-emerald-950">Business sign in</h1>
         <p className="mt-2 text-sm text-slate-600">
-          Default dev credentials are set via API environment variables (see README).
+          Sign in with <strong>DEFAULT_ADMIN_EMAIL</strong> and <strong>DEFAULT_ADMIN_PASSWORD</strong> from Railway
+          (API service or combined website service).
         </p>
+        {hint && (
+          <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">{hint}</p>
+        )}
         <label className="mt-6 block text-sm">
           Email
           <input name="email" type="email" required className="mt-1 w-full rounded-lg border px-3 py-2" />
