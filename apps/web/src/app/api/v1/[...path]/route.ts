@@ -17,7 +17,15 @@ async function proxy(request: NextRequest, apiPath: string): Promise<NextRespons
   if (request.method !== "GET" && request.method !== "HEAD") {
     body = await request.arrayBuffer();
   }
-  const upstream = await fetch(url, { method: request.method, headers, body: body as BodyInit | undefined });
+  let upstream: Response;
+  try {
+    upstream = await fetch(url, { method: request.method, headers, body: body as BodyInit | undefined });
+  } catch {
+    return NextResponse.json(
+      { detail: "FastAPI sidecar refused connection — check Railway logs for uvicorn startup errors." },
+      { status: 503 },
+    );
+  }
   const responseHeaders = new Headers();
   upstream.headers.forEach((value, key) => {
     if (key === "transfer-encoding") return;

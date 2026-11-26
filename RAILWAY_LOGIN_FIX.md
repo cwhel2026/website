@@ -30,6 +30,21 @@ Keep on this same service:
 
 Use exactly **`DEFAULT_ADMIN_EMAIL`** and **`DEFAULT_ADMIN_PASSWORD`** from Railway. On each API boot, the owner account for that email is created or its password is synced from the env var.
 
+## `ECONNREFUSED 127.0.0.1:8000` in logs
+
+The combined image is running, but **uvicorn exited or never started**. Open **Deployments → View logs** and search for `uvicorn exited` or the FastAPI traceback.
+
+Common causes on Railway:
+
+| Issue | Fix |
+|-------|-----|
+| Missing `SYNC_DATABASE_URL` | Add `postgresql://…` (same DB as `DATABASE_URL`, without `+asyncpg`) |
+| `JWT_SECRET` &lt; 32 chars with `ENVIRONMENT=production` | Set a long random secret |
+| `DEFAULT_ADMIN_PASSWORD` still `ChangeMe-RMD-2025!` in production | Set a real password in Railway |
+| Postgres plugin not linked / wrong `DATABASE_URL` | Reference Railway Postgres variables on the website service |
+
+After fixing variables, **redeploy**. The container will not start Next.js until `/health` returns OK (so a broken API fails fast with logs).
+
 ## Still failing?
 
 - Wrong email (e.g. personal Yahoo) if `DEFAULT_ADMIN_EMAIL` is something else.
