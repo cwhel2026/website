@@ -1,8 +1,11 @@
 from decimal import Decimal
 from functools import lru_cache
+from typing import Self
 
-from pydantic import field_validator
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from app.db_urls import derive_sync_from_async, normalize_async_database_url, normalize_sync_database_url
 
 
 class Settings(BaseSettings):
@@ -87,16 +90,16 @@ class Settings(BaseSettings):
     freeagent_default_expense_category_url: str | None = None
     public_dashboard_base_url: str | None = None
 
-    @field_validator("database_url", mode="before")
-    @classmethod
-    def _use_asyncpg_driver(cls, v):
-        if isinstance(v, str):
-            v = v.strip()
-            if v.startswith("postgres://"):
-                v = "postgresql+asyncpg://" + v[len("postgres://"):]
-            elif v.startswith("postgresql://"):
-                v = "postgresql+asyncpg://" + v[len("postgresql://"):]
-        return v
+    @model_validator(mode="after")
+    def normalize_database_urls(self) -> Self:
+        self.database_url = normalize_async_database_url(self.database_url)
+        sync = (self.sync_database_url or "").strip()
+        dev_sync_default = "postgresql://rmd:rmd_dev_password@localhost:5432/revive_my_drive"
+        if not sync or sync == dev_sync_default:
+            self.sync_database_url = derive_sync_from_async(self.database_url)
+        else:
+            self.sync_database_url = normalize_sync_database_url(sync)
+        return self
 
     @property
     def telegram_admin_id_list(self) -> list[int]:
