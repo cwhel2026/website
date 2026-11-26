@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 import logging
 from contextlib import asynccontextmanager
 
@@ -71,16 +72,27 @@ def _try_register_telegram_webhook() -> None:
         logger.exception("Telegram webhook auto-registration failed")
 
 
+async def _bootstrap_data() -> None:
+    """DB setup and seeding — runs in the background so /health can respond quickly."""
+    try:
+        if not settings.database_migrations_managed:
+            async with engine.begin() as conn:
+                await conn.run_sync(Base.metadata.create_all)
+        async with SessionLocal() as session:
+            await seed_database(session)
+        await asyncio.to_thread(_try_register_telegram_webhook)
+    except Exception:
+        logger.exception("API bootstrap failed (migrations, seed, or webhook registration)")
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     validate_production_settings(settings)
-    if not settings.database_migrations_managed:
-        async with engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
-    async with SessionLocal() as session:
-        await seed_database(session)
-    await asyncio.to_thread(_try_register_telegram_webhook)
+    bootstrap = asyncio.create_task(_bootstrap_data())
     yield
+    bootstrap.cancel()
+    with contextlib.suppress(asyncio.CancelledError):
+        await bootstrap
 
 
 app = FastAPI(
