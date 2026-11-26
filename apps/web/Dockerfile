@@ -19,6 +19,7 @@ FROM node:22-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=3000
+ENV RMD_IMAGE_KIND=web-only
 
 RUN addgroup --system --gid 1001 nodejs && adduser --system --uid 1001 nextjs
 

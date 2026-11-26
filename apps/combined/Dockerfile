@@ -26,6 +26,7 @@ ENV PYTHONUNBUFFERED=1
 ENV PORT=3000
 ENV API_INTERNAL_URL=http://127.0.0.1:8000
 ENV RUN_EMBEDDED_API=1
+ENV RMD_IMAGE_KIND=combined
 ENV PYTHONPATH=/api
 
 RUN apt-get update && apt-get install -y --no-install-recommends libpq5 curl ca-certificates gnupg \

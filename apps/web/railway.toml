@@ -1,11 +1,12 @@
-# If Root directory is still "apps/web", login will fail — clear it (repo root).
-# See RAILWAY_LOGIN_FIX.md and repo-root railway.toml (combined image).
+# Root directory may stay "apps/web" — dockerfilePath is relative to the **repo root**.
+# Combined image: site + FastAPI; start.sh runs both.
 
 [build]
 builder = "DOCKERFILE"
 dockerfilePath = "Dockerfile"
+watchPatterns = ["apps/web/**", "apps/api/**", "apps/combined/**"]
 
 [deploy]
-startCommand = "node server.js"
-healthcheckPath = "/"
+startCommand = "/app/start.sh"
+healthcheckPath = "/health"
 restartPolicyType = "ON_FAILURE"

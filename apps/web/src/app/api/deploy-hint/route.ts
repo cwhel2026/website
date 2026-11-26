@@ -8,10 +8,12 @@ export async function GET() {
   const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "";
   const internal = Boolean(process.env.API_INTERNAL_URL?.trim());
   const hasDb = Boolean(process.env.DATABASE_URL?.trim());
-  const combined = internal && hasDb;
+  const imageKind = process.env.RMD_IMAGE_KIND ?? "unknown";
+  const combined = imageKind === "combined" || (internal && hasDb);
 
   return NextResponse.json({
     service: "revive-my-drive",
+    image_kind: imageKind,
     combined_deploy: combined,
     role: combined
       ? "Combined site + FastAPI (variables on this service are correct)"
@@ -26,7 +28,9 @@ export async function GET() {
       }
     })(),
     fix_when_login_fails:
-      "Railway → website → Settings → Source → Root directory: leave empty (repo root, not apps/web). Redeploy. Keep DATABASE_URL, JWT_SECRET, DEFAULT_ADMIN_* on this service.",
+      imageKind === "web-only"
+        ? "Still on web-only image. Railway → website → Settings → Deploy → Start command: /app/start.sh, Health: /health. Build → Dockerfile: Dockerfile (repo root). Redeploy. Or clear Root directory to empty."
+        : "Railway → Dockerfile = repo root Dockerfile, Start = /app/start.sh. Set DEFAULT_ADMIN_EMAIL/PASSWORD to match login.",
     docs: "RAILWAY_COMBINED.md",
   });
 }
