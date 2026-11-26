@@ -13,7 +13,8 @@ from app.models.territory import Territory
 from app.services.marketing.capacity_engine import territory_demand_insights
 from app.services.marketing.director import build_weekly_marketing_plan
 from app.services.marketing.integration_setup import build_integration_centre
-from app.services.marketing.marketing_profitability import marketing_profitability_snapshot
+from app.services.marketing.competitor_research import list_competitor_findings
+from app.services.marketing.profitability_full import marketing_profitability_full
 from app.services.marketing.prospect_categories import TERRITORY_AREAS, vertical_places_queries
 from app.services.marketing.research.prospect_orchestrator import run_territory_research
 
@@ -45,7 +46,8 @@ async def run_daily_director_cycle(db: AsyncSession, *, execute_research: bool =
         i.get("live_write_verified") for i in integrations["integrations"] if isinstance(i, dict)
     )
     weekly = await build_weekly_marketing_plan(db)
-    profit = await marketing_profitability_snapshot(db, days=30)
+    profit = await marketing_profitability_full(db, days=30)
+    competitor_rows = await list_competitor_findings(db, limit=8)
     global_cap, territories = await territory_demand_insights(db)
 
     cluster_opportunities: list[dict] = []
@@ -93,9 +95,10 @@ async def run_daily_director_cycle(db: AsyncSession, *, execute_research: bool =
 
     prospect_backlog = await db.scalar(select(func.count()).select_from(CommercialProspect))
     competitor_note = {
-        "method": "OSM amenity density + Places when configured — not live competitor spend",
-        "certainty": "estimate",
+        "method": "Google Places listings when API key configured — no invented pricing",
+        "certainty": "verified" if competitor_rows else "estimate",
         "prospect_records": int(prospect_backlog or 0),
+        "recent_findings": competitor_rows[:5],
     }
 
     seasonal = {
@@ -118,6 +121,21 @@ async def run_daily_director_cycle(db: AsyncSession, *, execute_research: bool =
             {
                 "action": f"Prospect commercial sites in {u['territory']}",
                 "reason": f"Demand score {u['demand_score']}",
+                "certainty": "estimate",
+            }
+        )
+    if competitor_rows and not pre_launch:
+        recommendations.append(
+            {
+                "action": f"Review {len(competitor_rows)} competitor intelligence rows before local campaigns",
+                "certainty": "verified",
+            }
+        )
+    if profit.get("marketing_roi") is not None and profit.get("marketing_roi", 0) < 1:
+        recommendations.append(
+            {
+                "action": "Pause low-ROI campaigns — optimise for completed profitable jobs",
+                "reason": f"Marketing ROI {profit.get('marketing_roi')}",
                 "certainty": "estimate",
             }
         )

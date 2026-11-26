@@ -7,7 +7,7 @@ You do **not** need Facebook, Instagram or ad accounts to start.
 1. **Launch readiness** dashboard — see what is blocked vs internal-only.
 2. **Marketing hub** — budget stays blocked for live spend.
 3. **Content studio** — generate drafts; publish simulates until Meta connected.
-4. **Telegram** — `#marketing before permission` / `#marketing after permission` on job photos.
+4. **Telegram** — `#marketing before RMD-JOBREF permission` / `#marketing after RMD-JOBREF permission` on job photos.
 5. **Director** — Automations or `POST /marketing/launch/director/run` for daily brief.
 
 ## When you register the business

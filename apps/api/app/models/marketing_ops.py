@@ -41,6 +41,23 @@ class OutreachMessageStatus(str, enum.Enum):
     FAILED = "failed"
 
 
+class CommercialPipelineStage(str, enum.Enum):
+    DISCOVERED = "discovered"
+    RESEARCH_REQUIRED = "research_required"
+    QUALIFIED = "qualified"
+    CONTACT_VERIFIED = "contact_verified"
+    OUTREACH_DRAFTED = "outreach_drafted"
+    APPROVED = "approved"
+    CONTACTED = "contacted"
+    REPLIED = "replied"
+    SITE_SURVEY_REQUESTED = "site_survey_requested"
+    QUOTATION_SUBMITTED = "quotation_submitted"
+    NEGOTIATION = "negotiation"
+    WON = "won"
+    LOST = "lost"
+    DO_NOT_CONTACT = "do_not_contact"
+
+
 class MarketingBrandProfile(Base):
     __tablename__ = "marketing_brand_profiles"
 
@@ -53,8 +70,72 @@ class MarketingBrandProfile(Base):
     tagline: Mapped[str | None] = mapped_column(String(255), nullable=True)
     logo_storage_key: Mapped[str | None] = mapped_column(String(255), nullable=True)
     services_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    service_areas_json: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    fonts_json: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    tone_of_voice: Mapped[str | None] = mapped_column(Text, nullable=True)
+    approved_claims_json: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    approved_ctas_json: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    objectives_json: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    differentiators_json: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    demographics_json: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    photo_permission_policy: Mapped[str | None] = mapped_column(Text, nullable=True)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class CompetitorIntelligenceFinding(Base):
+    __tablename__ = "competitor_intelligence_findings"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    competitor_name: Mapped[str] = mapped_column(String(255), index=True)
+    territory_code: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    category: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    finding_type: Mapped[str] = mapped_column(String(80))
+    summary: Mapped[str] = mapped_column(Text)
+    source_name: Mapped[str] = mapped_column(String(120))
+    source_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    confidence: Mapped[int] = mapped_column(Integer, default=50)
+    retrieved_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    payload_json: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+
+
+class MarketingLaunchPlan(Base):
+    __tablename__ = "marketing_launch_plans"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    launch_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    plan_json: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    generated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
+class MarketingMetaLead(Base):
+    __tablename__ = "marketing_meta_leads"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    leadgen_id: Mapped[str] = mapped_column(String(120), unique=True)
+    enquiry_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    payload_json: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    dedupe_key: Mapped[str] = mapped_column(String(64), unique=True)
+    ingested_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
+class MarketingJobMediaStaging(Base):
+    __tablename__ = "marketing_job_media_staging"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    job_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    job_reference: Mapped[str | None] = mapped_column(String(24), index=True)
+    asset_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("marketing_media_assets.id"))
+    phase: Mapped[str] = mapped_column(String(20))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
     )
 
 
@@ -121,6 +202,7 @@ class MarketingBudgetPolicy(Base):
     research_api_daily_limit_gbp: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal("5"))
     outreach_email_enabled: Mapped[bool] = mapped_column(default=False)
     outreach_daily_cap: Mapped[int] = mapped_column(Integer, default=20)
+    official_launch_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
@@ -166,6 +248,11 @@ class CommercialProspect(Base):
     distance_km: Mapped[Decimal | None] = mapped_column(Numeric(8, 2), nullable=True)
     decision_contact_hint: Mapped[str | None] = mapped_column(String(200), nullable=True)
     next_action: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    pipeline_stage: Mapped[CommercialPipelineStage] = mapped_column(
+        Enum(CommercialPipelineStage, name="commercial_pipeline_stage", create_type=False),
+        default=CommercialPipelineStage.DISCOVERED,
+    )
+    contact_history_json: Mapped[list | None] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

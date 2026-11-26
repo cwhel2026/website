@@ -272,6 +272,8 @@ async def list_commercial_prospects(
             "verified_on": p.verified_on.isoformat() if p.verified_on else None,
             "confidence": p.confidence,
             "outreach_status": p.outreach_status.value,
+            "pipeline_stage": p.pipeline_stage.value,
+            "priority_score": p.priority_score,
             "opt_out": p.opt_out,
         }
         for p in rows

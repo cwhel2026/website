@@ -212,12 +212,20 @@ async def telegram_webhook(
                 is_before=is_before,
                 customer_permission="permission" in caption.lower(),
             )
+            from app.services.marketing.job_media_telegram import parse_job_reference, stage_telegram_photo
+
+            phase = "before" if is_before else "after"
+            staged = await stage_telegram_photo(db, asset=asset, caption=caption, phase=phase)
             await db.commit()
-            await _safe_send(
-                chat_id,
-                f"Marketing photo stored ({asset.category}). "
-                "Link to a job in Content studio or send paired before/after with customer permission.",
-            )
+            ref = staged.get("job_reference") or parse_job_reference(caption)
+            msg = f"Marketing photo stored ({asset.category})."
+            if ref:
+                msg += f" Job ref: {ref} ({'matched' if staged.get('job_found') else 'not found'})."
+            if staged.get("before_after_package", {}).get("ok"):
+                msg += " Before/after package queued for approval."
+            elif phase == "after" and not ("permission" in caption.lower()):
+                msg += " Add 'permission' in caption when customer has agreed to marketing use."
+            await _safe_send(chat_id, msg)
             return JSONResponse({"status": "marketing_media_ok", "asset_id": str(asset.id)})
         except Exception as exc:
             await db.rollback()

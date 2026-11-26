@@ -461,13 +461,25 @@ def marketing_daily_brief(self) -> dict:
         from app.database import SessionLocal as AsyncSessionLocal
         from app.services.marketing.director_proactive import run_daily_director_cycle
 
-        async def _plan():
+        from app.services.notifications.outbox import enqueue_notification
+
+        async def _plan_and_notify():
             async with AsyncSessionLocal() as adb:
                 plan = await run_daily_director_cycle(adb, execute_research=False)
+                recs = (plan.get("recommendations") or [])[:5]
+                body = "\n".join(f"• {r.get('action')}" for r in recs if r.get("action"))
+                await enqueue_notification(
+                    adb,
+                    channel="telegram",
+                    title="Marketing director — daily brief",
+                    body=body or plan.get("summary") or "No actions",
+                    category="marketing_director",
+                    dedupe_key=f"marketing_brief:{datetime.now(UTC).date().isoformat()}",
+                )
                 await adb.commit()
                 return plan
 
-        plan = asyncio.run(_plan())
+        plan = asyncio.run(_plan_and_notify())
         brief = {
             "summary": plan.get("summary"),
             "recommendations": (plan.get("recommendations") or [])[:5],

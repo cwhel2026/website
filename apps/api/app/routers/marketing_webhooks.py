@@ -19,6 +19,9 @@ async def meta_lead_verify(hub_mode: str = "", hub_verify_token: str = "", hub_c
 
 @router.post("/meta/leads")
 async def meta_lead_ingest(request: Request) -> dict:
+    from app.database import SessionLocal
+    from app.services.marketing.meta_leads_service import ingest_meta_lead_payload
+
     settings = get_settings()
     body = await request.body()
     sig = request.headers.get("X-Hub-Signature-256", "")
@@ -26,8 +29,18 @@ async def meta_lead_ingest(request: Request) -> dict:
         expected = hmac.new(settings.meta_app_secret.encode(), body, hashlib.sha256).hexdigest()
         if not hmac.compare_digest(sig[7:], expected):
             raise HTTPException(403, "Invalid signature")
+    elif settings.meta_app_secret and not sig:
+        raise HTTPException(403, "Missing signature")
     payload = json.loads(body)
-    return {"status": "received", "object": payload.get("object"), "entries": len(payload.get("entry") or [])}
+    ingested: list[dict] = []
+    async with SessionLocal() as db:
+        for entry in payload.get("entry") or []:
+            for change in entry.get("changes") or []:
+                val = change.get("value") or {}
+                if val.get("leadgen_id") or change.get("field") == "leadgen":
+                    ingested.append(await ingest_meta_lead_payload(db, {**val, "leadgen_id": val.get("leadgen_id")}))
+        await db.commit()
+    return {"status": "received", "object": payload.get("object"), "ingested": ingested}
 
 
 @router.post("/email/inbound")
