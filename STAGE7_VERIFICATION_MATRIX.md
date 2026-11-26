@@ -32,3 +32,12 @@
 | Before/after compositor | Yes | Yes | N/A | N/A | N/A | Pillow formats |
 | Organic publish idempotency | Yes | No | Simulated | With Meta | App review | |
 | Funnel attribution journey | Yes | Partial | N/A | N/A | N/A | Collected revenue |
+| Central brand profile | Yes | Yes | N/A | N/A | N/A | — |
+| Competitor intelligence (Places) | Yes | Partial | With key | With key | N/A | GOOGLE_PLACES_API_KEY |
+| Commercial sales pipeline stages | Yes | Yes | N/A | N/A | N/A | — |
+| Job ref Telegram staging | Yes | Yes | N/A | N/A | N/A | MARKETING_MEDIA_DIR |
+| Meta lead webhook ingest | Yes | Yes | Simulated | With Meta | N/A | META_APP_SECRET |
+| Full profitability view | Yes | Partial | N/A | N/A | N/A | Job cost allocation |
+| 30-day launch planner | Yes | Partial | N/A | N/A | N/A | Owner launch date |
+| Director Telegram daily brief | Yes | Partial | N/A | N/A | N/A | TELEGRAM_* |
+| Marketing hub consolidated tabs | Yes | Manual | N/A | N/A | N/A | — |

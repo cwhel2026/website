@@ -21,10 +21,20 @@ type Budget = {
   };
 };
 
+type BrandProfile = { business_name: string; tone_of_voice?: string; service_areas?: string[] };
+type CompetitorRow = { competitor_name: string; confidence: number; source_name: string };
+type Profitability = { marketing_roi: number | null; job_contribution_gbp: number | null; optimise_for?: string };
+
 export default function MarketingHubPage() {
   const [plan, setPlan] = useState<DailyPlan | null>(null);
   const [budget, setBudget] = useState<Budget | null>(null);
-  const [prospects, setProspects] = useState<Array<{ business_name: string; lead_score: number }>>([]);
+  const [prospects, setProspects] = useState<
+    Array<{ business_name: string; lead_score: number; pipeline_stage?: string }>
+  >([]);
+  const [brand, setBrand] = useState<BrandProfile | null>(null);
+  const [competitors, setCompetitors] = useState<CompetitorRow[]>([]);
+  const [profit, setProfit] = useState<Profitability | null>(null);
+  const [compArea, setCompArea] = useState("Preston");
   const [searchQuery, setSearchQuery] = useState("car park Preston");
   const [searchMsg, setSearchMsg] = useState<string | null>(null);
 
@@ -34,18 +44,23 @@ export default function MarketingHubPage() {
     if (!token) return;
     apiGet<DailyPlan>("/api/v1/marketing/director/daily-plan", token).then(setPlan).catch(() => setPlan(null));
     apiGet<Budget>("/api/v1/marketing/budget", token).then(setBudget).catch(() => setBudget(null));
-    apiGet<Array<{ business_name: string; lead_score: number }>>("/api/v1/marketing/commercial-prospects", token)
+    apiGet<Array<{ business_name: string; lead_score: number; pipeline_stage?: string }>>(
+      "/api/v1/marketing/commercial-prospects",
+      token,
+    )
       .then(setProspects)
       .catch(() => setProspects([]));
+    apiGet<BrandProfile>("/api/v1/marketing/launch/brand", token).then(setBrand).catch(() => setBrand(null));
+    apiGet<{ findings: CompetitorRow[] }>("/api/v1/marketing/launch/competitors", token)
+      .then((r) => setCompetitors(r.findings || []))
+      .catch(() => setCompetitors([]));
+    apiGet<Profitability>("/api/v1/marketing/launch/profitability?days=90", token)
+      .then(setProfit)
+      .catch(() => setProfit(null));
   };
 
   useEffect(() => {
-    if (!token) return;
-    apiGet<DailyPlan>("/api/v1/marketing/director/daily-plan", token).then(setPlan).catch(() => setPlan(null));
-    apiGet<Budget>("/api/v1/marketing/budget", token).then(setBudget).catch(() => setBudget(null));
-    apiGet<Array<{ business_name: string; lead_score: number }>>("/api/v1/marketing/commercial-prospects", token)
-      .then(setProspects)
-      .catch(() => setProspects([]));
+    reload();
   }, [token]);
 
   const toggleLiveSpend = async () => {
@@ -55,6 +70,12 @@ export default function MarketingHubPage() {
       { live_paid_spend_approved: !budget.policy.live_paid_spend_approved },
       token,
     );
+    reload();
+  };
+
+  const runCompetitorResearch = async () => {
+    if (!token) return;
+    await apiPost("/api/v1/marketing/launch/competitors/research", { area: compArea }, token);
     reload();
   };
 
@@ -118,6 +139,50 @@ export default function MarketingHubPage() {
       </section>
 
       <section className="rounded-xl border p-4">
+        <h2 className="font-semibold">Brand intelligence</h2>
+        {brand && (
+          <p className="mt-2 text-sm text-slate-600">
+            {brand.business_name} · {(brand.service_areas || []).slice(0, 4).join(", ")}
+          </p>
+        )}
+        <Link href="/dashboard/marketing-integrations" className="mt-2 inline-block text-sm text-emerald-800 underline">
+          Integrations & launch readiness
+        </Link>
+      </section>
+
+      <section className="rounded-xl border p-4">
+        <h2 className="font-semibold">Competitor intelligence</h2>
+        <div className="mt-2 flex gap-2">
+          <input
+            className="flex-1 rounded border px-2 py-1 text-sm"
+            value={compArea}
+            onChange={(e) => setCompArea(e.target.value)}
+          />
+          <button type="button" onClick={runCompetitorResearch} className="rounded bg-slate-800 px-3 py-1 text-sm text-white">
+            Research
+          </button>
+        </div>
+        <ul className="mt-2 max-h-32 overflow-y-auto text-xs text-slate-600">
+          {competitors.slice(0, 8).map((c, i) => (
+            <li key={i}>
+              {c.competitor_name} · {c.source_name} · confidence {c.confidence}
+            </li>
+          ))}
+          {!competitors.length && <li>Run research when Places API is configured (mock-safe without key).</li>}
+        </ul>
+      </section>
+
+      {profit && (
+        <section className="rounded-xl border p-4 text-sm">
+          <h2 className="font-semibold">Profitability (90d)</h2>
+          <p className="mt-2">
+            ROI: {profit.marketing_roi ?? "unknown"} · Job contribution: {profit.job_contribution_gbp ?? "unknown"}
+          </p>
+          <p className="text-xs text-slate-500">Optimise for: {profit.optimise_for || "profitable work"}</p>
+        </section>
+      )}
+
+      <section className="rounded-xl border p-4">
         <h2 className="font-semibold">Commercial prospects</h2>
         <div className="mt-2 flex gap-2">
           <input
@@ -134,6 +199,7 @@ export default function MarketingHubPage() {
           {prospects.slice(0, 15).map((p, i) => (
             <li key={i}>
               {p.business_name} · score {p.lead_score}
+              {p.pipeline_stage ? ` · ${p.pipeline_stage}` : ""}
             </li>
           ))}
         </ul>

@@ -8,6 +8,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import get_settings
 from app.models.marketing_ops import ContentPlatform, ContentStatus, MarketingContentItem
 from app.services.ai.usage_limits import check_spend_allowed, estimate_openai_cost_gbp, record_usage
+from app.services.marketing.brand_profile import brand_system_prompt, get_or_create_brand
+
+
+async def _brand_system(db: AsyncSession) -> str:
+    brand = await get_or_create_brand(db)
+    return brand_system_prompt(brand)
 
 
 async def _generate_text(db: AsyncSession, prompt: str) -> str:
@@ -29,7 +35,10 @@ async def _generate_text(db: AsyncSession, prompt: str) -> str:
             json={
                 "model": model,
                 "messages": [
-                    {"role": "system", "content": "You write factual UK driveway restoration marketing copy. Never invent projects or reviews."},
+                    {
+                        "role": "system",
+                        "content": await _brand_system(db),
+                    },
                     {"role": "user", "content": prompt},
                 ],
                 "temperature": 0.6,
