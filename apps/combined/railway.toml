@@ -14,5 +14,5 @@ watchPatterns = ["apps/web/**", "apps/api/**", "apps/combined/**"]
 
 [deploy]
 startCommand = "/app/start.sh"
-healthcheckPath = "/health"
+healthcheckPath = ""
 restartPolicyType = "ON_FAILURE"

@@ -8,5 +8,6 @@ watchPatterns = ["apps/web/**", "apps/api/**", "apps/combined/**"]
 
 [deploy]
 startCommand = "/app/start.sh"
-healthcheckPath = "/health"
+# No Railway deploy health gate — combined boot is faster; verify /health manually after deploy.
+healthcheckPath = ""
 restartPolicyType = "ON_FAILURE"
