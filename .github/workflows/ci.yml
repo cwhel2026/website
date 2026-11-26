@@ -39,7 +39,13 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
     env:
+      REDIS_URL: redis://localhost:6379/0
+      REDIS_TEST_URL: redis://localhost:6379/1
       DATABASE_URL: postgresql+asyncpg://rmd:rmd_ci_password@localhost:5432/revive_my_drive
       SYNC_DATABASE_URL: postgresql://rmd:rmd_ci_password@localhost:5432/revive_my_drive
       JWT_SECRET: ci-integration-test-secret-at-least-thirty-two-chars
@@ -63,7 +69,21 @@ jobs:
         run: python -m app.schema.cli upgrade
       - name: Integration smoke
         working-directory: apps/api
-        run: pytest -q tests/test_smoke_integration.py tests/test_auth_login.py tests/test_session_security_integration.py
+        run: pytest -q tests/test_smoke_integration.py tests/test_auth_login.py tests/test_session_security_integration.py tests/test_worker_guard_integration.py
+      - name: Worker smoke (real Celery worker + beat writes a heartbeat)
+        working-directory: apps/api
+        run: |
+          celery -A app.worker.celery_app worker --beat --concurrency=1 --loglevel=info -s /tmp/celerybeat-schedule > /tmp/celery.log 2>&1 &
+          PID=$!
+          ok=0
+          for i in $(seq 1 75); do
+            n=$(PGPASSWORD=rmd_ci_password psql -h localhost -U rmd -d revive_my_drive -tAc "select count(*) from scheduler_heartbeats where component='beat'")
+            if [ "$n" = "1" ]; then ok=1; break; fi
+            sleep 2
+          done
+          kill $PID || true
+          cat /tmp/celery.log | tail -40
+          test "$ok" = "1"
       - name: Migration paths (empty, legacy create_all, model drift, idempotency)
         working-directory: apps/api
         env:
@@ -98,6 +118,8 @@ jobs:
       - name: Verify image layout
         run: |
           docker run --rm rmd-combined:ci test -f /app/start.sh
+          docker run --rm rmd-combined:ci test -x /app/worker.sh
+          docker run --rm rmd-combined:ci sh -c 'cd /api && python -c "import app.worker.celery_app, app.worker.heartbeat; from kombu.transport import redis"'
           docker run --rm rmd-combined:ci test -f /app/server.js
           docker run --rm rmd-combined:ci test -f /api/app/main.py
           docker run --rm rmd-combined:ci sh -c 'grep -q "HOSTNAME=0.0.0.0" /app/start.sh'

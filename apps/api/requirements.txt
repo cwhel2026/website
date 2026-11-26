@@ -17,5 +17,7 @@ pytest-asyncio==0.24.0
 aiosqlite==0.20.0
 slowapi==0.1.9
 celery[redis]==5.4.0
+# kombu must stay below 5.6: newer releases require redis-py>=6.1 and the worker crashes on start.
+kombu==5.4.2
 redis==5.2.0
 Pillow==11.0.0

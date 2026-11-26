@@ -10,7 +10,8 @@ celery_app = Celery(
     "revive_my_drive",
     broker=broker,
     backend=broker,
-    include=["app.worker.tasks"],
+    include=["app.worker.tasks", "app.worker.heartbeat"],
+    task_cls="app.worker.guard:GuardedTask",
 )
 
 celery_app.conf.update(
@@ -19,7 +20,14 @@ celery_app.conf.update(
     worker_prefetch_multiplier=1,
     task_soft_time_limit=300,
     task_time_limit=360,
+    result_expires=86400,
+    broker_connection_retry_on_startup=True,
     beat_schedule={
+        "scheduler-heartbeat": {
+            "task": "rmd.scheduler_heartbeat",
+            "schedule": crontab(minute="*"),
+            "options": {"expires": 55},
+        },
         "refresh-weather-hq": {
             "task": "rmd.refresh_weather_hq",
             "schedule": crontab(minute=0, hour="*/3"),

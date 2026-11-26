@@ -75,6 +75,8 @@ def test_auditor_is_read_only():
             "/api/v1/analytics/overview",
             "/api/v1/marketing/surfacecoat/overview",
             "/api/v1/finance/tax-centre/reserves",
+            "/api/v1/ops/workers",
+            "/api/v1/ops/schema",
         ):
             assert client.get(path).status_code == 200, path
         headers = {"X-CSRF-Token": csrf}

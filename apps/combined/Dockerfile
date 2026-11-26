@@ -46,7 +46,8 @@ COPY --from=webbuild /web/public ./public
 COPY --from=webbuild /web/.next/standalone ./
 COPY --from=webbuild /web/.next/static ./.next/static
 COPY apps/combined/start.sh /app/start.sh
-RUN chmod +x /app/start.sh
+COPY apps/combined/worker.sh /app/worker.sh
+RUN chmod +x /app/start.sh /app/worker.sh
 
 EXPOSE 3000
 CMD ["/app/start.sh"]
