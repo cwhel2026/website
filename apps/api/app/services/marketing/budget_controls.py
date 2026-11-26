@@ -24,6 +24,10 @@ async def get_or_create_budget_policy(db: AsyncSession) -> MarketingBudgetPolicy
     policy = row.scalar_one_or_none()
     if policy is None:
         policy = MarketingBudgetPolicy()
+        policy.geo_target_json = {
+            "centre": "Preston, Lancashire",
+            "radius_miles": 20,
+        }
         db.add(policy)
         await db.flush()
     return policy
@@ -78,10 +82,14 @@ def _policy_dict(policy: MarketingBudgetPolicy) -> dict:
         "weekly_limit_gbp": float(policy.weekly_limit_gbp),
         "monthly_limit_gbp": float(policy.monthly_limit_gbp),
         "meta_daily_limit_gbp": float(policy.meta_daily_limit_gbp),
+        "meta_weekly_budget_gbp": float(getattr(policy, "meta_weekly_budget_gbp", 150)),
+        "meta_safety_buffer_pct": float(getattr(policy, "meta_safety_buffer_pct", 5)),
+        "director_operating_mode": getattr(getattr(policy, "director_operating_mode", None), "value", "recommend"),
         "google_daily_limit_gbp": float(policy.google_daily_limit_gbp),
         "research_api_daily_limit_gbp": float(policy.research_api_daily_limit_gbp),
         "outreach_email_enabled": policy.outreach_email_enabled,
         "outreach_daily_cap": policy.outreach_daily_cap,
+        "geo_target": getattr(policy, "geo_target_json", None),
     }
 
 

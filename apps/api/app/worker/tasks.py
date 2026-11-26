@@ -575,3 +575,27 @@ def marketing_capacity_snapshot(self) -> dict:
         raise
     finally:
         session.close()
+
+
+@celery_app.task(name="rmd.marketing_organic_sync", bind=True)
+def marketing_organic_sync(self) -> dict:
+    session = SessionLocal()
+    run = start_run(session, "marketing_organic_sync", dedupe_key=None, worker_id=_worker_id())
+    try:
+        from app.database import SessionLocal as AsyncSessionLocal
+        from app.services.marketing.organic_post_sync import sync_all_organic
+
+        async def _sync():
+            async with AsyncSessionLocal() as adb:
+                result = await sync_all_organic(adb)
+                await adb.commit()
+                return result
+
+        result = asyncio.run(_sync())
+        finish_run(session, run, status=JobRunStatus.SUCCEEDED, detail=result)
+        return result
+    except Exception as exc:
+        finish_run(session, run, status=JobRunStatus.FAILED, error=str(exc))
+        raise
+    finally:
+        session.close()
