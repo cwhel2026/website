@@ -19,7 +19,6 @@ Receipt blobs are **never** on the website container.
 | Variable | Service | Format / notes |
 |----------|---------|----------------|
 | `DATABASE_URL` | API, Worker | `postgresql+asyncpg://…` (API); worker uses sync URL via existing app config |
-| `DATABASE_MIGRATIONS_MANAGED` | API | `true` — run `alembic upgrade head` (revisions **0004–0010**) |
 | `FINANCE_TOKEN_ENCRYPTION_KEY` | API, Worker | Fernet key from `python apps/api/scripts/generate_finance_token_encryption_key.py` |
 | `JWT_SECRET` | API, Website | Strong random string; must not be default in `production` |
 | `REDIS_URL` or `CELERY_BROKER_URL` | Worker | `redis://…` |

@@ -51,7 +51,7 @@ Copy **all** integration and backend variables here from web.
 |----------|-----------|
 | **Core** | `DATABASE_URL` (`postgresql+asyncpg://…`), `SYNC_DATABASE_URL` (`postgresql://…`), `JWT_SECRET`, `ENVIRONMENT=production`, `CORS_ORIGINS` (your **web** URL), `DEFAULT_ADMIN_EMAIL`, `DEFAULT_ADMIN_PASSWORD` |
 | **Telegram** | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, `TELEGRAM_ADMIN_IDS`, `PUBLIC_API_BASE_URL` (= same host as `NEXT_PUBLIC_API_URL`), optional `TELEGRAM_OWNER_CHAT_ID` |
-| **Migrations** | `DATABASE_MIGRATIONS_MANAGED=true` after you run Alembic |
+| **Migrations** | None — Alembic runs on every start (see `MIGRATIONS.md`) |
 | **Redis / limits** | `REDIS_URL`, optional `RATE_LIMIT_STORAGE_REDIS=true`, optional `CELERY_BROKER_URL` |
 | **AI** | `OPENAI_API_KEY`, optional `AI_DAILY_SPEND_LIMIT_GBP` |
 | **FreeAgent** | `FREEAGENT_CLIENT_ID`, `FREEAGENT_CLIENT_SECRET`, `FREEAGENT_REDIRECT_URI` → must be **API** callback URL |

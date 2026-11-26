@@ -51,7 +51,6 @@ Paste the single line into Railway on the **API** service. The vault derives a F
 | `FINANCE_TELEGRAM_INGEST_KEY` | API + website | Next.js receipt forward |
 | `API_INTERNAL_URL` | website | Forward Telegram to FastAPI |
 | `OPENAI_API_KEY` | API | Receipt OCR (optional) |
-| `DATABASE_MIGRATIONS_MANAGED` | API | Alembic 0004–0008 |
 
 ## FreeAgent API — verified in code
 

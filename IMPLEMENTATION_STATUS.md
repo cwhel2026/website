@@ -44,7 +44,7 @@ Status legend: **Not started** · **Scaffolded** · **Implemented** · **Tested 
 | FreeAgent invoice sync (matched rows) | **Implemented** | `sync_invoices_from_freeagent`, `POST /finance/freeagent/sync` |
 | Finance dashboard connect + sync UI | **Implemented** | `dashboard/finance/page.tsx` |
 | Alembic revision 0002 (OAuth columns) | **Implemented** | `alembic/versions/20251124_0002_freeagent_oauth.py`, `MIGRATIONS.md` |
-| Opt-out `create_all` when migrations managed | **Implemented** | `DATABASE_MIGRATIONS_MANAGED` in `main.py` |
+| `create_all` removed; Alembic sole schema authority | **Implemented** | `app/schema/`, `MIGRATIONS.md` |
 | Redis-backed rate limits (optional) | **Implemented** | `RATE_LIMIT_STORAGE_REDIS` + `REDIS_URL` in `rate_limit.py` |
 | FreeAgent live in production | **Blocked** | Owner registers app + sets Railway env + completes OAuth |
 

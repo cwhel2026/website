@@ -7,7 +7,6 @@ Use one **API + worker** service (or combined Docker image) for finance. The **w
 On the API service:
 
 ```bash
-export DATABASE_MIGRATIONS_MANAGED=true
 cd apps/api && alembic upgrade head
 ```
 

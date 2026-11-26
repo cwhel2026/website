@@ -1,39 +1,67 @@
 # Database migrations (Alembic)
 
-Production Postgres should use **Alembic** for additive schema changes. The API still runs `create_all` on startup unless you opt out.
+Alembic is the **only** schema authority. The API never calls `create_all`; every process that
+starts the API (combined image `start.sh`, API `Dockerfile`) runs
 
-## Railway / Docker API deploy
+```bash
+python -m app.schema.cli upgrade
+```
 
-1. Set on the **api** service (after Postgres exists):
+first and refuses to start if it fails. `/ready` returns `503 {"detail":"schema"}` while the database
+is not at the Alembic head, and `GET /api/v1/ops/schema` (admin / auditor) reports the exact state.
 
-   ```text
-   DATABASE_MIGRATIONS_MANAGED=true
-   SYNC_DATABASE_URL=postgresql://...
-   ```
+## How the chain handles each kind of database
 
-2. **Pre-deploy or start command** (recommended once `create_all` has already bootstrapped tables):
+| Database | What happens |
+|----------|--------------|
+| Empty | `20251124_0001` loads the frozen baseline `alembic/baseline/schema_20261126.sql` (current models), later revisions detect the baseline and skip. |
+| Legacy, built by `create_all` (current production) | `0001` is a no-op, `0002`–`0016` use existence-checked operations (`app/schema/ops.py`), and `20261126_0017` adds anything still missing by comparing the live schema with the models (`app/schema/reconcile.py`). |
+| Already at head | Nothing. Running upgrade repeatedly is safe. |
 
-   ```bash
-   alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}
-   ```
+Reconciliation is **additive only**: it creates missing tables, columns, indexes, constraints and enum
+labels. It never drops, renames or rewrites existing data. New NOT NULL columns on populated tables get
+a temporary default so existing rows stay valid.
 
-   For the stock Dockerfile CMD, override the Railway **custom start command** as above (from `apps/api` root).
+## Before deploying to production
 
-3. **Worker** — same `SYNC_DATABASE_URL`; run migrations from the **api** service only (not the worker).
+Run the dry run against the production database. It applies the full upgrade inside one transaction,
+prints the before/after report, then **rolls back** (Postgres DDL is transactional):
+
+```bash
+cd apps/api
+SYNC_DATABASE_URL='postgresql://…' python -m app.schema.cli dry-run
+```
+
+On Railway: open the website service → **⋯ → Shell** (or `railway run`), then run the command above
+from `/api`. Check `after.ok` is `true`. Then deploy normally; the start script applies the same upgrade.
+
+Other commands:
+
+```bash
+python -m app.schema.cli status    # read-only report: revision, head, drift
+python -m app.schema.cli upgrade   # what start.sh runs
+```
 
 ## Local
 
 ```bash
 cd apps/api
 export SYNC_DATABASE_URL=postgresql://rmd:rmd_dev_password@localhost:5432/revive_my_drive
-alembic upgrade head
+python -m app.schema.cli upgrade
 ```
 
-## Revisions
+## Adding a migration
 
-| Revision | Purpose |
-|----------|---------|
-| `20251124_0001` | Placeholder (schema historically from `create_all`) |
-| `20251124_0002` | FreeAgent OAuth token columns on `freeagent_connections` |
+1. Change the model.
+2. `alembic revision -m "describe change"` and write the operation with `from app.schema import ops as safe`
+   helpers (`safe.create_table`, `safe.add_column`, `safe.create_index`) so it is safe on every database.
+3. Regenerate the baseline so fresh databases match: dump a migrated database with
+   `pg_dump --schema-only --no-owner --no-privileges`, strip `SET`/`set_config`/comment lines, and save
+   it over `alembic/baseline/schema_20261126.sql`.
+4. CI (`api-integration` → *Migration paths*) proves empty, legacy and idempotent upgrades and fails if
+   the models drift from the migrations.
 
-New environments with empty Postgres can still use `create_all` once, then `alembic stamp head` before enabling `DATABASE_MIGRATIONS_MANAGED`.
+## Removed flags
+
+`DATABASE_MIGRATIONS_MANAGED` and `ALEMBIC_ON_START` no longer exist. Migrations always run on start.
+Delete them from Railway variables if present; they are ignored.
