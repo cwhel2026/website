@@ -1,5 +1,5 @@
-# Use this config ONLY when Railway Root Directory = apps/web (web-only; no FastAPI in image).
-# For dashboard login: Root Directory EMPTY, Config file path = /railway.toml (repo root).
+# NOT production login. Root Directory apps/web → web-only image only.
+# Production: PRODUCTION_DEPLOY.md (empty root, /railway.toml, apps/combined/Dockerfile).
 
 [build]
 builder = "DOCKERFILE"

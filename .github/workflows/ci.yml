@@ -75,3 +75,16 @@ jobs:
           npm run build
         env:
           NEXT_PUBLIC_API_URL: http://localhost:8000
+
+  combined-docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build production combined image
+        run: docker build -f apps/combined/Dockerfile -t rmd-combined:ci .
+      - name: Verify image layout
+        run: |
+          docker run --rm rmd-combined:ci test -f /app/start.sh
+          docker run --rm rmd-combined:ci test -f /app/server.js
+          docker run --rm rmd-combined:ci test -f /api/app/main.py
+          docker run --rm rmd-combined:ci sh -c 'grep -q "HOSTNAME=0.0.0.0" /app/start.sh'
