@@ -35,6 +35,10 @@ class MarketingExperiment(Base):
     quotations: Mapped[int] = mapped_column(default=0)
     bookings: Mapped[int] = mapped_column(default=0)
     revenue_gbp: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal("0"))
+    min_sample_size: Mapped[int] = mapped_column(default=30)
+    metric_name: Mapped[str] = mapped_column(String(80), default="quotations")
+    conclusion: Mapped[str | None] = mapped_column(Text, nullable=True)
+    winner_variant: Mapped[str | None] = mapped_column(String(1), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

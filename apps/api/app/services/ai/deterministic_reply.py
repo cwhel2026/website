@@ -14,7 +14,10 @@ INTENT_PATTERNS: list[tuple[re.Pattern[str], list[str]]] = [
     (re.compile(r"\bapproval", re.I), ["pending_approvals", "quotations_awaiting"]),
     (re.compile(r"\brain\b", re.I), ["rain_risk_coating"]),
     (re.compile(r"\benquir", re.I), ["new_enquiries"]),
-    (re.compile(r"\bmarket|ads?|campaign", re.I), ["marketing_capacity"]),
+    (re.compile(r"\bmarket|ads?|campaign", re.I), ["marketing_capacity", "marketing_director_proactive"]),
+    (re.compile(r"\bpause all ad", re.I), ["marketing_pause_all"]),
+    (re.compile(r"\blaunch readiness", re.I), ["marketing_launch_readiness"]),
+    (re.compile(r"\bcommercial.*preston", re.I), ["marketing_vertical_queries"]),
     (re.compile(r"\brevenue|finance|kpi", re.I), ["analytics_snapshot"]),
 ]
 

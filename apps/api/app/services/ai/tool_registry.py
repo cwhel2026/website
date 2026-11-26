@@ -121,6 +121,30 @@ OPENAI_TOOL_SPECS: list[dict[str, Any]] = [
             "parameters": {"type": "object", "properties": {}, "additionalProperties": False},
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "marketing_director_proactive",
+            "description": "Run proactive marketing director daily analysis with persistent recommendations.",
+            "parameters": {"type": "object", "properties": {}, "additionalProperties": False},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "marketing_launch_readiness",
+            "description": "Pre-launch checklist and external blockers.",
+            "parameters": {"type": "object", "properties": {}, "additionalProperties": False},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "marketing_content_calendar",
+            "description": "Scheduled and draft content for the next 7 days.",
+            "parameters": {"type": "object", "properties": {}, "additionalProperties": False},
+        },
+    },
 ]
 
 

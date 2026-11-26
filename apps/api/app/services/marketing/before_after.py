@@ -12,7 +12,9 @@ from app.models.marketing_ops import (
     MarketingMediaAsset,
 )
 from app.services.marketing.content_studio import generate_platform_content
+from app.services.marketing.image_compositor import FORMATS, render_before_after
 from app.services.marketing.media_store import store_bytes
+from app.models.marketing_ops import MarketingRenderedCreative
 
 
 async def ingest_marketing_photo(
@@ -51,24 +53,53 @@ async def build_before_after_package(
 ) -> dict:
     if not customer_permission:
         return {"ok": False, "message": "Customer permission required for before/after marketing"}
+    from sqlalchemy import select
+
+    before_asset = (
+        await db.execute(select(MarketingMediaAsset).where(MarketingMediaAsset.id == before_asset_id))
+    ).scalar_one_or_none()
+    after_asset = (
+        await db.execute(select(MarketingMediaAsset).where(MarketingMediaAsset.id == after_asset_id))
+    ).scalar_one_or_none()
+    if not before_asset or not after_asset:
+        return {"ok": False, "message": "Before/after assets not found"}
     package = MarketingBeforeAfterPackage(
         job_id=job_id,
         before_asset_id=before_asset_id,
         after_asset_id=after_asset_id,
         customer_permission=customer_permission,
-        layout_status="captions_ready",
+        layout_status="rendering",
     )
+    db.add(package)
+    await db.flush()
+    renders: list[dict] = []
+    for fmt in FORMATS:
+        try:
+            key, _ = render_before_after(
+                before_key=before_asset.storage_key,
+                after_key=after_asset.storage_key,
+                format_name=fmt,
+            )
+            w, h = FORMATS[fmt]
+            creative = MarketingRenderedCreative(
+                package_id=package.id, format=fmt, storage_key=key, width=w, height=h
+            )
+            db.add(creative)
+            renders.append({"format": fmt, "storage_key": key})
+        except Exception as exc:
+            renders.append({"format": fmt, "error": str(exc)[:120]})
+    package.layout_status = "pending_approval"
     item = await generate_platform_content(
         db,
         platform=ContentPlatform.FACEBOOK,
         brief="Before-and-after driveway restoration (genuine completed work)",
     )
     package.content_item_id = item.id
-    db.add(package)
     await db.flush()
     return {
         "ok": True,
         "package_id": str(package.id),
         "content_item_id": str(item.id),
-        "note": "Branded layout renderer pending — captions queued for approval",
+        "renders": renders,
     }
+

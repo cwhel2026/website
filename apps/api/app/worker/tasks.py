@@ -459,19 +459,19 @@ def marketing_daily_brief(self) -> dict:
     run = start_run(session, "marketing_daily_brief", dedupe_key=None, worker_id=_worker_id())
     try:
         from app.database import SessionLocal as AsyncSessionLocal
-        from app.services.marketing.director import build_daily_marketing_plan
+        from app.services.marketing.director_proactive import run_daily_director_cycle
 
         async def _plan():
             async with AsyncSessionLocal() as adb:
-                plan = await build_daily_marketing_plan(adb)
+                plan = await run_daily_director_cycle(adb, execute_research=False)
                 await adb.commit()
                 return plan
 
         plan = asyncio.run(_plan())
         brief = {
-            "priority_actions": plan.get("priority_actions", [])[:5],
-            "weekly_spend": plan.get("weekly_spend"),
-            "attribution_events_7d": plan.get("attribution_events_7d"),
+            "summary": plan.get("summary"),
+            "recommendations": (plan.get("recommendations") or [])[:5],
+            "pre_launch_mode": plan.get("pre_launch_mode"),
         }
         finish_run(session, run, status=JobRunStatus.SUCCEEDED, detail=brief)
         return brief

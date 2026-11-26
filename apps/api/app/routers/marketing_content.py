@@ -10,8 +10,11 @@ from app.auth import get_current_admin
 from app.database import get_db
 from app.models.marketing_ops import ContentPlatform, MarketingContentItem, MarketingMediaAsset
 from app.models.user import User
+from app.models.marketing_ops import ContentStatus
 from app.services.marketing.before_after import build_before_after_package, ingest_marketing_photo
+from app.services.marketing.content_calendar import calendar_view
 from app.services.marketing.content_studio import generate_platform_content
+from app.services.marketing.meta.meta_organic_publish import publish_content_item
 
 router = APIRouter(prefix="/marketing/content", tags=["marketing-content"])
 
@@ -97,4 +100,30 @@ async def before_after(
     await db.commit()
     if not result.get("ok"):
         raise HTTPException(400, result.get("message", "Failed"))
+    return result
+
+
+@router.get("/calendar")
+async def content_calendar(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[User, Depends(get_current_admin)],
+    days: int = 30,
+) -> dict:
+    return await calendar_view(db, days=days)
+
+
+@router.post("/items/{item_id}/publish")
+async def publish_item(
+    item_id: uuid.UUID,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    user: Annotated[User, Depends(get_current_admin)],
+    simulate: bool | None = None,
+) -> dict:
+    item = await db.get(MarketingContentItem, item_id)
+    if item is None:
+        raise HTTPException(404)
+    if item.status not in (ContentStatus.APPROVED, ContentStatus.SCHEDULED):
+        raise HTTPException(400, "Content must be approved before publish")
+    result = await publish_content_item(db, item, force_simulation=simulate)
+    await db.commit()
     return result
