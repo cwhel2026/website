@@ -22,11 +22,22 @@ async function proxyToApi(request: NextRequest, targetPath: string): Promise<Nex
     body = await request.arrayBuffer();
   }
 
-  const upstream = await fetch(url, {
-    method: request.method,
-    headers,
-    body: body as BodyInit | undefined,
-  });
+  let upstream: Response;
+  try {
+    upstream = await fetch(url, {
+      method: request.method,
+      headers,
+      body: body as BodyInit | undefined,
+    });
+  } catch {
+    return NextResponse.json(
+      {
+        detail:
+          "FastAPI sidecar is not reachable on API_INTERNAL_URL. Check Railway deploy logs for uvicorn startup errors (DATABASE_URL, JWT_SECRET, SYNC_DATABASE_URL).",
+      },
+      { status: 503 },
+    );
+  }
 
   const responseHeaders = new Headers();
   upstream.headers.forEach((value, key) => {
