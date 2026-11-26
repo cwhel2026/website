@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { apiGet } from "@/lib/api";
 import { getToken } from "@/lib/auth-client";
 import { MarketingCard } from "@/components/marketing-director-shell";
+import { withLoadError } from "@/lib/load-errors";
 
 export default function GeoPage() {
   const [geo, setGeo] = useState<Record<string, unknown> | null>(null);
@@ -16,7 +17,7 @@ export default function GeoPage() {
       token,
     )
       .then((r) => setGeo(r.geo || r.programme?.geo || null))
-      .catch(() => setGeo(null));
+      .catch(withLoadError(() => setGeo(null)));
   }, []);
 
   return (

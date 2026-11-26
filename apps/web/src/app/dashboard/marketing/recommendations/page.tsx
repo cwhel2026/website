@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { apiGet } from "@/lib/api";
 import { getToken } from "@/lib/auth-client";
 import { EmptyState, MarketingCard } from "@/components/marketing-director-shell";
+import { withLoadError } from "@/lib/load-errors";
 
 type Rec = { post_id: string; platform: string; recommendation: string; confidence: string };
 
@@ -15,7 +16,7 @@ export default function RecommendationsPage() {
     if (!token) return;
     apiGet<{ items: Rec[] }>("/api/v1/marketing/surfacecoat/recommendations/organic-boost", token)
       .then((r) => setItems(r.items || []))
-      .catch(() => setItems([]));
+      .catch(withLoadError(() => setItems([])));
   }, []);
 
   return (

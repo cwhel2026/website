@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { apiGet } from "@/lib/api";
 import { getToken } from "@/lib/auth-client";
+import { withLoadError } from "@/lib/load-errors";
 
 type FieldJob = {
   reference: string;
@@ -19,7 +20,7 @@ export default function FieldPage() {
   useEffect(() => {
     const token = getToken();
     if (!token) return;
-    apiGet<FieldJob[]>("/api/v1/jobs/field/today", token).then(setJobs).catch(() => setJobs([]));
+    apiGet<FieldJob[]>("/api/v1/jobs/field/today", token).then(setJobs).catch(withLoadError(() => setJobs([])));
   }, []);
 
   return (

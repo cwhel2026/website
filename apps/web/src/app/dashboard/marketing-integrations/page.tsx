@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { apiGet, apiPost } from "@/lib/api";
 import { getToken } from "@/lib/auth-client";
+import { withLoadError } from "@/lib/load-errors";
 
 type Centre = {
   integrations: Array<{
@@ -22,7 +23,7 @@ export default function MarketingIntegrationsPage() {
   useEffect(() => {
     const token = getToken();
     if (!token) return;
-    apiGet<Centre>("/api/v1/marketing/integrations/setup-centre", token).then(setData).catch(() => setData(null));
+    apiGet<Centre>("/api/v1/marketing/integrations/setup-centre", token).then(setData).catch(withLoadError(() => setData(null)));
   }, []);
 
   const testMeta = async () => {

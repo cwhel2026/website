@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { apiGet, apiPost } from "@/lib/api";
 import { getToken } from "@/lib/auth-client";
 import { EmptyState, MarketingCard } from "@/components/marketing-director-shell";
+import { withLoadError } from "@/lib/load-errors";
 
 type Post = {
   id: string;
@@ -25,7 +26,7 @@ export default function SocialPostsPage() {
     if (!token) return;
     apiGet<Post[]>("/api/v1/marketing/surfacecoat/organic-posts", token)
       .then(setPosts)
-      .catch(() => setPosts([]));
+      .catch(withLoadError(() => setPosts([])));
   };
 
   useEffect(load, [token]);

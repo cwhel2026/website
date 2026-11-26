@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { apiGet, apiPost } from "@/lib/api";
 import { getToken } from "@/lib/auth-client";
+import { withLoadError } from "@/lib/load-errors";
 
 type Flyer = { id: string; name: string; qr_slug: string; status: string; quantity: number };
 
@@ -12,7 +13,7 @@ export default function FlyersPage() {
   function reload() {
     const token = getToken();
     if (!token) return;
-    apiGet<Flyer[]>("/api/v1/marketing/flyers", token).then(setFlyers).catch(() => setFlyers([]));
+    apiGet<Flyer[]>("/api/v1/marketing/flyers", token).then(setFlyers).catch(withLoadError(() => setFlyers([])));
   }
 
   useEffect(reload, []);

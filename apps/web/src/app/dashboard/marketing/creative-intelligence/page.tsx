@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { apiGet } from "@/lib/api";
 import { getToken } from "@/lib/auth-client";
 import { MarketingCard } from "@/components/marketing-director-shell";
+import { withLoadError } from "@/lib/load-errors";
 
 export default function CreativeIntelligencePage() {
   const [brief, setBrief] = useState<{ copy_for_chatgpt?: string } | null>(null);
@@ -13,7 +14,7 @@ export default function CreativeIntelligencePage() {
     if (!token) return;
     apiGet<{ copy_for_chatgpt?: string }>("/api/v1/marketing/surfacecoat/creative-brief", token)
       .then(setBrief)
-      .catch(() => setBrief(null));
+      .catch(withLoadError(() => setBrief(null)));
   }, []);
 
   const copy = () => {

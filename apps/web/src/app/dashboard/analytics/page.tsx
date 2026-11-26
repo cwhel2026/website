@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { apiGet } from "@/lib/api";
 import { getToken } from "@/lib/auth-client";
+import { gbp } from "@/lib/format";
+import { withLoadError } from "@/lib/load-errors";
 
 type Overview = {
   period_days: number;
@@ -20,13 +22,13 @@ export default function AnalyticsPage() {
   useEffect(() => {
     const token = getToken();
     if (!token) return;
-    apiGet<Overview>("/api/v1/analytics/overview?days=30", token).then(setOverview).catch(() => setOverview(null));
+    apiGet<Overview>("/api/v1/analytics/overview?days=30", token).then(setOverview).catch(withLoadError(() => setOverview(null)));
     apiGet<{ territories: Array<{ territory_code: string; estimated_profit_gbp: number }> }>(
       "/api/v1/analytics/regional",
       token,
     )
       .then(setRegional)
-      .catch(() => setRegional(null));
+      .catch(withLoadError(() => setRegional(null)));
   }, []);
 
   return (
@@ -52,7 +54,7 @@ export default function AnalyticsPage() {
           <ul className="mt-2 text-sm">
             {regional.territories.map((t) => (
               <li key={t.territory_code}>
-                {t.territory_code}: £{t.estimated_profit_gbp.toFixed(2)}
+                {t.territory_code}: {gbp(t.estimated_profit_gbp)}
               </li>
             ))}
           </ul>

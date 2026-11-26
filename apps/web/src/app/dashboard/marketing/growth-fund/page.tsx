@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { apiGet, apiPost } from "@/lib/api";
 import { getToken } from "@/lib/auth-client";
 import { MarketingCard } from "@/components/marketing-director-shell";
+import { gbp } from "@/lib/format";
+import { withLoadError } from "@/lib/load-errors";
 
 type LedgerResponse = {
   summary: Record<string, number | string | boolean | object>;
@@ -16,7 +18,7 @@ export default function GrowthFundPage() {
 
   const load = () => {
     if (!token) return;
-    apiGet<LedgerResponse>("/api/v1/finance/growth-fund/ledger", token).then(setData).catch(() => setData(null));
+    apiGet<LedgerResponse>("/api/v1/finance/growth-fund/ledger", token).then(setData).catch(withLoadError(() => setData(null)));
   };
 
   useEffect(load, [token]);
@@ -36,15 +38,15 @@ export default function GrowthFundPage() {
         <dl className="mt-3 grid grid-cols-2 gap-2 text-sm">
           <div>
             <dt className="text-slate-500">Virtual balance</dt>
-            <dd className="text-lg font-semibold">£{s?.virtual_reserve_balance_gbp?.toFixed(2) ?? "—"}</dd>
+            <dd className="text-lg font-semibold">{gbp(s?.virtual_reserve_balance_gbp, "—")}</dd>
           </div>
           <div>
             <dt className="text-slate-500">Available</dt>
-            <dd className="text-lg font-semibold">£{s?.available_uncommitted_gbp?.toFixed(2) ?? "—"}</dd>
+            <dd className="text-lg font-semibold">{gbp(s?.available_uncommitted_gbp, "—")}</dd>
           </div>
           <div>
             <dt className="text-slate-500">Committed ads</dt>
-            <dd>£{s?.committed_ad_budget_gbp?.toFixed(2) ?? "—"}</dd>
+            <dd>{gbp(s?.committed_ad_budget_gbp, "—")}</dd>
           </div>
           <div>
             <dt className="text-slate-500">Allocation rate</dt>
@@ -62,7 +64,7 @@ export default function GrowthFundPage() {
       <ul className="space-y-2 text-sm text-white">
         {(data?.entries || []).map((e, i) => (
           <li key={i} className="rounded-lg bg-white/10 px-3 py-2">
-            {e.type}: £{e.amount_gbp.toFixed(2)} — {e.description || ""}
+            {e.type}: {gbp(e.amount_gbp)} — {e.description || ""}
           </li>
         ))}
       </ul>

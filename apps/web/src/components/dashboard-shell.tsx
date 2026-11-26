@@ -5,8 +5,10 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { LogOut, PanelLeftClose, PanelLeftOpen, X } from "lucide-react";
 import { apiGet } from "@/lib/api";
+import { ApiError } from "@/lib/api-errors";
 import { clearToken, getToken } from "@/lib/auth-client";
 import { brand } from "@/lib/brand";
+import { onLoadError, type LoadErrorEvent } from "@/lib/load-errors";
 import { BOTTOM_NAV, isNavActive, NAV_SECTIONS } from "@/lib/portal-nav";
 
 export function DashboardShell({ children }: { children: React.ReactNode }) {
@@ -15,10 +17,20 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   const [ready, setReady] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [loadErrors, setLoadErrors] = useState<LoadErrorEvent[]>([]);
 
   useEffect(() => {
     setDrawerOpen(false);
+    setLoadErrors([]);
   }, [pathname]);
+
+  useEffect(
+    () =>
+      onLoadError((e) =>
+        setLoadErrors((prev) => (prev.some((p) => p.path === e.path) ? prev : [...prev, e].slice(-5))),
+      ),
+    [],
+  );
 
   useEffect(() => {
     if (pathname === "/dashboard/login" || pathname.startsWith("/dashboard/login/")) {
@@ -32,7 +44,11 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
     }
     apiGet<{ email?: string }>("/api/v1/auth/me", token)
       .then(() => setReady(true))
-      .catch(() => {
+      .catch((err: unknown) => {
+        if (err instanceof ApiError && err.status !== 401) {
+          setReady(true);
+          return;
+        }
         clearToken();
         router.replace("/dashboard/login");
       });
@@ -140,6 +156,35 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
                   : "overflow-x-auto rounded-2xl bg-white p-4 text-[#1a1a1a] md:p-6"
             }`}
           >
+            {loadErrors.length > 0 && (
+              <div
+                role="alert"
+                data-testid="load-error-banner"
+                className="mb-4 rounded-lg border border-red-500/50 bg-red-950/80 px-3 py-2 text-sm text-red-50"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <p className="font-semibold">
+                    Some data on this page failed to load — anything shown as empty below may not be accurate.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setLoadErrors([])}
+                    className="shrink-0 rounded p-1 text-red-100 hover:bg-white/10"
+                    aria-label="Dismiss"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+                <ul className="mt-1 space-y-0.5 text-xs text-red-100/90">
+                  {loadErrors.map((e) => (
+                    <li key={e.path} className="break-all">
+                      {e.path.replace(/^\/api\/v1/, "")}: {e.status ? `HTTP ${e.status} — ` : ""}
+                      {e.message}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
             {children}
           </div>
         </main>

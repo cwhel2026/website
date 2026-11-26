@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { apiGet } from "@/lib/api";
 import { getToken } from "@/lib/auth-client";
+import { withLoadError } from "@/lib/load-errors";
 
 type Appt = {
   job_reference: string;
@@ -23,7 +24,7 @@ export default function CalendarPage() {
     const to = new Date();
     to.setDate(to.getDate() + 14);
     const q = `from=${from.toISOString()}&to=${to.toISOString()}`;
-    apiGet<Appt[]>(`/api/v1/calendar/appointments?${q}`, token).then(setItems).catch(() => setItems([]));
+    apiGet<Appt[]>(`/api/v1/calendar/appointments?${q}`, token).then(setItems).catch(withLoadError(() => setItems([])));
   }, []);
 
   return (

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { apiGet, apiPatch, apiPost } from "@/lib/api";
 import { getToken } from "@/lib/auth-client";
 import { MarketingCard } from "@/components/marketing-director-shell";
+import { withLoadError } from "@/lib/load-errors";
 
 type Budget = { policy: Record<string, unknown> };
 
@@ -13,7 +14,7 @@ export default function BudgetPage() {
 
   const load = () => {
     if (!token) return;
-    apiGet<Budget>("/api/v1/marketing/budget", token).then(setBudget).catch(() => setBudget(null));
+    apiGet<Budget>("/api/v1/marketing/budget", token).then(setBudget).catch(withLoadError(() => setBudget(null)));
   };
 
   useEffect(load, [token]);

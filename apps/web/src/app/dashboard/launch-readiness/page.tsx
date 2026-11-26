@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { apiGet, apiPost } from "@/lib/api";
 import { getToken } from "@/lib/auth-client";
+import { withLoadError } from "@/lib/load-errors";
 
 type Readiness = {
   pre_launch: boolean;
@@ -20,7 +21,7 @@ export default function LaunchReadinessPage() {
   useEffect(() => {
     const token = getToken();
     if (!token) return;
-    apiGet<Readiness>("/api/v1/marketing/launch/readiness", token).then(setData).catch(() => setData(null));
+    apiGet<Readiness>("/api/v1/marketing/launch/readiness", token).then(setData).catch(withLoadError(() => setData(null)));
   }, []);
 
   const pauseAll = async () => {

@@ -1,8 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { apiGet, apiPost } from "@/lib/api";
-import { getToken } from "@/lib/auth-client";
+import { LoadState } from "@/components/load-state";
+import { useApi } from "@/lib/use-api";
 
 type Lead = {
   id: string;
@@ -14,58 +13,36 @@ type Lead = {
 };
 
 export default function CommercialLeadsPage() {
-  const [leads, setLeads] = useState<Lead[]>([]);
-
-  function reload() {
-    const token = getToken();
-    if (!token) return;
-    apiGet<Lead[]>("/api/v1/marketing/commercial-leads", token).then(setLeads).catch(() => setLeads([]));
-  }
-
-  useEffect(reload, []);
-
-  async function addSample() {
-    const token = getToken();
-    if (!token) return;
-    await apiPost(
-      "/api/v1/marketing/commercial-leads",
-      {
-        business_name: "Sample Retail Park Ltd",
-        postcode: "PR1 1AA",
-        town: "Preston",
-        category: "Retail car park",
-        contact_email: "facilities@example.com",
-      },
-      token,
-    );
-    reload();
-  }
+  const leads = useApi<Lead[]>("/api/v1/marketing/commercial-leads");
 
   return (
     <div>
-      <h1 className="text-2xl font-semibold text-emerald-950">Commercial leads</h1>
-      <p className="mt-2 text-sm text-slate-600">Manual prospecting — PECR/GDPR compliance before outreach.</p>
-      <button type="button" onClick={addSample} className="mt-4 rounded border px-4 py-2 text-sm">
-        Add sample lead
-      </button>
-      <table className="mt-6 w-full text-left text-sm">
-        <thead>
-          <tr className="border-b text-slate-500">
-            <th className="py-2">Business</th>
-            <th>Score</th>
-            <th>Status</th>
-          </tr>
-        </thead>
-        <tbody>
-          {leads.map((l) => (
-            <tr key={l.id} className="border-b">
-              <td className="py-2">{l.business_name}</td>
-              <td>{l.score}</td>
-              <td>{l.outreach_status}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <h1 className="text-2xl font-semibold text-[#1a1a1a]">Commercial leads</h1>
+      <p className="mt-2 text-sm text-slate-600">Manual prospecting — PECR/GDPR compliance is checked before any outreach.</p>
+      <div className="mt-6 overflow-x-auto">
+        <LoadState resource={leads} isEmpty={(l) => l.length === 0} empty="No commercial leads recorded yet.">
+          {(list) => (
+            <table className="w-full text-left text-sm text-[#1a1a1a]">
+              <thead>
+                <tr className="border-b text-slate-500">
+                  <th className="py-2">Business</th>
+                  <th>Score</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {list.map((l) => (
+                  <tr key={l.id} className="border-b">
+                    <td className="py-2">{l.business_name}</td>
+                    <td>{l.score}</td>
+                    <td>{l.outreach_status}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </LoadState>
+      </div>
     </div>
   );
 }

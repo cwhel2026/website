@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { apiGet, apiPost } from "@/lib/api";
-import { getToken } from "@/lib/auth-client";
+import { LoadState } from "@/components/load-state";
+import { SimulatedBadge } from "@/components/simulated-badge";
+import { useApi } from "@/lib/use-api";
 
 type Campaign = {
   id: string;
@@ -14,56 +14,33 @@ type Campaign = {
 };
 
 export default function AdvertisingPage() {
-  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
-
-  function reload() {
-    const token = getToken();
-    if (!token) return;
-    apiGet<Campaign[]>("/api/v1/marketing/campaigns", token).then(setCampaigns).catch(() => setCampaigns([]));
-  }
-
-  useEffect(reload, []);
-
-  async function createSample() {
-    const token = getToken();
-    if (!token) return;
-    await apiPost(
-      "/api/v1/marketing/campaigns",
-      {
-        name: "Blackpool tarmac test",
-        platform: "meta",
-        service_slug: "tarmac-driveway-restoration",
-        daily_budget_gbp: 15,
-        monthly_budget_gbp: 200,
-        simulation_only: true,
-        headline: "Restore your driveway — Blackpool",
-      },
-      token,
-    );
-    reload();
-  }
+  const campaigns = useApi<Campaign[]>("/api/v1/marketing/campaigns");
 
   return (
     <div>
-      <h1 className="text-2xl font-semibold text-emerald-950">Advertising</h1>
+      <h1 className="text-2xl font-semibold text-[#1a1a1a]">Advertising</h1>
       <p className="mt-2 text-sm text-slate-600">
-        Launch requires approval. No fictional spend — connect Meta in Marketing → Integrations.
+        Campaigns recorded in the business system. A campaign marked simulated has never been sent to Meta or Google
+        and has spent nothing. Live launches require owner approval and a connected ad account (Marketing → Integrations).
       </p>
-      <button
-        type="button"
-        onClick={createSample}
-        className="mt-4 rounded-full border border-slate-300 px-4 py-2 text-sm text-slate-600"
-      >
-        Create internal draft (simulation only)
-      </button>
-      <ul className="mt-6 space-y-2 text-sm">
-        {campaigns.map((c) => (
-          <li key={c.id} className="rounded border px-3 py-2">
-            {c.name} · {c.platform} · {c.status} · £{c.daily_budget_gbp}/day
-            {c.simulation_only ? " · simulation" : ""}
-          </li>
-        ))}
-      </ul>
+      <div className="mt-6">
+        <LoadState
+          resource={campaigns}
+          isEmpty={(c) => c.length === 0}
+          empty="No campaigns have been created."
+        >
+          {(list) => (
+            <ul className="space-y-2 text-sm">
+              {list.map((c) => (
+                <li key={c.id} className="rounded-lg border px-3 py-2 text-[#1a1a1a]">
+                  <span className="font-medium">{c.name}</span> · {c.platform} · {c.status} · £{c.daily_budget_gbp}/day
+                  {c.simulation_only ? <SimulatedBadge /> : null}
+                </li>
+              ))}
+            </ul>
+          )}
+        </LoadState>
+      </div>
     </div>
   );
 }

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { apiGet, apiPut } from "@/lib/api";
 import { getToken } from "@/lib/auth-client";
+import { withLoadError } from "@/lib/load-errors";
 
 type Task = {
   slug: string;
@@ -54,7 +55,7 @@ export default function CompanySetupPage() {
           accountant_email: s.profile.accountant_email ?? "",
         });
       })
-      .catch(() => setData(null));
+      .catch(withLoadError(() => setData(null)));
   }, []);
 
   useEffect(() => {

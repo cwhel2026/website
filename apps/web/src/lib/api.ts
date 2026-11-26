@@ -37,7 +37,9 @@ async function request<T>(method: Method, path: string, body?: unknown): Promise
   });
   if (!res.ok) {
     const detail = await res.text();
-    throw parseApiError(res.status, detail);
+    const err = parseApiError(res.status, detail);
+    err.path = path;
+    throw err;
   }
   if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
