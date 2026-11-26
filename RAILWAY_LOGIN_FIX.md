@@ -10,7 +10,7 @@ You can **keep Root directory = `apps/web`** (as in your screenshot). You must u
 2. **Settings → Build → Dockerfile path:** `apps/combined/Dockerfile` (repo root path — **not** `Dockerfile` or `apps/web/Dockerfile`). Optional variable: `RAILWAY_DOCKERFILE_PATH=apps/combined/Dockerfile`.
 3. **Settings → Config file path:** `/apps/web/railway.toml` (so this service does not inherit the repo-root config alone).
 4. **Settings → Deploy → Custom start command:** leave **empty** (image `CMD` is `/app/start.sh`) **or** set `/app/start.sh` explicitly. Do **not** use `node server.js`.
-5. **Health check path:** `/health` (not `/`).
+5. **Health check path:** **off** (repo `healthcheckPath = ""` in `apps/web/railway.toml` — avoids long deploy waits). After deploy, confirm `GET /health` returns JSON manually.
 6. **Redeploy** after merging the latest `main`.
 
 If deploy fails with **`/app/start.sh` could not be found**, Railway built the **web-only** image — fix step 2.
@@ -60,7 +60,7 @@ The **website** container never bound to `$PORT`. In **Deployments → View logs
 | Log line | Meaning |
 |----------|---------|
 | `uvicorn exited before ready` | Python crash (imports, `JWT_SECRET` too short with `ENVIRONMENT=production`, DB driver) |
-| `FastAPI did not pass /health within 120s` | API lifespan blocked or DB unreachable — set `ALEMBIC_ON_START=1` after Alembic is stamped, or fix `DATABASE_URL` |
+| Login/API 503 for ~30s after deploy | Normal while uvicorn starts in background — retry `/health` then login |
 | `Alembic failed` | Bad `SYNC_DATABASE_URL` or revision conflict — see `MIGRATIONS.md` |
 | `Wrong Dockerfile for production` | Dockerfile path still `apps/web/Dockerfile` — use `apps/combined/Dockerfile` |
 

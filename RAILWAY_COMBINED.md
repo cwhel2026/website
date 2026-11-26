@@ -37,7 +37,7 @@ You **do not** need to move env vars off “website”. You only change **how th
 
 5. **Redeploy.**
 
-6. Check `https://YOUR-URL/health` → JSON from FastAPI (proxied).  
+6. After deploy finishes, check `https://YOUR-URL/health` → JSON from FastAPI (proxied). Railway HTTP health checks are disabled in config for faster rollouts.  
    Check `https://YOUR-URL/api/deploy-hint` → web deploy hint.
 
 7. Message Telegram bot — webhook auto-registers on API boot.
