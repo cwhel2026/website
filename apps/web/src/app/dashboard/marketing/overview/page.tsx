@@ -14,6 +14,7 @@ type Overview = {
   organic_posts_total?: number;
   director_mode?: string;
   emergency_pause?: boolean;
+  growth_fund?: { virtual_reserve_balance_gbp?: number; available_uncommitted_gbp?: number };
   disclaimer?: string;
 };
 
@@ -52,6 +53,14 @@ export default function MarketingOverviewPage() {
           <p className="mt-2 text-xs text-slate-500">Meta spend: {data.meta_spend_source}</p>
         )}
       </MarketingCard>
+      {data?.growth_fund && (
+        <MarketingCard title="Growth fund">
+          <p className="text-sm">
+            Virtual reserve £{data.growth_fund.virtual_reserve_balance_gbp?.toFixed(2) ?? "0"} · Available £
+            {data.growth_fund.available_uncommitted_gbp?.toFixed(2) ?? "0"}
+          </p>
+        </MarketingCard>
+      )}
       <MarketingCard title="Director mode">
         <p className="capitalize">{data?.director_mode?.replace("_", " ") ?? "recommend"}</p>
         {data?.emergency_pause && <p className="mt-2 text-red-700">Emergency pause is ON</p>}

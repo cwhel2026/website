@@ -71,6 +71,26 @@ async def validate_campaign_spend(
     today = await committed_spend_today(db)
     if policy.daily_limit_gbp > 0 and today + daily_budget_gbp > policy.daily_limit_gbp:
         return {"allowed": False, "reason": f"Would exceed today's committed spend (£{today})."}
+    if not simulation_only:
+        try:
+            from app.services.marketing.growth_fund import fund_summary
+
+            fund = await fund_summary(db)
+            weekly_cap = policy.weekly_limit_gbp or Decimal("150")
+            if daily_budget_gbp * 7 > weekly_cap:
+                return {
+                    "allowed": False,
+                    "reason": f"Exceeds approved weekly advertising limit (£{weekly_cap}). "
+                    "Increase only with explicit owner approval.",
+                }
+            if fund["available_uncommitted_gbp"] < float(daily_budget_gbp * 7):
+                return {
+                    "allowed": False,
+                    "reason": "Insufficient virtual marketing fund for this commitment "
+                    f"(available £{fund['available_uncommitted_gbp']:.2f}).",
+                }
+        except Exception:
+            pass
     return {"allowed": True, "policy": _policy_dict(policy)}
 
 

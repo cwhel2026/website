@@ -468,6 +468,18 @@ def marketing_daily_brief(self) -> dict:
                 plan = await run_daily_director_cycle(adb, execute_research=False)
                 recs = (plan.get("recommendations") or [])[:5]
                 body = "\n".join(f"• {r.get('action')}" for r in recs if r.get("action"))
+                try:
+                    from app.services.marketing.growth_fund import fund_summary
+
+                    gf = await fund_summary(adb)
+                    body = (
+                        f"Growth fund: £{gf['virtual_reserve_balance_gbp']:.2f} "
+                        f"(available £{gf['available_uncommitted_gbp']:.2f})\n"
+                        f"Weekly ad limit: £150 until you approve more.\n\n"
+                        + (body or "")
+                    )
+                except Exception:
+                    pass
                 await enqueue_notification(
                     adb,
                     channel="telegram",

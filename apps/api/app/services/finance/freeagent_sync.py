@@ -142,11 +142,19 @@ async def sync_bank_transactions_from_freeagent(db: AsyncSession) -> dict:
     from app.services.finance.bookkeeping.review_queue import categorize_uncategorized_transactions
 
     cat = await categorize_uncategorized_transactions(db, limit=500)
+    growth = {"processed": 0}
+    try:
+        from app.services.marketing.growth_fund import process_revenue_allocations
+
+        growth = await process_revenue_allocations(db, notify=True)
+    except Exception:
+        growth = {"processed": 0, "message": "growth fund skipped"}
     return {
         "fetched": fetched,
         "imported": imported,
         "skipped_duplicates": skipped,
         "categorization": cat,
+        "growth_fund": growth,
         "message": f"Imported {imported} new bank lines ({skipped} duplicates skipped).",
     }
 

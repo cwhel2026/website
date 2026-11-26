@@ -11,6 +11,7 @@ const TABS = [
   { href: "/dashboard/marketing/creative-intelligence", label: "Creative intelligence" },
   { href: "/dashboard/marketing/geo", label: "Geo" },
   { href: "/dashboard/marketing/budget", label: "Budget" },
+  { href: "/dashboard/marketing/growth-fund", label: "Growth fund" },
   { href: "/dashboard/marketing/recommendations", label: "AI recommendations" },
   { href: "/dashboard/marketing/integrations", label: "Integrations" },
 ] as const;

@@ -33,6 +33,9 @@ async def overview(
     spend = await account_spend_last_7d()
     meta_spend = float(spend.get("spend_gbp") or 0) if spend.get("ok") else None
     posts = await db.scalar(select(func.count()).select_from(MarketingOrganicPost))
+    from app.services.marketing.growth_fund import fund_summary
+
+    growth = await fund_summary(db)
     return {
         "pre_launch_mode": not policy.live_paid_spend_approved,
         "weekly_budget_gbp": float(policy.weekly_limit_gbp),
@@ -43,6 +46,7 @@ async def overview(
         "director_mode": policy.director_operating_mode.value,
         "emergency_pause": policy.emergency_pause_all,
         "launch_programme": policy.launch_programme_json or DEFAULT_LAUNCH_PROGRAMME,
+        "growth_fund": growth,
         "disclaimer": "Spend from Meta may lag; campaigns edited in Ads Manager may not appear immediately.",
     }
 

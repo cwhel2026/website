@@ -23,9 +23,12 @@ type FinanceTask = {
   severity: string;
 };
 
+type GrowthSummary = { virtual_reserve_balance_gbp?: number; available_uncommitted_gbp?: number };
+
 export default function FinanceHubPage() {
   const [queue, setQueue] = useState<ReviewItem[]>([]);
   const [tasks, setTasks] = useState<FinanceTask[]>([]);
+  const [growth, setGrowth] = useState<GrowthSummary | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -38,6 +41,9 @@ export default function FinanceHubPage() {
     apiGet<{ tasks: FinanceTask[] }>("/api/v1/finance/insights/tasks", token)
       .then((r) => setTasks(r.tasks.slice(0, 6)))
       .catch(() => setTasks([]));
+    apiGet<GrowthSummary>("/api/v1/finance/growth-fund/summary", token)
+      .then(setGrowth)
+      .catch(() => setGrowth(null));
   }, []);
 
   useEffect(() => {
@@ -103,6 +109,18 @@ export default function FinanceHubPage() {
         </a>
       </div>
       {status ? <p className="mt-2 text-sm text-slate-600">{status}</p> : null}
+
+      <section className="mt-6 rounded-xl border border-[#eab308]/30 bg-[#1a1a1a] p-4 text-white">
+        <h2 className="text-sm font-semibold text-[#eab308]">SurfaceCoat Growth Fund</h2>
+        <p className="mt-1 text-xs text-white/70">5% of eligible customer revenue → virtual marketing reserve (not a bank transfer).</p>
+        <p className="mt-2 text-lg font-semibold">
+          £{growth?.virtual_reserve_balance_gbp?.toFixed(2) ?? "—"} · available £
+          {growth?.available_uncommitted_gbp?.toFixed(2) ?? "—"}
+        </p>
+        <a href="/dashboard/marketing/growth-fund" className="mt-2 inline-block text-xs font-semibold text-[#eab308] underline">
+          Open ledger
+        </a>
+      </section>
 
       {tasks.length > 0 ? (
         <section className="mt-6 rounded-xl border border-emerald-100 bg-emerald-50/60 p-4">

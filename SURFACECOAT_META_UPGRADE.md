@@ -74,6 +74,10 @@ Webhooks:
 
 `tests/test_organic_post_analysis.py`, existing `test_budget_controls.py`
 
+## Growth Fund (same branch)
+
+See **`GROWTH_FUND.md`**: 5% revenue allocation ledger, FreeAgent sync hook, virtual Mettle reserve, Telegram on allocation, finance + marketing UI.
+
 ## Remaining (future PRs)
 
 - Full funnel profit metrics on dashboard widgets

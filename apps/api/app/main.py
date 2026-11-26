@@ -14,7 +14,7 @@ from app.middleware.security_headers import SecurityHeadersMiddleware
 from app.rate_limit import limiter
 from app.security.startup import validate_production_settings
 from app.database import Base, SessionLocal, engine
-from app.routers import marketing_surfacecoat
+from app.routers import growth_fund, marketing_surfacecoat
 from app.routers import (
     approvals,
     assistant,
@@ -126,6 +126,7 @@ app.include_router(marketing_content.router, prefix=prefix)
 app.include_router(marketing_webhooks.router, prefix=prefix)
 app.include_router(marketing_launch.router, prefix=prefix)
 app.include_router(marketing_surfacecoat.router, prefix=prefix)
+app.include_router(growth_fund.router, prefix=prefix)
 app.include_router(marketing_public.router, prefix=prefix)
 app.include_router(public.router, prefix=prefix)
 app.include_router(company.router, prefix=prefix)
