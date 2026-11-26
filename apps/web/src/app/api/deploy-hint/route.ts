@@ -48,7 +48,7 @@ export async function GET() {
     })(),
     fix_when_login_fails:
       imageKind === "web-only"
-        ? "Still on web-only image. Railway → website → Settings → Deploy → Start command: /app/start.sh, Health: /health. Build → Dockerfile: Dockerfile (repo root). Redeploy. Or clear Root directory to empty."
+        ? "Web-only image (Root=apps/web). For login: Root Directory EMPTY, Config /railway.toml, Dockerfile apps/combined/Dockerfile, Start /app/start.sh, redeploy."
         : "Railway → Dockerfile = repo root Dockerfile, Start = /app/start.sh. Set DEFAULT_ADMIN_EMAIL/PASSWORD to match login.",
     docs: "RAILWAY_COMBINED.md",
   });
