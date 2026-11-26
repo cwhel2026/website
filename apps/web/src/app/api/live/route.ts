@@ -7,6 +7,8 @@ export async function GET() {
       status: "ok",
       layer: "web",
       image_kind: process.env.RMD_IMAGE_KIND ?? "unknown",
+      port: process.env.PORT ?? null,
+      hostname: process.env.HOSTNAME ?? null,
     },
     { status: 200 },
   );

@@ -1,5 +1,7 @@
 # One Railway service (website + API together)
 
+**Authoritative deploy checklist:** [PRODUCTION_DEPLOY.md](PRODUCTION_DEPLOY.md)
+
 Use this if you want **one** service and **one** public URL — the setup where you already put all variables on “website”.
 
 ## Why the old `apps/web`-only deploy did not work
