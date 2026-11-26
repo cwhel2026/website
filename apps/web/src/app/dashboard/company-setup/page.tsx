@@ -44,7 +44,7 @@ export default function CompanySetupPage() {
       .then((s) => {
         setData(s);
         setForm({
-          registered_name: s.profile.registered_name ?? "Revive My Drive Ltd",
+          registered_name: s.profile.registered_name ?? "SurfaceCoat Ltd",
           companies_house_number: s.profile.companies_house_number ?? "",
           incorporation_date: s.profile.incorporation_date ?? "",
           trading_start_date: s.profile.trading_start_date ?? "",
@@ -103,7 +103,7 @@ export default function CompanySetupPage() {
     <div className="max-w-3xl">
       <h1 className="text-2xl font-semibold text-emerald-950">UK limited company setup</h1>
       <p className="mt-2 text-sm text-slate-600">
-        Revive My Drive operates as a private limited company. Complete these details so deadlines and tax guidance use
+        SurfaceCoat Ltd operates as a private limited company. Complete these details so deadlines and tax guidance use
         real information — nothing is assumed about incorporation or HMRC registration.
       </p>
 

@@ -17,10 +17,12 @@ export function resolveApiUrl(): string {
 export async function apiGet<T>(path: string, token?: string): Promise<T> {
   const res = await fetch(`${resolveApiUrl()}${path}`, {
     headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-    next: { revalidate: 60 },
+    cache: "no-store",
+    credentials: "same-origin",
   });
   if (!res.ok) {
-    throw new Error(`API error ${res.status}`);
+    const detail = await res.text();
+    throw parseApiError(res.status, detail);
   }
   return res.json() as Promise<T>;
 }

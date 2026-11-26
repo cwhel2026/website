@@ -31,7 +31,7 @@ export default function TaxCentrePage() {
     <div className="mx-auto max-w-lg pb-16">
       <h1 className="text-xl font-semibold text-emerald-950">Tax &amp; compliance</h1>
       <p className="mt-2 text-sm leading-relaxed text-slate-600">
-        Planning tools for Revive My Drive Ltd — not HMRC filing. Figures show sources and stay provisional until your
+        Planning tools for SurfaceCoat Ltd — not HMRC filing. Figures show sources and stay provisional until your
         accountant signs off.
       </p>
 

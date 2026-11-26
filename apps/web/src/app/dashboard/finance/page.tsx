@@ -91,7 +91,7 @@ export default function FinancePage() {
     <div>
       <h1 className="text-2xl font-semibold text-emerald-950">Finance</h1>
       <p className="mt-2 text-sm text-slate-600">
-        Revive My Drive Ltd — FreeAgent remains the authoritative books. Mettle feeds through FreeAgent when linked.
+        SurfaceCoat Ltd — FreeAgent remains the authoritative books. Mettle feeds through FreeAgent when linked.
         Use <strong>Company setup</strong> for incorporation details and statutory checklist.
       </p>
 

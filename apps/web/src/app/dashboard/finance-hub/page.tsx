@@ -88,7 +88,7 @@ export default function FinanceHubPage() {
     <div className="mx-auto max-w-lg pb-16">
       <h1 className="text-xl font-semibold text-emerald-950">Money hub</h1>
       <p className="mt-2 text-sm leading-relaxed text-slate-600">
-        Plain-English bookkeeping for Revive My Drive Ltd. FreeAgent stays the official books — here you review
+        Plain-English bookkeeping for SurfaceCoat Ltd. FreeAgent stays the official books — here you review
         suggestions and receipts. Photograph receipts in Telegram.
       </p>
 
