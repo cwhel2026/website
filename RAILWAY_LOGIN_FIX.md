@@ -55,7 +55,13 @@ After fixing variables, **redeploy**. The container will not start Next.js until
 
 ## Railway “Application failed to respond” (502)
 
-The **website** container never bound to `$PORT`. In **Deployments → View logs**, look for:
+Nothing listened on `$PORT` — almost always **wrong image or start command**, or the old script **exited before** `node server.js` (e.g. Alembic failed while `DATABASE_MIGRATIONS_MANAGED=true`).
+
+**Latest `start.sh`:** Next.js binds `$PORT` first; FastAPI + Alembic run in the background. Redeploy from current `main`.
+
+Smoke test after deploy: `GET /api/live` → `{"status":"ok","layer":"web"}` (does not need the API). Then `GET /health` for FastAPI.
+
+In **Deployments → View logs**, look for:
 
 | Log line | Meaning |
 |----------|---------|

@@ -8,6 +8,7 @@ watchPatterns = ["apps/web/**", "apps/api/**", "apps/combined/**"]
 
 [deploy]
 startCommand = "/app/start.sh"
-# No Railway deploy health gate — combined boot is faster; verify /health manually after deploy.
-healthcheckPath = ""
+# Optional fast gate: Next-only liveness (no FastAPI). Clear in UI to disable entirely.
+healthcheckPath = "/api/live"
+healthcheckTimeout = 60
 restartPolicyType = "ON_FAILURE"
