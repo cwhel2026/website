@@ -53,6 +53,19 @@ Common causes on Railway:
 
 After fixing variables, **redeploy**. The container will not start Next.js until `/health` returns OK (so a broken API fails fast with logs).
 
+## Railway “Application failed to respond” (502)
+
+The **website** container never bound to `$PORT`. In **Deployments → View logs**, look for:
+
+| Log line | Meaning |
+|----------|---------|
+| `uvicorn exited before ready` | Python crash (imports, `JWT_SECRET` too short with `ENVIRONMENT=production`, DB driver) |
+| `FastAPI did not pass /health within 120s` | API lifespan blocked or DB unreachable — set `ALEMBIC_ON_START=1` after Alembic is stamped, or fix `DATABASE_URL` |
+| `Alembic failed` | Bad `SYNC_DATABASE_URL` or revision conflict — see `MIGRATIONS.md` |
+| `Wrong Dockerfile for production` | Dockerfile path still `apps/web/Dockerfile` — use `apps/combined/Dockerfile` |
+
+After merge, redeploy from latest `main`. Optional: `ALEMBIC_ON_START=1` on the website service to apply revisions **0015–0016** on boot (only if Alembic history is already in sync).
+
 ## Still failing?
 
 - Wrong email (e.g. personal Yahoo) if `DEFAULT_ADMIN_EMAIL` is something else.

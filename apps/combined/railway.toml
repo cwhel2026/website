@@ -13,5 +13,6 @@ dockerfilePath = "apps/combined/Dockerfile"
 watchPatterns = ["apps/web/**", "apps/api/**", "apps/combined/**"]
 
 [deploy]
+startCommand = "/app/start.sh"
 healthcheckPath = "/health"
 restartPolicyType = "ON_FAILURE"
