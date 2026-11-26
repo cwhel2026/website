@@ -1,5 +1,6 @@
 # Default for the single "website" Railway service (site + API + Telegram).
 # In Railway: leave Root Directory empty (repo root). Variables stay on this service.
+# If login fails with vars on website, see RAILWAY_LOGIN_FIX.md (do not use Root apps/web).
 
 [build]
 builder = "DOCKERFILE"

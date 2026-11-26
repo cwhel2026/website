@@ -5,9 +5,17 @@ import { NextResponse } from "next/server";
  */
 export async function GET() {
   const internal = process.env.API_INTERNAL_URL ?? "";
+  const hasDb = Boolean(process.env.DATABASE_URL?.trim());
+  const embedded = process.env.RUN_EMBEDDED_API === "1";
   let api: Record<string, unknown> = { reachable: false };
 
-  if (internal) {
+  if (hasDb && !internal && !embedded) {
+    api = {
+      reachable: false,
+      reason:
+        "DATABASE_URL is set but this is still the web-only image. Railway → Settings → Root directory: empty (repo root) → Redeploy (combined Dockerfile). Variables can stay on this service.",
+    };
+  } else if (internal) {
     try {
       const res = await fetch(`${internal.replace(/\/$/, "")}/health`, {
         cache: "no-store",
@@ -34,7 +42,8 @@ export async function GET() {
   return NextResponse.json({
     service: "revive-my-drive",
     telegram_native_webhook: telegramOnWeb,
-    combined_sidecar: Boolean(internal),
+    embedded_api_image: embedded,
+    combined_sidecar: Boolean(internal) || embedded,
     api_internal_url_set: Boolean(internal),
     next_public_api_url_host: publicApi ? safeHost(publicApi) : null,
     api,
