@@ -1,6 +1,7 @@
 from decimal import Decimal
 from functools import lru_cache
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -82,6 +83,17 @@ class Settings(BaseSettings):
     finance_receipt_freeagent_expense: bool = False
     freeagent_default_expense_category_url: str | None = None
     public_dashboard_base_url: str | None = None
+
+    @field_validator("database_url", mode="before")
+    @classmethod
+    def _use_asyncpg_driver(cls, v):
+        if isinstance(v, str):
+            v = v.strip()
+            if v.startswith("postgres://"):
+                v = "postgresql+asyncpg://" + v[len("postgres://"):]
+            elif v.startswith("postgresql://"):
+                v = "postgresql+asyncpg://" + v[len("postgresql://"):]
+        return v
 
     @property
     def telegram_admin_id_list(self) -> list[int]:
