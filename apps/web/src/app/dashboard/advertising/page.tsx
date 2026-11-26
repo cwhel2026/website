@@ -46,9 +46,15 @@ export default function AdvertisingPage() {
   return (
     <div>
       <h1 className="text-2xl font-semibold text-emerald-950">Advertising</h1>
-      <p className="mt-2 text-sm text-slate-600">Launch requires approval. Live Meta/Google APIs not connected.</p>
-      <button type="button" onClick={createSample} className="mt-4 rounded-full bg-emerald-900 px-4 py-2 text-sm text-white">
-        Create sample simulated campaign
+      <p className="mt-2 text-sm text-slate-600">
+        Launch requires approval. No fictional spend — connect Meta in Marketing → Integrations.
+      </p>
+      <button
+        type="button"
+        onClick={createSample}
+        className="mt-4 rounded-full border border-slate-300 px-4 py-2 text-sm text-slate-600"
+      >
+        Create internal draft (simulation only)
       </button>
       <ul className="mt-6 space-y-2 text-sm">
         {campaigns.map((c) => (

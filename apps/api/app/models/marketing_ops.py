@@ -185,6 +185,50 @@ class MarketingRenderedCreative(Base):
     )
 
 
+class OrganicPlatform(str, enum.Enum):
+    FACEBOOK = "facebook"
+    INSTAGRAM = "instagram"
+
+
+class MarketingDirectorMode(str, enum.Enum):
+    OBSERVATION = "observation"
+    RECOMMEND = "recommend"
+    CONTROLLED_AUTO = "controlled_auto"
+
+
+class MarketingOrganicPost(Base):
+    __tablename__ = "marketing_organic_posts"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    platform: Mapped[OrganicPlatform] = mapped_column(
+        Enum(OrganicPlatform, name="organic_platform", create_constraint=False)
+    )
+    external_post_id: Mapped[str] = mapped_column(String(120))
+    permalink: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    caption: Mapped[str | None] = mapped_column(Text, nullable=True)
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    media_refs_json: Mapped[list | dict | None] = mapped_column(JSONB, nullable=True)
+    format: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    metrics_json: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    ai_analysis_json: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    raw_payload_json: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    last_synced_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class MarketingOrganicPostSnapshot(Base):
+    __tablename__ = "marketing_organic_post_snapshots"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    post_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("marketing_organic_posts.id", ondelete="CASCADE")
+    )
+    captured_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    metrics_json: Mapped[dict] = mapped_column(JSONB)
+
+
 class MarketingBudgetPolicy(Base):
     """Owner-configurable spending limits — live ads blocked until explicitly approved."""
 
@@ -193,10 +237,22 @@ class MarketingBudgetPolicy(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     live_paid_spend_approved: Mapped[bool] = mapped_column(default=False)
     emergency_pause_all: Mapped[bool] = mapped_column(default=False)
-    daily_limit_gbp: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal("0"))
-    weekly_limit_gbp: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal("0"))
-    monthly_limit_gbp: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal("0"))
-    meta_daily_limit_gbp: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal("0"))
+    daily_limit_gbp: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal("22"))
+    weekly_limit_gbp: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal("150"))
+    monthly_limit_gbp: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal("600"))
+    meta_daily_limit_gbp: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal("22"))
+    meta_weekly_budget_gbp: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal("150"))
+    meta_safety_buffer_pct: Mapped[Decimal] = mapped_column(Numeric(5, 2), default=Decimal("5"))
+    director_operating_mode: Mapped[MarketingDirectorMode] = mapped_column(
+        Enum(MarketingDirectorMode, name="marketing_director_mode", create_type=False),
+        default=MarketingDirectorMode.RECOMMEND,
+    )
+    geo_target_json: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    launch_programme_json: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    meta_account_spend_last_gbp: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
+    meta_account_spend_synced_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     google_daily_limit_gbp: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal("0"))
     max_single_increase_pct: Mapped[Decimal] = mapped_column(Numeric(5, 2), default=Decimal("20"))
     research_api_daily_limit_gbp: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal("5"))

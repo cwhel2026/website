@@ -24,6 +24,10 @@ async def get_or_create_budget_policy(db: AsyncSession) -> MarketingBudgetPolicy
     policy = row.scalar_one_or_none()
     if policy is None:
         policy = MarketingBudgetPolicy()
+        policy.geo_target_json = {
+            "centre": "Preston, Lancashire",
+            "radius_miles": 20,
+        }
         db.add(policy)
         await db.flush()
     return policy
@@ -67,6 +71,26 @@ async def validate_campaign_spend(
     today = await committed_spend_today(db)
     if policy.daily_limit_gbp > 0 and today + daily_budget_gbp > policy.daily_limit_gbp:
         return {"allowed": False, "reason": f"Would exceed today's committed spend (£{today})."}
+    if not simulation_only:
+        try:
+            from app.services.marketing.growth_fund import fund_summary
+
+            fund = await fund_summary(db)
+            weekly_cap = policy.weekly_limit_gbp or Decimal("150")
+            if daily_budget_gbp * 7 > weekly_cap:
+                return {
+                    "allowed": False,
+                    "reason": f"Exceeds approved weekly advertising limit (£{weekly_cap}). "
+                    "Increase only with explicit owner approval.",
+                }
+            if fund["available_uncommitted_gbp"] < float(daily_budget_gbp * 7):
+                return {
+                    "allowed": False,
+                    "reason": "Insufficient virtual marketing fund for this commitment "
+                    f"(available £{fund['available_uncommitted_gbp']:.2f}).",
+                }
+        except Exception:
+            pass
     return {"allowed": True, "policy": _policy_dict(policy)}
 
 
@@ -78,10 +102,14 @@ def _policy_dict(policy: MarketingBudgetPolicy) -> dict:
         "weekly_limit_gbp": float(policy.weekly_limit_gbp),
         "monthly_limit_gbp": float(policy.monthly_limit_gbp),
         "meta_daily_limit_gbp": float(policy.meta_daily_limit_gbp),
+        "meta_weekly_budget_gbp": float(getattr(policy, "meta_weekly_budget_gbp", 150)),
+        "meta_safety_buffer_pct": float(getattr(policy, "meta_safety_buffer_pct", 5)),
+        "director_operating_mode": getattr(getattr(policy, "director_operating_mode", None), "value", "recommend"),
         "google_daily_limit_gbp": float(policy.google_daily_limit_gbp),
         "research_api_daily_limit_gbp": float(policy.research_api_daily_limit_gbp),
         "outreach_email_enabled": policy.outreach_email_enabled,
         "outreach_daily_cap": policy.outreach_daily_cap,
+        "geo_target": getattr(policy, "geo_target_json", None),
     }
 
 

@@ -80,6 +80,10 @@ celery_app.conf.update(
             "task": "rmd.marketing_daily_brief",
             "schedule": crontab(minute=15, hour=6),
         },
+        "marketing-organic-sync": {
+            "task": "rmd.marketing_organic_sync",
+            "schedule": crontab(minute=45, hour="*/3"),
+        },
     },
     timezone="Europe/London",
 )

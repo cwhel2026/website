@@ -33,6 +33,10 @@ async def get_or_create_brand(db: AsyncSession) -> MarketingBrandProfile:
     row = (await db.execute(select(MarketingBrandProfile).limit(1))).scalar_one_or_none()
     if row is None:
         row = MarketingBrandProfile(
+            business_name="SurfaceCoat Ltd",
+            primary_colour="#1a1a1a",
+            secondary_colour="#eab308",
+            tagline="Driveway & commercial surface restoration — Preston, Lancashire",
             service_areas_json=DEFAULT_AREAS,
             approved_claims_json=DEFAULT_CLAIMS,
             approved_ctas_json=DEFAULT_CTAS,
