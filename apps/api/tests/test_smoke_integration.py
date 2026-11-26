@@ -29,9 +29,8 @@ def test_ready_and_territories_after_seed():
             },
         )
         assert login.status_code == 200
-        token = login.json()["access_token"]
-        overview = client.get(
-            "/api/v1/analytics/overview",
-            headers={"Authorization": f"Bearer {token}"},
-        )
+        assert "access_token" not in login.json()
+        overview = client.get("/api/v1/analytics/overview")
         assert overview.status_code == 200
+        marketing = client.get("/api/v1/marketing/surfacecoat/overview")
+        assert marketing.status_code == 200, marketing.text

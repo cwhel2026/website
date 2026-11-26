@@ -43,6 +43,59 @@ async def ensure_owner_from_env(session: AsyncSession) -> None:
         user.password_hash = desired_hash
 
 
+AUDITOR_MIN_PASSWORD = 16
+
+
+async def ensure_e2e_auditor_from_env(session: AsyncSession) -> str:
+    """Provision the read-only browser-test account from E2E_AUDITOR_EMAIL / E2E_AUDITOR_PASSWORD.
+
+    * both set: create or update the account as role AUDITOR (GET-only access).
+    * email set, password empty: deactivate the account (revocation).
+    * never converts an existing non-auditor account, and never touches the owner.
+    """
+    import logging
+
+    log = logging.getLogger(__name__)
+    settings = get_settings()
+    email = (settings.e2e_auditor_email or "").strip().lower()
+    password = settings.e2e_auditor_password or ""
+    if not email:
+        return "not_configured"
+    if email == settings.default_admin_email.strip().lower():
+        log.error("E2E_AUDITOR_EMAIL must not be the owner account; skipping")
+        return "refused_owner"
+
+    user = (await session.execute(select(User).where(User.email == email))).scalar_one_or_none()
+    if user is not None and user.role != UserRole.AUDITOR:
+        log.error("E2E_AUDITOR_EMAIL belongs to a %s account; refusing to change it", user.role.value)
+        return "refused_existing_role"
+
+    if not password:
+        if user is not None and user.is_active:
+            user.is_active = False
+            return "deactivated"
+        return "inactive"
+    if len(password) < AUDITOR_MIN_PASSWORD:
+        log.error("E2E_AUDITOR_PASSWORD must be at least %s characters; skipping", AUDITOR_MIN_PASSWORD)
+        return "refused_weak_password"
+
+    if user is None:
+        session.add(
+            User(
+                email=email,
+                password_hash=hash_password(password),
+                full_name="Automated test (read-only)",
+                role=UserRole.AUDITOR,
+                is_active=True,
+            )
+        )
+        return "created"
+    user.is_active = True
+    if not verify_password(password, user.password_hash):
+        user.password_hash = hash_password(password)
+    return "updated"
+
+
 async def rotate_owner_password(session: AsyncSession, *, new_password: str) -> None:
     settings = get_settings()
     email = settings.default_admin_email.strip().lower()

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { apiPost } from "@/lib/api";
 import { mapLoginError } from "@/lib/api-errors";
-import { setToken } from "@/lib/auth-client";
+import { purgeLegacyToken } from "@/lib/auth-client";
 
 export default function DashboardLoginPage() {
   const router = useRouter();
@@ -19,11 +19,11 @@ export default function DashboardLoginPage() {
     setError(null);
     const form = new FormData(e.currentTarget);
     try {
-      const data = await apiPost<{ access_token: string }>("/api/v1/auth/login", {
+      await apiPost<{ ok: boolean }>("/api/v1/auth/login", {
         email: String(form.get("email") || "").trim().toLowerCase(),
         password: form.get("password"),
       });
-      setToken(data.access_token);
+      purgeLegacyToken();
       router.push("/dashboard");
     } catch (err) {
       setError(mapLoginError(err));

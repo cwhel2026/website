@@ -243,9 +243,10 @@ async def seed_database(session: AsyncSession) -> None:
 
 
 async def _seed_admin(session: AsyncSession) -> None:
-    from app.services.owner_provisioning import ensure_owner_from_env
+    from app.services.owner_provisioning import ensure_e2e_auditor_from_env, ensure_owner_from_env
 
     await ensure_owner_from_env(session)
+    await ensure_e2e_auditor_from_env(session)
 
 
 async def _seed_territories(session: AsyncSession) -> None:

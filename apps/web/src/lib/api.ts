@@ -1,4 +1,5 @@
 import { ApiError, parseApiError } from "@/lib/api-errors";
+import { getCsrfToken } from "@/lib/auth-client";
 
 /** Same-origin when NEXT_PUBLIC_API_URL is unset (combined Railway deploy). */
 export function resolveApiUrl(): string {
@@ -14,9 +15,23 @@ export function resolveApiUrl(): string {
   return (process.env.API_INTERNAL_URL ?? "http://localhost:8000").replace(/\/$/, "");
 }
 
-export async function apiGet<T>(path: string, token?: string): Promise<T> {
+type Method = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+
+/**
+ * Authenticated by the HttpOnly session cookie. The historical `token` argument on the
+ * exported helpers is accepted for call-site compatibility and deliberately ignored.
+ */
+async function request<T>(method: Method, path: string, body?: unknown): Promise<T> {
+  const headers: Record<string, string> = {};
+  if (body !== undefined) headers["Content-Type"] = "application/json";
+  if (method !== "GET") {
+    const csrf = getCsrfToken();
+    if (csrf) headers["X-CSRF-Token"] = csrf;
+  }
   const res = await fetch(`${resolveApiUrl()}${path}`, {
-    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    method,
+    headers,
+    body: body === undefined ? undefined : JSON.stringify(body),
     cache: "no-store",
     credentials: "same-origin",
   });
@@ -24,68 +39,31 @@ export async function apiGet<T>(path: string, token?: string): Promise<T> {
     const detail = await res.text();
     throw parseApiError(res.status, detail);
   }
+  if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
 }
 
-export async function apiPatch<T>(
-  path: string,
-  body: unknown,
-  token?: string,
-): Promise<T> {
-  const res = await fetch(`${resolveApiUrl()}${path}`, {
-    method: "PATCH",
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) {
-    const detail = await res.text();
-    throw new Error(detail || `API error ${res.status}`);
-  }
-  return res.json() as Promise<T>;
+/* eslint-disable @typescript-eslint/no-unused-vars */
+export function apiGet<T>(path: string, _token?: string | null): Promise<T> {
+  return request<T>("GET", path);
 }
 
-export async function apiPut<T>(
-  path: string,
-  body: unknown,
-  token?: string,
-): Promise<T> {
-  const res = await fetch(`${resolveApiUrl()}${path}`, {
-    method: "PUT",
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) {
-    const detail = await res.text();
-    throw parseApiError(res.status, detail);
-  }
-  return res.json() as Promise<T>;
+export function apiPost<T>(path: string, body: unknown, _token?: string | null): Promise<T> {
+  return request<T>("POST", path, body);
 }
 
-export async function apiPost<T>(
-  path: string,
-  body: unknown,
-  token?: string,
-): Promise<T> {
-  const res = await fetch(`${resolveApiUrl()}${path}`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) {
-    const detail = await res.text();
-    throw parseApiError(res.status, detail);
-  }
-  return res.json() as Promise<T>;
+export function apiPut<T>(path: string, body: unknown, _token?: string | null): Promise<T> {
+  return request<T>("PUT", path, body);
 }
+
+export function apiPatch<T>(path: string, body: unknown, _token?: string | null): Promise<T> {
+  return request<T>("PATCH", path, body);
+}
+
+export function apiDelete<T>(path: string, _token?: string | null): Promise<T> {
+  return request<T>("DELETE", path);
+}
+/* eslint-enable @typescript-eslint/no-unused-vars */
 
 export { ApiError };
 

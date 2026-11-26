@@ -79,8 +79,8 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
             <button
               type="button"
               className="rounded-lg p-2 text-white/70 hover:bg-white/10"
-              onClick={() => {
-                clearToken();
+              onClick={async () => {
+                await clearToken();
                 router.push("/dashboard/login");
               }}
               aria-label="Sign out"

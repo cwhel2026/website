@@ -45,6 +45,9 @@ jobs:
       JWT_SECRET: ci-integration-test-secret-at-least-thirty-two-chars
       RUN_INTEGRATION_TESTS: "1"
       ENVIRONMENT: test
+      # Disposable CI database only — not a real account.
+      E2E_AUDITOR_EMAIL: e2e-auditor@example.com
+      E2E_AUDITOR_PASSWORD: ci-only-auditor-password-0123456789
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -60,7 +63,7 @@ jobs:
         run: python -m app.schema.cli upgrade
       - name: Integration smoke
         working-directory: apps/api
-        run: pytest -q tests/test_smoke_integration.py
+        run: pytest -q tests/test_smoke_integration.py tests/test_auth_login.py tests/test_session_security_integration.py
       - name: Migration paths (empty, legacy create_all, model drift, idempotency)
         working-directory: apps/api
         env:

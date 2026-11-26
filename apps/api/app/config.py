@@ -25,6 +25,8 @@ class Settings(BaseSettings):
     default_admin_email: str = "admin@revivemydrive.co.uk"
     default_admin_password: str = "ChangeMe-RMD-2025!"
     admin_setup_key: str | None = None
+    e2e_auditor_email: str | None = None
+    e2e_auditor_password: str | None = None
     openai_api_key: str | None = None
     openai_model: str = "gpt-4o-mini"
     anthropic_api_key: str | None = None

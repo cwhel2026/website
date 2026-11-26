@@ -137,14 +137,20 @@ def test_login_success_session_and_logout_flow():
     with TestClient(app) as client:
         login = client.post("/api/v1/auth/login", json={"email": email, "password": password})
         assert login.status_code == 200
-        token = login.json()["access_token"]
+        assert "access_token" not in login.json()
+        set_cookie = ", ".join(login.headers.get_list("set-cookie")).lower()
+        assert "sc_session=" in set_cookie and "httponly" in set_cookie
+        assert client.get("/api/v1/auth/me").status_code == 200
+        assert client.get("/api/v1/analytics/overview").status_code == 200
+        client.post("/api/v1/auth/logout")
+        client.cookies.clear()
+        assert client.get("/api/v1/auth/me").status_code == 401
+
+        form = client.post("/api/v1/auth/token", data={"username": email, "password": password})
+        assert form.status_code == 200
+        token = form.json()["access_token"]
         me = client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {token}"})
         assert me.status_code == 200
-        protected = client.get(
-            "/api/v1/analytics/overview",
-            headers={"Authorization": f"Bearer {token}"},
-        )
-        assert protected.status_code == 200
 
 
 @requires_postgres
