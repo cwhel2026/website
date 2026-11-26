@@ -12,7 +12,7 @@ settings = get_settings()
 
 
 @router.get("/health")
-async def health() -> dict[str, str]:
+async def health() -> dict[str, str | None]:
     return {
         "status": "ok",
         "environment": settings.environment,
