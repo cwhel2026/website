@@ -1,5 +1,6 @@
 from celery import Celery
 from celery.schedules import crontab
+from celery.signals import worker_init, worker_process_init
 
 from app.config import get_settings
 
@@ -95,3 +96,18 @@ celery_app.conf.update(
     },
     timezone="Europe/London",
 )
+
+@worker_init.connect
+@worker_process_init.connect
+def _use_unpooled_async_engine(**_):
+    """Tasks call asyncio.run() per invocation; pooled asyncpg connections are bound to the
+    loop that opened them, so worker processes must not reuse connections across runs."""
+    from sqlalchemy.ext.asyncio import create_async_engine
+    from sqlalchemy.pool import NullPool
+
+    from app import database
+
+    if isinstance(database.engine.pool, NullPool):
+        return
+    database.engine = create_async_engine(settings.database_url, poolclass=NullPool)
+    database.SessionLocal.configure(bind=database.engine)
