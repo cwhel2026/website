@@ -7,6 +7,8 @@ _INSECURE_JWT_DEFAULTS = frozenset(
     }
 )
 
+FACTORY_DEFAULT_PASSWORDS = frozenset({"ChangeMe-RMD-2025!", "change-on-first-login"})
+
 
 def validate_production_settings(settings: Settings) -> None:
     if settings.environment.lower() != "production":
@@ -16,14 +18,12 @@ def validate_production_settings(settings: Settings) -> None:
         raise RuntimeError(
             "JWT_SECRET must be a unique random string of at least 32 characters in production."
         )
-    if settings.default_admin_password in (
-        "ChangeMe-RMD-2025!",
-        "change-on-first-login",
-    ):
+    if settings.default_admin_password in FACTORY_DEFAULT_PASSWORDS:
         import logging
 
         logging.getLogger(__name__).critical(
-            "DEFAULT_ADMIN_PASSWORD is still a factory default — change it in Railway immediately."
+            "DEFAULT_ADMIN_PASSWORD is still a factory default: sign-in with it is refused in production. "
+            "Set a unique DEFAULT_ADMIN_PASSWORD in Railway and redeploy."
         )
     import logging
 

@@ -13,9 +13,11 @@ from app.auth import (
     set_session_cookies,
     verify_password_or_dummy,
 )
+from app.config import get_settings
 from app.database import get_db
 from app.models.user import User
 from app.rate_limit import limiter
+from app.security.startup import FACTORY_DEFAULT_PASSWORDS
 from app.schemas.auth import LoginRequest, OwnerPasswordResetRequest, SessionOut, Token, UserOut
 from app.services.owner_provisioning import rotate_owner_password
 
@@ -32,6 +34,12 @@ async def _authenticate(db: AsyncSession, email: str, password: str) -> User:
         )
     if not user.is_active:
         raise HTTPException(status_code=400, detail="Inactive user")
+    if get_settings().environment.lower() == "production" and password in FACTORY_DEFAULT_PASSWORDS:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="The factory default password is disabled in production. "
+            "Set DEFAULT_ADMIN_PASSWORD in Railway and redeploy, then sign in with the new password.",
+        )
     return user
 
 
