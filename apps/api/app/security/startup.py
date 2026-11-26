@@ -25,3 +25,13 @@ def validate_production_settings(settings: Settings) -> None:
         logging.getLogger(__name__).critical(
             "DEFAULT_ADMIN_PASSWORD is still a factory default — change it in Railway immediately."
         )
+    import logging
+
+    log = logging.getLogger(__name__)
+    if len((settings.finance_token_encryption_key or "").strip()) < 32:
+        log.critical(
+            "FINANCE_TOKEN_ENCRYPTION_KEY is missing or shorter than 32 characters: "
+            "FreeAgent connect/refresh is disabled until it is set."
+        )
+    if not settings.meta_app_secret:
+        log.warning("META_APP_SECRET is not set: Meta webhooks will be rejected (503).")

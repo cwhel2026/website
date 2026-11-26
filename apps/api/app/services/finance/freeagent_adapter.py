@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hmac
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
@@ -11,7 +12,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import Settings, get_settings
 from app.models.finance import FreeAgentConnection, FreeAgentConnectionState, Invoice
 from app.services.finance import freeagent_client
-from app.services.finance.token_vault import decrypt_token, encrypt_token
+from app.services.finance.token_vault import (
+    decrypt_token,
+    encrypt_token,
+    encryption_configured,
+    reencrypt_if_legacy,
+)
 
 
 @dataclass
@@ -77,6 +83,10 @@ async def begin_oauth(db: AsyncSession) -> dict:
     settings = get_settings()
     if not _credentials_configured(settings):
         raise ValueError("FreeAgent OAuth is not configured on this deployment")
+    if not encryption_configured():
+        raise ValueError(
+            "FINANCE_TOKEN_ENCRYPTION_KEY (32+ characters) must be set before connecting FreeAgent"
+        )
     row = await get_connection_row(db)
     if row is None:
         row = FreeAgentConnection(state=FreeAgentConnectionState.PENDING_OAUTH)
@@ -93,7 +103,7 @@ async def begin_oauth(db: AsyncSession) -> dict:
 async def complete_oauth(db: AsyncSession, code: str, state: str) -> dict:
     settings = get_settings()
     row = await get_connection_row(db)
-    if row is None or not row.oauth_state or row.oauth_state != state:
+    if row is None or not row.oauth_state or not hmac.compare_digest(row.oauth_state, state or ""):
         raise ValueError("Invalid or expired OAuth state — start connect again")
     try:
         payload = await freeagent_client.exchange_code_for_tokens(settings, code)
@@ -124,10 +134,12 @@ async def complete_oauth(db: AsyncSession, code: str, state: str) -> dict:
 
 
 def _clear_access_token(row: FreeAgentConnection) -> str | None:
+    row.access_token = reencrypt_if_legacy(row.access_token)
     return decrypt_token(row.access_token)
 
 
 def _clear_refresh_token(row: FreeAgentConnection) -> str | None:
+    row.refresh_token = reencrypt_if_legacy(row.refresh_token)
     return decrypt_token(row.refresh_token)
 
 
