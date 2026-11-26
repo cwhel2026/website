@@ -2,20 +2,22 @@
 
 You can keep **every variable on the website Railway service** — but the service must run the **combined** image (Next.js + FastAPI in one container), not `apps/web` alone.
 
-## One-time Railway change
+## One-time Railway change (fixes 502 + login)
 
-You can **keep Root directory = `apps/web`** (as in your screenshot). You must use the **combined** Dockerfile and start command.
+Railway **cannot** build the combined image when **Root Directory = `apps/web`**: the API (`apps/api`) is outside that folder, so Docker never ships FastAPI. A stale or mismatched image plus **Start command `/app/start.sh`** on a broken build → **“Application failed to respond”**.
 
-1. Open your **website** service in Railway.
-2. **Settings → Build → Dockerfile path:** `apps/combined/Dockerfile` (repo root path — **not** `Dockerfile` or `apps/web/Dockerfile`). Optional variable: `RAILWAY_DOCKERFILE_PATH=apps/combined/Dockerfile`.
-3. **Settings → Config file path:** `/apps/web/railway.toml` (so this service does not inherit the repo-root config alone).
-4. **Settings → Deploy → Custom start command:** leave **empty** (image `CMD` is `/app/start.sh`) **or** set `/app/start.sh` explicitly. Do **not** use `node server.js`.
-5. **Health check path:** **off** (repo `healthcheckPath = ""` in `apps/web/railway.toml` — avoids long deploy waits). After deploy, confirm `GET /health` returns JSON manually.
-6. **Redeploy** after merging the latest `main`.
+### Required for combined (site + API + login)
 
-If deploy fails with **`/app/start.sh` could not be found**, Railway built the **web-only** image — fix step 2.
+1. **Settings → Root Directory:** **empty** (repository root — not `apps/web`).
+2. **Settings → Config file path:** `/railway.toml` (repo root).
+3. **Settings → Build → Dockerfile path:** `apps/combined/Dockerfile` (or variable `RAILWAY_DOCKERFILE_PATH=apps/combined/Dockerfile`).
+4. **Settings → Deploy → Start command:** `/app/start.sh` or leave empty (image `CMD`).
+5. **Health check path (optional):** `/api/live` (60s) or empty in the UI.
+6. **Redeploy** from latest `main`.
 
-**Alternative:** clear **Root directory** (empty) and redeploy — same combined image.
+### If Root Directory stays `apps/web`
+
+You get **web-only** (public marketing site). Config path `/apps/web/railway.toml`, Dockerfile `Dockerfile` in that folder. **`/api/live` works; `/health` and login do not.** To restore the dashboard, switch to the combined steps above.
 
 Keep on this same service:
 
@@ -55,7 +57,13 @@ After fixing variables, **redeploy**. The container will not start Next.js until
 
 ## Railway “Application failed to respond” (502)
 
-Nothing listened on `$PORT` — almost always **wrong image or start command**, or the old script **exited before** `node server.js` (e.g. Alembic failed while `DATABASE_MIGRATIONS_MANAGED=true`).
+Nothing listened on `$PORT`. Most common on this repo:
+
+1. **Root Directory = `apps/web`** but **Start command = `/app/start.sh`** on an old combined/wrong image (no `server.js` or no `start.sh`).
+2. **Combined Dockerfile** with **Root = `apps/web`** (build context missing `apps/api` — failed or cached wrong image).
+3. Alembic/`set -e` exit before Node (mitigated in current `start.sh`).
+
+**Fix:** clear Root Directory → `/railway.toml` → `apps/combined/Dockerfile` → redeploy.
 
 **Latest `start.sh`:** Next.js binds `$PORT` first; FastAPI + Alembic run in the background. Redeploy from current `main`.
 
