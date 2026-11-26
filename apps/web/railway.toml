@@ -8,7 +8,5 @@ watchPatterns = ["**"]
 
 [deploy]
 startCommand = "/app/start.sh"
-# Optional fast gate: Next-only liveness (no FastAPI). Clear in UI to disable entirely.
-healthcheckPath = "/api/live"
-healthcheckTimeout = 60
+healthcheckPath = ""
 restartPolicyType = "ON_FAILURE"
