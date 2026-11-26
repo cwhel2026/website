@@ -1,3 +1,4 @@
+import hmac
 import logging
 from typing import Annotated, Any
 
@@ -105,7 +106,7 @@ async def telegram_register_webhook_bootstrap(
     """
     cfg = get_settings()
     expected = (cfg.telegram_webhook_setup_key or "").strip()
-    if not expected or setup_key != expected:
+    if not expected or not setup_key or not hmac.compare_digest(setup_key, expected):
         raise HTTPException(status_code=401, detail="Invalid setup key")
     try:
         return register_telegram_webhook()

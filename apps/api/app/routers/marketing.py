@@ -4,13 +4,14 @@ from decimal import Decimal
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_admin
 from app.database import get_db
+from app.rate_limit import limiter
 from app.models.approvals import ApprovalRequest, ApprovalStatus, ApprovalType
 from app.models.marketing import (
     AdPlatform,
@@ -650,7 +651,9 @@ class AttributionIn(BaseModel):
 
 
 @router.post("/attribution/track")
+@limiter.limit("30/minute")
 async def track_attribution(
+    request: Request,
     body: AttributionIn,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> dict[str, str]:

@@ -51,6 +51,7 @@ class Settings(BaseSettings):
     meta_instagram_actor_id: str | None = None
     meta_webhook_verify_token: str | None = None
     meta_app_secret: str | None = None
+    email_inbound_webhook_secret: str | None = None
     meta_pixel_id: str | None = None
     meta_capi_dataset_token: str | None = None
     google_ads_refresh_token: str | None = None

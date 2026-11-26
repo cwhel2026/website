@@ -51,7 +51,10 @@ class OutboundOut(BaseModel):
 
 
 @router.get("/templates", response_model=list[TemplateOut])
-async def list_templates(db: Annotated[AsyncSession, Depends(get_db)]) -> list[MessageTemplate]:
+async def list_templates(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[User, Depends(get_current_admin)],
+) -> list[MessageTemplate]:
     result = await db.execute(
         select(MessageTemplate).where(MessageTemplate.is_active.is_(True)).order_by(MessageTemplate.slug)
     )

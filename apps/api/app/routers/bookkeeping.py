@@ -1,3 +1,4 @@
+import hmac
 from typing import Annotated
 from uuid import UUID
 
@@ -150,7 +151,7 @@ async def telegram_receipt_ingest(
 
     settings = get_settings()
     expected = (settings.finance_telegram_ingest_key or "").strip()
-    if not expected or ingest_key != expected:
+    if not expected or not ingest_key or not hmac.compare_digest(ingest_key, expected):
         raise HTTPException(401, "Invalid ingest key")
     try:
         receipt, detail = await ingest_telegram_receipt(
