@@ -15,6 +15,8 @@ Telegram webhook URL becomes:
 
 `https://YOUR-RAILWAY-URL.up.railway.app/api/v1/telegram/webhook`
 
+**Login broken with all variables on website?** See **[RAILWAY_LOGIN_FIX.md](./RAILWAY_LOGIN_FIX.md)**.
+
 ## Switch your existing website service (variables stay where they are)
 
 You **do not** need to move env vars off “website”. You only change **how the image is built** (two clicks):

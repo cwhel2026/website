@@ -12,13 +12,15 @@ export default function DashboardLoginPage() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    fetch("/api/ops/status")
-      .then((r) => r.json())
-      .then((d) => {
-        if (d.combined_sidecar && d.api?.reachable) return;
+    Promise.all([fetch("/api/ops/status"), fetch("/api/deploy-hint")])
+      .then(async ([opsRes, hintRes]) => {
+        const ops = await opsRes.json();
+        const hintData = await hintRes.json();
+        if (ops.combined_sidecar && ops.api?.reachable) return;
         setHint(
-          d.api?.reason ??
-            "FastAPI is not running. Use the combined Railway deploy (empty Root directory) — see RAILWAY_COMBINED.md.",
+          ops.api?.reason ??
+            hintData.fix_when_login_fails ??
+            "FastAPI is not running. Clear Railway Root directory (repo root) and redeploy — RAILWAY_LOGIN_FIX.md.",
         );
       })
       .catch(() => setHint(null));
