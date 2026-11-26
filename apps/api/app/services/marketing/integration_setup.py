@@ -116,7 +116,13 @@ def build_integration_centre() -> dict:
             "state": integration_state_for(AdPlatform.META).value,
         }
     )
-    return {"checked_at": datetime.now(UTC).isoformat(), "integrations": items}
+    pre_launch = not any(i.get("live_write_verified") for i in items)
+    return {
+        "checked_at": datetime.now(UTC).isoformat(),
+        "integrations": items,
+        "pre_launch_mode": pre_launch,
+        "pre_launch_note": "Internal features work before social accounts exist. Simulated publish clearly labelled.",
+    }
 
 
 def _row(

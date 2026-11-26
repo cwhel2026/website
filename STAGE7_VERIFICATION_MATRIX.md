@@ -27,3 +27,8 @@
 | Telegram #marketing photos | Yes | No | N/A | N/A | — | Volume for media |
 | Integration setup centre UI | Yes | Manual | N/A | N/A | N/A | |
 | GBP / GA4 / GSC | Scaffold | No | No | No | No | Credentials TBD |
+| Pre-launch readiness centre | Yes | Yes | N/A | N/A | N/A | |
+| Proactive director history | Yes | Partial | N/A | N/A | N/A | |
+| Before/after compositor | Yes | Yes | N/A | N/A | N/A | Pillow formats |
+| Organic publish idempotency | Yes | No | Simulated | With Meta | App review | |
+| Funnel attribution journey | Yes | Partial | N/A | N/A | N/A | Collected revenue |

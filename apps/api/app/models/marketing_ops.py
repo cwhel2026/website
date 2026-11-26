@@ -41,6 +41,69 @@ class OutreachMessageStatus(str, enum.Enum):
     FAILED = "failed"
 
 
+class MarketingBrandProfile(Base):
+    __tablename__ = "marketing_brand_profiles"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    business_name: Mapped[str] = mapped_column(String(200), default="Revive My Drive Ltd")
+    primary_colour: Mapped[str] = mapped_column(String(20), default="#047857")
+    secondary_colour: Mapped[str] = mapped_column(String(20), default="#0f172a")
+    phone: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    website: Mapped[str] = mapped_column(String(255), default="https://revivemydrive.co.uk")
+    tagline: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    logo_storage_key: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    services_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class MarketingDirectorRun(Base):
+    __tablename__ = "marketing_director_runs"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    run_type: Mapped[str] = mapped_column(String(40))
+    summary: Mapped[str] = mapped_column(Text)
+    recommendations_json: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    evidence_json: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    pre_launch_mode: Mapped[bool] = mapped_column(default=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
+class MarketingPublicationLog(Base):
+    __tablename__ = "marketing_publication_log"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    content_item_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("marketing_content_items.id")
+    )
+    platform: Mapped[str] = mapped_column(String(40))
+    idempotency_key: Mapped[str] = mapped_column(String(64), unique=True)
+    status: Mapped[str] = mapped_column(String(40))
+    external_id: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    simulated: Mapped[bool] = mapped_column(default=False)
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class MarketingRenderedCreative(Base):
+    __tablename__ = "marketing_rendered_creatives"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    package_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("marketing_before_after_packages.id")
+    )
+    format: Mapped[str] = mapped_column(String(40))
+    storage_key: Mapped[str] = mapped_column(String(255))
+    width: Mapped[int] = mapped_column(Integer)
+    height: Mapped[int] = mapped_column(Integer)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
 class MarketingBudgetPolicy(Base):
     """Owner-configurable spending limits — live ads blocked until explicitly approved."""
 
@@ -97,6 +160,12 @@ class CommercialProspect(Base):
     registered_address: Mapped[str | None] = mapped_column(Text, nullable=True)
     trading_premises_note: Mapped[str | None] = mapped_column(Text, nullable=True)
     responsible_org_hint: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    follow_up_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    priority_score: Mapped[int] = mapped_column(Integer, default=0)
+    estimated_value_gbp: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
+    distance_km: Mapped[Decimal | None] = mapped_column(Numeric(8, 2), nullable=True)
+    decision_contact_hint: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    next_action: Mapped[str | None] = mapped_column(String(120), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -221,6 +290,8 @@ class MarketingContentItem(Base):
     media_asset_ids: Mapped[list | None] = mapped_column(JSONB, nullable=True)
     publish_external_id: Mapped[str | None] = mapped_column(String(120), nullable=True)
     publish_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    format_variant: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    idempotency_key: Mapped[str | None] = mapped_column(String(64), unique=True, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

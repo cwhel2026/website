@@ -15,6 +15,8 @@ const nav = [
   { href: "/dashboard/marketing-hub", label: "Marketing hub" },
   { href: "/dashboard/marketing-integrations", label: "Marketing setup" },
   { href: "/dashboard/content-studio", label: "Content studio" },
+  { href: "/dashboard/content-calendar", label: "Content calendar" },
+  { href: "/dashboard/launch-readiness", label: "Launch readiness" },
   { href: "/dashboard/marketing", label: "Marketing" },
   { href: "/dashboard/website", label: "Website" },
   { href: "/dashboard/advertising", label: "Advertising" },

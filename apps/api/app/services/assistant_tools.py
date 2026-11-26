@@ -12,7 +12,12 @@ from app.services.analytics_service import build_analytics_snapshot
 from app.services.marketing.budget_controls import weekly_spend_summary
 from app.services.marketing.capacity_engine import global_capacity_snapshot, territory_demand_insights
 from app.services.marketing.director import build_daily_marketing_plan
+from app.services.marketing.budget_controls import emergency_pause_connected_platforms, get_or_create_budget_policy
+from app.services.marketing.director_proactive import run_daily_director_cycle
 from app.services.marketing.integration_setup import build_integration_centre
+from app.services.marketing.launch_readiness import assess_launch_readiness
+from app.services.marketing.prospect_categories import PROSPECT_VERTICALS, vertical_places_queries
+from app.services.marketing.content_calendar import calendar_view
 from app.services.marketing.marketing_profitability import marketing_profitability_snapshot
 from app.services.uk_time import uk_date_label, uk_now, uk_today, utc_range_for_uk_day
 
@@ -101,6 +106,32 @@ async def tool_marketing_profitability(db: AsyncSession) -> dict[str, Any]:
 
 async def tool_marketing_integrations(db: AsyncSession) -> dict[str, Any]:
     return build_integration_centre()
+
+
+async def tool_marketing_director_proactive(db: AsyncSession) -> dict[str, Any]:
+    result = await run_daily_director_cycle(db, execute_research=False)
+    await db.commit()
+    return result
+
+
+async def tool_marketing_launch_readiness(db: AsyncSession) -> dict[str, Any]:
+    return assess_launch_readiness()
+
+
+async def tool_marketing_pause_all(db: AsyncSession) -> dict[str, Any]:
+    policy = await get_or_create_budget_policy(db)
+    policy.emergency_pause_all = True
+    platforms = await emergency_pause_connected_platforms()
+    await db.commit()
+    return {"emergency_pause_all": True, "platforms": platforms}
+
+
+async def tool_marketing_vertical_queries(db: AsyncSession) -> dict[str, Any]:
+    return {"queries": vertical_places_queries("retail_park", "Preston"), "verticals": list(PROSPECT_VERTICALS.keys())}
+
+
+async def tool_marketing_content_calendar(db: AsyncSession) -> dict[str, Any]:
+    return await calendar_view(db, days=7)
 
 
 async def tool_marketing_capacity(db: AsyncSession) -> dict[str, Any]:
@@ -226,4 +257,9 @@ TOOL_HANDLERS = {
     "marketing_director_plan": tool_marketing_director_plan,
     "marketing_profitability": tool_marketing_profitability,
     "marketing_integrations": tool_marketing_integrations,
+    "marketing_director_proactive": tool_marketing_director_proactive,
+    "marketing_launch_readiness": tool_marketing_launch_readiness,
+    "marketing_pause_all": tool_marketing_pause_all,
+    "marketing_vertical_queries": tool_marketing_vertical_queries,
+    "marketing_content_calendar": tool_marketing_content_calendar,
 }

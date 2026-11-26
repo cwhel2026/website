@@ -27,6 +27,7 @@ from app.routers import (
     marketing,
     marketing_content,
     marketing_integrations,
+    marketing_launch,
     marketing_public,
     marketing_webhooks,
     public,
@@ -122,6 +123,7 @@ app.include_router(marketing.router, prefix=prefix)
 app.include_router(marketing_integrations.router, prefix=prefix)
 app.include_router(marketing_content.router, prefix=prefix)
 app.include_router(marketing_webhooks.router, prefix=prefix)
+app.include_router(marketing_launch.router, prefix=prefix)
 app.include_router(marketing_public.router, prefix=prefix)
 app.include_router(public.router, prefix=prefix)
 app.include_router(company.router, prefix=prefix)
