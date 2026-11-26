@@ -69,7 +69,7 @@ jobs:
         run: python -m app.schema.cli upgrade
       - name: Integration smoke
         working-directory: apps/api
-        run: pytest -q tests/test_smoke_integration.py tests/test_auth_login.py tests/test_session_security_integration.py tests/test_worker_guard_integration.py
+        run: pytest -q tests/test_smoke_integration.py tests/test_auth_login.py tests/test_session_security_integration.py tests/test_worker_guard_integration.py tests/test_campaign_approval_integration.py
       - name: Worker smoke (real Celery worker + beat writes a heartbeat)
         working-directory: apps/api
         run: |

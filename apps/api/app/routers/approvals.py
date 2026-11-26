@@ -12,6 +12,7 @@ from app.database import get_db
 from app.models.approvals import ApprovalRequest, ApprovalStatus, ApprovalType
 from app.models.quotation import Quotation, QuotationStatus
 from app.models.user import User
+from app.models.marketing import CampaignStatus, RegionalCampaign
 from app.services.audit import record_audit
 
 router = APIRouter(prefix="/approvals", tags=["approvals"])
@@ -69,6 +70,10 @@ async def approve(
         if quotation:
             quotation.status = QuotationStatus.SENT
             quotation.requires_approval = False
+    if req.approval_type == ApprovalType.AD_SPEND and req.entity_type == "regional_campaign" and req.entity_id:
+        campaign = await db.get(RegionalCampaign, req.entity_id)
+        if campaign and campaign.status == CampaignStatus.PENDING_APPROVAL:
+            campaign.status = CampaignStatus.APPROVED
     await record_audit(
         db,
         actor_type="user",
@@ -102,6 +107,10 @@ async def reject(
         quotation = await db.get(Quotation, req.entity_id)
         if quotation:
             quotation.status = QuotationStatus.REJECTED
+    if req.approval_type == ApprovalType.AD_SPEND and req.entity_type == "regional_campaign" and req.entity_id:
+        campaign = await db.get(RegionalCampaign, req.entity_id)
+        if campaign and campaign.status == CampaignStatus.PENDING_APPROVAL:
+            campaign.status = CampaignStatus.DRAFT
     await record_audit(db, actor_type="user", actor_id=str(user.id), action="approval.reject", entity_id=req.entity_id)
     await db.commit()
     await db.refresh(req)

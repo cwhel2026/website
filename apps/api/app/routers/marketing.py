@@ -461,8 +461,10 @@ async def launch_approved(
     campaign = await db.get(RegionalCampaign, campaign_id)
     if campaign is None:
         raise HTTPException(404)
-    if campaign.status not in (CampaignStatus.APPROVED, CampaignStatus.PENDING_APPROVAL, CampaignStatus.DRAFT):
-        raise HTTPException(400, "Invalid status")
+    if campaign.status != CampaignStatus.APPROVED:
+        raise HTTPException(
+            409, "Campaign must be approved in Approvals before launch (current status: %s)" % campaign.status.value
+        )
     result = launch_campaign(campaign, campaign.daily_budget_gbp or Decimal("0"))
     if not result.success:
         raise HTTPException(400, result.message)
@@ -470,7 +472,14 @@ async def launch_approved(
     campaign.external_campaign_id = result.external_id
     await record_audit(db, actor_type="user", actor_id=str(user.id), action="marketing.launch", entity_id=campaign.id)
     await db.commit()
-    return {"success": True, "simulation": result.simulation, "message": result.message}
+    if result.simulation:
+        return {
+            "success": True,
+            "live": False,
+            "simulation": True,
+            "message": "SIMULATED ONLY — nothing was sent to the ad platform and no money was spent. " + result.message,
+        }
+    return {"success": True, "live": True, "simulation": False, "message": result.message}
 
 
 @router.get("/commercial-leads")
