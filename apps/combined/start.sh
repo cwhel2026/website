@@ -3,12 +3,24 @@
 set -e
 
 export PYTHONPATH="/api:${PYTHONPATH:-}"
-export API_INTERNAL_URL="${API_INTERNAL_URL:-http://127.0.0.1:8000}"
 export PYTHONUNBUFFERED=1
 export HOSTNAME=0.0.0.0
 export PORT="${PORT:-3000}"
 
+# Normalise sidecar base URL (Railway may set a trailing slash → //health).
+trim_trailing_slashes() {
+  printf '%s' "$1" | sed 's:/*$::'
+}
+API_RAW="${API_INTERNAL_URL:-http://127.0.0.1:8000}"
+API_INTERNAL_URL="$(trim_trailing_slashes "$API_RAW")"
+export API_INTERNAL_URL
+
+HEALTH_URL="${API_INTERNAL_URL}/health"
+READY_URL="${API_INTERNAL_URL}/ready"
+STARTUP_TIMEOUT="${RMD_API_STARTUP_TIMEOUT:-120}"
+
 echo "[rmd] combined start PORT=${PORT} HOSTNAME=${HOSTNAME} image=${RMD_IMAGE_KIND:-unknown}"
+echo "[rmd] API_INTERNAL_URL=${API_INTERNAL_URL} (raw was: ${API_RAW})"
 
 if [ ! -f /app/server.js ]; then
   echo "[rmd] FATAL: /app/server.js missing — combined Docker build failed" >&2
@@ -46,12 +58,12 @@ UVICORN_PID=$!
 
 i=0
 api_ok=0
-while [ "$i" -lt 120 ]; do
+while [ "$i" -lt "$STARTUP_TIMEOUT" ]; do
   if ! kill -0 "$UVICORN_PID" 2>/dev/null; then
     echo "[rmd-api] FATAL: uvicorn exited during startup" >&2
     exit 1
   fi
-  if curl -sf "${API_INTERNAL_URL}/health" >/dev/null 2>&1; then
+  if curl -sfS "$HEALTH_URL" >/dev/null 2>&1; then
     api_ok=1
     break
   fi
@@ -60,15 +72,17 @@ while [ "$i" -lt 120 ]; do
 done
 
 if [ "$api_ok" -ne 1 ]; then
-  echo "[rmd-api] FATAL: /health did not respond within 120s" >&2
+  echo "[rmd-api] FATAL: GET ${HEALTH_URL} did not return HTTP 2xx within ${STARTUP_TIMEOUT}s" >&2
+  echo "[rmd-api] Diagnostic: curl -v ${HEALTH_URL}" >&2
+  curl -sS -v "$HEALTH_URL" 2>&1 | tail -20 >&2 || true
   kill "$UVICORN_PID" 2>/dev/null || true
   exit 1
 fi
 
-if curl -sf "${API_INTERNAL_URL}/ready" >/dev/null 2>&1; then
-  echo "[rmd-api] FastAPI /ready OK (database)"
+if curl -sfS "$READY_URL" >/dev/null 2>&1; then
+  echo "[rmd-api] FastAPI GET ${READY_URL} OK (database)"
 else
-  echo "[rmd-api] WARN: /ready not OK — check DATABASE_URL and migrations (no data reset required)"
+  echo "[rmd-api] WARN: GET ${READY_URL} not OK — check DATABASE_URL (no data reset)"
 fi
 
 echo "[rmd-api] FastAPI ready (pid $UVICORN_PID)"

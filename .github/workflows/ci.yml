@@ -88,3 +88,5 @@ jobs:
           docker run --rm rmd-combined:ci test -f /app/server.js
           docker run --rm rmd-combined:ci test -f /api/app/main.py
           docker run --rm rmd-combined:ci sh -c 'grep -q "HOSTNAME=0.0.0.0" /app/start.sh'
+      - name: Internal API URL normalisation
+        run: bash scripts/test-internal-api-url.sh

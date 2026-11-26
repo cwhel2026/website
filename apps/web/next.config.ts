@@ -2,7 +2,10 @@ import type { NextConfig } from "next";
 import path from "node:path";
 
 const combined = process.env.RAILWAY_COMBINED_BUILD === "1";
-const apiInternal = process.env.API_INTERNAL_URL ?? "http://127.0.0.1:8000";
+const apiInternal = (process.env.API_INTERNAL_URL ?? "http://127.0.0.1:8000").replace(
+  /\/+$/,
+  "",
+);
 
 const nextConfig: NextConfig = {
   output: "standalone",
