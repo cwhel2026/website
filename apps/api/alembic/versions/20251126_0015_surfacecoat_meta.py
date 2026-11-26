@@ -10,6 +10,8 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects.postgresql import JSONB
 
+from app.schema import ops as safe
+
 revision: str = "20251126_0015"
 down_revision: str | Sequence[str] | None = "20251126_0014"
 branch_labels: str | Sequence[str] | None = None
@@ -26,7 +28,7 @@ def upgrade() -> None:
         "('observation','recommend','controlled_auto'); "
         "EXCEPTION WHEN duplicate_object THEN null; END $$;"
     )
-    op.create_table(
+    safe.create_table(
         "marketing_organic_posts",
         sa.Column("id", sa.UUID(), primary_key=True),
         sa.Column(
@@ -47,8 +49,8 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
         sa.UniqueConstraint("platform", "external_post_id", name="uq_organic_post_platform_ext"),
     )
-    op.create_index("ix_organic_posts_published", "marketing_organic_posts", ["published_at"])
-    op.create_table(
+    safe.create_index("ix_organic_posts_published", "marketing_organic_posts", ["published_at"])
+    safe.create_table(
         "marketing_organic_post_snapshots",
         sa.Column("id", sa.UUID(), primary_key=True),
         sa.Column(
@@ -60,7 +62,7 @@ def upgrade() -> None:
         sa.Column("captured_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
         sa.Column("metrics_json", JSONB, nullable=False),
     )
-    op.add_column(
+    safe.add_column(
         "marketing_budget_policies",
         sa.Column(
             "director_operating_mode",
@@ -68,18 +70,18 @@ def upgrade() -> None:
             server_default="recommend",
         ),
     )
-    op.add_column(
+    safe.add_column(
         "marketing_budget_policies",
         sa.Column("meta_weekly_budget_gbp", sa.Numeric(12, 2), server_default="150"),
     )
-    op.add_column(
+    safe.add_column(
         "marketing_budget_policies",
         sa.Column("meta_safety_buffer_pct", sa.Numeric(5, 2), server_default="5"),
     )
-    op.add_column("marketing_budget_policies", sa.Column("geo_target_json", JSONB))
-    op.add_column("marketing_budget_policies", sa.Column("launch_programme_json", JSONB))
-    op.add_column("marketing_budget_policies", sa.Column("meta_account_spend_last_gbp", sa.Numeric(12, 2)))
-    op.add_column("marketing_budget_policies", sa.Column("meta_account_spend_synced_at", sa.DateTime(timezone=True)))
+    safe.add_column("marketing_budget_policies", sa.Column("geo_target_json", JSONB))
+    safe.add_column("marketing_budget_policies", sa.Column("launch_programme_json", JSONB))
+    safe.add_column("marketing_budget_policies", sa.Column("meta_account_spend_last_gbp", sa.Numeric(12, 2)))
+    safe.add_column("marketing_budget_policies", sa.Column("meta_account_spend_synced_at", sa.DateTime(timezone=True)))
 
 
 def downgrade() -> None:

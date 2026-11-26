@@ -10,6 +10,8 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
 
+from app.schema import ops as safe
+
 revision: str = "20251125_0009"
 down_revision: Union[str, None] = "20251125_0008"
 branch_labels: Union[str, Sequence[str], None] = None
@@ -17,16 +19,16 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.create_table(
+    safe.create_table(
         "freeagent_resource_cache",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
         sa.Column("resource_key", sa.String(120), unique=True),
         sa.Column("payload_json", sa.Text(), nullable=False),
         sa.Column("fetched_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
     )
-    op.create_index("ix_freeagent_resource_cache_resource_key", "freeagent_resource_cache", ["resource_key"])
+    safe.create_index("ix_freeagent_resource_cache_resource_key", "freeagent_resource_cache", ["resource_key"])
 
-    op.create_table(
+    safe.create_table(
         "financial_report_records",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
         sa.Column("period", sa.String(16), nullable=False),
@@ -36,12 +38,12 @@ def upgrade() -> None:
         sa.Column("generated_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
         sa.Column("telegram_sent", sa.Boolean(), server_default="false"),
     )
-    op.create_index("ix_financial_report_records_period", "financial_report_records", ["period"])
+    safe.create_index("ix_financial_report_records_period", "financial_report_records", ["period"])
 
-    op.add_column("bank_transactions", sa.Column("freeagent_url", sa.String(255), nullable=True))
-    op.add_column("bank_transactions", sa.Column("freeagent_explanation_url", sa.String(255), nullable=True))
-    op.add_column("receipts", sa.Column("freeagent_attach_status", sa.String(40), nullable=True))
-    op.add_column("receipts", sa.Column("freeagent_attach_error", sa.Text(), nullable=True))
+    safe.add_column("bank_transactions", sa.Column("freeagent_url", sa.String(255), nullable=True))
+    safe.add_column("bank_transactions", sa.Column("freeagent_explanation_url", sa.String(255), nullable=True))
+    safe.add_column("receipts", sa.Column("freeagent_attach_status", sa.String(40), nullable=True))
+    safe.add_column("receipts", sa.Column("freeagent_attach_error", sa.Text(), nullable=True))
 
 
 def downgrade() -> None:

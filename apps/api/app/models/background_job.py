@@ -36,3 +36,14 @@ class BackgroundJobRun(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
+
+
+class SchedulerHeartbeat(Base):
+    """Liveness rows written by the Celery beat/worker process (one row per component)."""
+
+    __tablename__ = "scheduler_heartbeats"
+
+    component: Mapped[str] = mapped_column(String(40), primary_key=True)
+    hostname: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    last_beat_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    detail_json: Mapped[str] = mapped_column(Text, default="{}")

@@ -10,6 +10,8 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects.postgresql import JSONB
 
+from app.schema import ops as safe
+
 revision: str = "20251126_0013"
 down_revision: str | Sequence[str] | None = "20251125_0012"
 branch_labels: str | Sequence[str] | None = None
@@ -17,7 +19,7 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    op.create_table(
+    safe.create_table(
         "marketing_brand_profiles",
         sa.Column("id", sa.UUID(), primary_key=True),
         sa.Column("business_name", sa.String(200), server_default="Revive My Drive Ltd"),
@@ -30,7 +32,7 @@ def upgrade() -> None:
         sa.Column("services_summary", sa.Text()),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
     )
-    op.create_table(
+    safe.create_table(
         "marketing_director_runs",
         sa.Column("id", sa.UUID(), primary_key=True),
         sa.Column("run_type", sa.String(40)),
@@ -40,7 +42,7 @@ def upgrade() -> None:
         sa.Column("pre_launch_mode", sa.Boolean(), server_default="true"),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
     )
-    op.create_table(
+    safe.create_table(
         "marketing_publication_log",
         sa.Column("id", sa.UUID(), primary_key=True),
         sa.Column("content_item_id", sa.UUID(), sa.ForeignKey("marketing_content_items.id")),
@@ -52,7 +54,7 @@ def upgrade() -> None:
         sa.Column("simulated", sa.Boolean(), server_default="false"),
         sa.Column("published_at", sa.DateTime(timezone=True)),
     )
-    op.create_table(
+    safe.create_table(
         "marketing_rendered_creatives",
         sa.Column("id", sa.UUID(), primary_key=True),
         sa.Column("package_id", sa.UUID(), sa.ForeignKey("marketing_before_after_packages.id")),
@@ -62,15 +64,15 @@ def upgrade() -> None:
         sa.Column("height", sa.Integer()),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
     )
-    op.add_column("commercial_prospects", sa.Column("follow_up_at", sa.DateTime(timezone=True)))
-    op.add_column("commercial_prospects", sa.Column("priority_score", sa.Integer(), server_default="0"))
-    op.add_column("commercial_prospects", sa.Column("estimated_value_gbp", sa.Numeric(12, 2)))
-    op.add_column("commercial_prospects", sa.Column("distance_km", sa.Numeric(8, 2)))
-    op.add_column("commercial_prospects", sa.Column("decision_contact_hint", sa.String(200)))
-    op.add_column("commercial_prospects", sa.Column("next_action", sa.String(120)))
-    op.add_column("marketing_experiments", sa.Column("min_sample_size", sa.Integer(), server_default="30"))
-    op.add_column("marketing_experiments", sa.Column("metric_name", sa.String(80), server_default="quotations"))
-    op.add_column("marketing_experiments", sa.Column("conclusion", sa.Text()))
-    op.add_column("marketing_experiments", sa.Column("winner_variant", sa.String(1)))
-    op.add_column("marketing_content_items", sa.Column("format_variant", sa.String(40)))
-    op.add_column("marketing_content_items", sa.Column("idempotency_key", sa.String(64), unique=True))
+    safe.add_column("commercial_prospects", sa.Column("follow_up_at", sa.DateTime(timezone=True)))
+    safe.add_column("commercial_prospects", sa.Column("priority_score", sa.Integer(), server_default="0"))
+    safe.add_column("commercial_prospects", sa.Column("estimated_value_gbp", sa.Numeric(12, 2)))
+    safe.add_column("commercial_prospects", sa.Column("distance_km", sa.Numeric(8, 2)))
+    safe.add_column("commercial_prospects", sa.Column("decision_contact_hint", sa.String(200)))
+    safe.add_column("commercial_prospects", sa.Column("next_action", sa.String(120)))
+    safe.add_column("marketing_experiments", sa.Column("min_sample_size", sa.Integer(), server_default="30"))
+    safe.add_column("marketing_experiments", sa.Column("metric_name", sa.String(80), server_default="quotations"))
+    safe.add_column("marketing_experiments", sa.Column("conclusion", sa.Text()))
+    safe.add_column("marketing_experiments", sa.Column("winner_variant", sa.String(1)))
+    safe.add_column("marketing_content_items", sa.Column("format_variant", sa.String(40)))
+    safe.add_column("marketing_content_items", sa.Column("idempotency_key", sa.String(64), unique=True))

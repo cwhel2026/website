@@ -10,6 +10,8 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
 
+from app.schema import ops as safe
+
 revision: str = "20251125_0007"
 down_revision: Union[str, None] = "20251125_0006"
 branch_labels: Union[str, Sequence[str], None] = None
@@ -28,7 +30,7 @@ def upgrade() -> None:
         "EXCEPTION WHEN duplicate_object THEN null; END $$;"
     )
 
-    op.create_table(
+    safe.create_table(
         "dividend_proposals",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
         sa.Column("amount_gbp", sa.Numeric(12, 2), nullable=False),
@@ -55,7 +57,7 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
     )
 
-    op.create_table(
+    safe.create_table(
         "directors_loan_entries",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
         sa.Column(
@@ -76,7 +78,7 @@ def upgrade() -> None:
         sa.Column("bank_transaction_id", postgresql.UUID(as_uuid=True), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
     )
-    op.create_index("ix_directors_loan_entries_kind", "directors_loan_entries", ["kind"])
+    safe.create_index("ix_directors_loan_entries_kind", "directors_loan_entries", ["kind"])
 
 
 def downgrade() -> None:

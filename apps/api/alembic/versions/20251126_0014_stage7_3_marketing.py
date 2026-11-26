@@ -10,6 +10,8 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects.postgresql import JSONB
 
+from app.schema import ops as safe
+
 revision: str = "20251126_0014"
 down_revision: str | Sequence[str] | None = "20251126_0013"
 branch_labels: str | Sequence[str] | None = None
@@ -23,16 +25,16 @@ def upgrade() -> None:
         "'contacted','replied','site_survey_requested','quotation_submitted','negotiation','won','lost','do_not_contact'"
         "); EXCEPTION WHEN duplicate_object THEN null; END $$;"
     )
-    op.add_column("marketing_brand_profiles", sa.Column("service_areas_json", JSONB))
-    op.add_column("marketing_brand_profiles", sa.Column("fonts_json", JSONB))
-    op.add_column("marketing_brand_profiles", sa.Column("tone_of_voice", sa.Text()))
-    op.add_column("marketing_brand_profiles", sa.Column("approved_claims_json", JSONB))
-    op.add_column("marketing_brand_profiles", sa.Column("approved_ctas_json", JSONB))
-    op.add_column("marketing_brand_profiles", sa.Column("objectives_json", JSONB))
-    op.add_column("marketing_brand_profiles", sa.Column("differentiators_json", JSONB))
-    op.add_column("marketing_brand_profiles", sa.Column("demographics_json", JSONB))
-    op.add_column("marketing_brand_profiles", sa.Column("photo_permission_policy", sa.Text()))
-    op.add_column(
+    safe.add_column("marketing_brand_profiles", sa.Column("service_areas_json", JSONB))
+    safe.add_column("marketing_brand_profiles", sa.Column("fonts_json", JSONB))
+    safe.add_column("marketing_brand_profiles", sa.Column("tone_of_voice", sa.Text()))
+    safe.add_column("marketing_brand_profiles", sa.Column("approved_claims_json", JSONB))
+    safe.add_column("marketing_brand_profiles", sa.Column("approved_ctas_json", JSONB))
+    safe.add_column("marketing_brand_profiles", sa.Column("objectives_json", JSONB))
+    safe.add_column("marketing_brand_profiles", sa.Column("differentiators_json", JSONB))
+    safe.add_column("marketing_brand_profiles", sa.Column("demographics_json", JSONB))
+    safe.add_column("marketing_brand_profiles", sa.Column("photo_permission_policy", sa.Text()))
+    safe.add_column(
         "commercial_prospects",
         sa.Column(
             "pipeline_stage",
@@ -40,9 +42,9 @@ def upgrade() -> None:
             server_default="discovered",
         ),
     )
-    op.add_column("commercial_prospects", sa.Column("contact_history_json", JSONB))
-    op.add_column("marketing_budget_policies", sa.Column("official_launch_date", sa.Date()))
-    op.create_table(
+    safe.add_column("commercial_prospects", sa.Column("contact_history_json", JSONB))
+    safe.add_column("marketing_budget_policies", sa.Column("official_launch_date", sa.Date()))
+    safe.create_table(
         "competitor_intelligence_findings",
         sa.Column("id", sa.UUID(), primary_key=True),
         sa.Column("competitor_name", sa.String(255), index=True),
@@ -56,14 +58,14 @@ def upgrade() -> None:
         sa.Column("retrieved_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
         sa.Column("payload_json", JSONB),
     )
-    op.create_table(
+    safe.create_table(
         "marketing_launch_plans",
         sa.Column("id", sa.UUID(), primary_key=True),
         sa.Column("launch_date", sa.Date(), nullable=True),
         sa.Column("plan_json", JSONB),
         sa.Column("generated_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
     )
-    op.create_table(
+    safe.create_table(
         "marketing_meta_leads",
         sa.Column("id", sa.UUID(), primary_key=True),
         sa.Column("leadgen_id", sa.String(120), unique=True),
@@ -72,7 +74,7 @@ def upgrade() -> None:
         sa.Column("dedupe_key", sa.String(64), unique=True),
         sa.Column("ingested_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
     )
-    op.create_table(
+    safe.create_table(
         "marketing_job_media_staging",
         sa.Column("id", sa.UUID(), primary_key=True),
         sa.Column("job_id", sa.UUID(), nullable=True),
