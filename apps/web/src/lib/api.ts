@@ -1,3 +1,5 @@
+import { ApiError, parseApiError } from "@/lib/api-errors";
+
 /** Same-origin when NEXT_PUBLIC_API_URL is unset (combined Railway deploy). */
 export function resolveApiUrl(): string {
   const configured = (process.env.NEXT_PUBLIC_API_URL ?? "").trim().replace(/\/$/, "");
@@ -58,7 +60,7 @@ export async function apiPut<T>(
   });
   if (!res.ok) {
     const detail = await res.text();
-    throw new Error(detail || `API error ${res.status}`);
+    throw parseApiError(res.status, detail);
   }
   return res.json() as Promise<T>;
 }
@@ -78,10 +80,12 @@ export async function apiPost<T>(
   });
   if (!res.ok) {
     const detail = await res.text();
-    throw new Error(detail || `API error ${res.status}`);
+    throw parseApiError(res.status, detail);
   }
   return res.json() as Promise<T>;
 }
+
+export { ApiError };
 
 /** @deprecated use resolveApiUrl() — empty on combined same-origin deploys */
 export const API_URL = resolveApiUrl();

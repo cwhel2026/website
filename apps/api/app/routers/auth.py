@@ -9,7 +9,8 @@ from app.auth import create_access_token, get_current_user, verify_password
 from app.database import get_db
 from app.models.user import User
 from app.rate_limit import limiter
-from app.schemas.auth import LoginRequest, Token, UserOut
+from app.schemas.auth import LoginRequest, OwnerPasswordResetRequest, Token, UserOut
+from app.services.owner_provisioning import rotate_owner_password
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -56,3 +57,24 @@ async def login_json(
 @router.get("/me", response_model=UserOut)
 async def me(user: Annotated[User, Depends(get_current_user)]) -> User:
     return user
+
+
+@router.post("/owner/recover")
+@limiter.limit("5/minute")
+async def owner_password_recover(
+    request: Request,
+    body: OwnerPasswordResetRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict:
+    """One-time owner password reset when ADMIN_SETUP_KEY is configured (not shown in UI)."""
+    from app.config import get_settings
+
+    settings = get_settings()
+    key = (settings.admin_setup_key or "").strip()
+    if not key or body.setup_key != key:
+        raise HTTPException(status_code=401, detail="Invalid recovery request")
+    if len(body.new_password) < 12:
+        raise HTTPException(status_code=400, detail="Password must be at least 12 characters")
+    await rotate_owner_password(db, new_password=body.new_password)
+    await db.commit()
+    return {"ok": True, "message": "Owner password updated. Sign in with your email and new password."}
