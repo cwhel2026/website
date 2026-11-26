@@ -21,3 +21,8 @@ class UserOut(BaseModel):
     full_name: str
     role: UserRole
     is_active: bool
+
+
+class OwnerPasswordResetRequest(BaseModel):
+    setup_key: str
+    new_password: str

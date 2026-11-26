@@ -4,16 +4,35 @@ import { NextResponse } from "next/server";
  * Public hint for operators — confirms which env this service reads.
  * Does not expose secret values.
  */
+async function apiSidecarReachable(): Promise<boolean> {
+  const base = process.env.API_INTERNAL_URL?.trim() || "http://127.0.0.1:8000";
+  try {
+    const res = await fetch(`${base.replace(/\/$/, "")}/health`, {
+      signal: AbortSignal.timeout(2500),
+      cache: "no-store",
+    });
+    if (!res.ok) return false;
+    const data = (await res.json()) as { status?: string };
+    return data.status === "ok";
+  } catch {
+    return false;
+  }
+}
+
 export async function GET() {
   const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "";
   const internal = Boolean(process.env.API_INTERNAL_URL?.trim());
   const hasDb = Boolean(process.env.DATABASE_URL?.trim());
   const imageKind = process.env.RMD_IMAGE_KIND ?? "unknown";
-  const combined = imageKind === "combined" || (internal && hasDb);
+  const apiUp = await apiSidecarReachable();
+  const combined = imageKind === "combined" && apiUp;
 
   return NextResponse.json({
     service: "revive-my-drive",
     image_kind: imageKind,
+    api_sidecar_reachable: apiUp,
+    database_url_configured: hasDb,
+    api_internal_url_configured: internal,
     combined_deploy: combined,
     role: combined
       ? "Combined site + FastAPI (variables on this service are correct)"
