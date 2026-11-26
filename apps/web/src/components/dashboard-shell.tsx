@@ -3,49 +3,25 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { LogOut, PanelLeftClose, PanelLeftOpen, X } from "lucide-react";
 import { apiGet } from "@/lib/api";
 import { clearToken, getToken } from "@/lib/auth-client";
-
-const nav = [
-  { href: "/dashboard", label: "Overview" },
-  { href: "/dashboard/assistant", label: "AI Assistant" },
-  { href: "/dashboard/approvals", label: "Approvals" },
-  { href: "/dashboard/briefings", label: "Briefings" },
-  { href: "/dashboard/automations", label: "Automations" },
-  { href: "/dashboard/marketing/overview", label: "Marketing director" },
-  { href: "/dashboard/marketing-hub", label: "Marketing hub (legacy)" },
-  { href: "/dashboard/launch-readiness", label: "Launch readiness" },
-  { href: "/dashboard/content-studio", label: "Content studio (legacy)" },
-  { href: "/dashboard/website", label: "Website" },
-  { href: "/dashboard/commercial-leads", label: "Commercial leads" },
-  { href: "/dashboard/flyers", label: "Flyers" },
-  { href: "/dashboard/company-setup", label: "Company setup" },
-  { href: "/dashboard/finance-hub", label: "Money hub" },
-  { href: "/dashboard/tax-centre", label: "Tax & compliance" },
-  { href: "/dashboard/director-pay", label: "Director pay" },
-  { href: "/dashboard/finance", label: "Finance" },
-  { href: "/dashboard/invoices", label: "Invoices" },
-  { href: "/dashboard/expenses", label: "Expenses" },
-  { href: "/dashboard/analytics", label: "Analytics" },
-  { href: "/dashboard/inventory", label: "Inventory" },
-  { href: "/dashboard/system-health", label: "System health" },
-  { href: "/dashboard/calendar", label: "Calendar" },
-  { href: "/dashboard/jobs", label: "Jobs" },
-  { href: "/dashboard/wash-pending", label: "Awaiting coating" },
-  { href: "/dashboard/weather", label: "Weather" },
-  { href: "/dashboard/territories", label: "Territories" },
-  { href: "/dashboard/customers", label: "Customers" },
-  { href: "/dashboard/quotations", label: "Quotations" },
-  { href: "/dashboard/field", label: "Field (mobile)" },
-];
+import { brand } from "@/lib/brand";
+import { BOTTOM_NAV, isNavActive, NAV_SECTIONS } from "@/lib/portal-nav";
 
 export function DashboardShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const [ready, setReady] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   useEffect(() => {
-    if (pathname === "/dashboard/login") {
+    setDrawerOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    if (pathname === "/dashboard/login" || pathname.startsWith("/dashboard/login/")) {
       setReady(true);
       return;
     }
@@ -54,7 +30,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
       router.replace("/dashboard/login");
       return;
     }
-    apiGet("/api/v1/auth/me", token)
+    apiGet<{ email?: string }>("/api/v1/auth/me", token)
       .then(() => setReady(true))
       .catch(() => {
         clearToken();
@@ -62,51 +38,200 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
       });
   }, [pathname, router]);
 
-  if (pathname === "/dashboard/login") return <>{children}</>;
+  if (pathname === "/dashboard/login" || pathname.startsWith("/dashboard/login/")) {
+    return <>{children}</>;
+  }
+
   if (!ready) {
     return (
-      <div className="flex min-h-screen items-center justify-center text-emerald-900">
-        Loading business dashboard…
+      <div className="flex min-h-screen items-center justify-center bg-[#1a1a1a] text-white/80">
+        <p className="text-sm">Loading {brand.portalTitle}…</p>
       </div>
     );
   }
 
+  const inMarketing = pathname.startsWith("/dashboard/marketing");
+  const contentTone = inMarketing ? "text-white" : "text-white";
+
   return (
-    <div className="min-h-screen bg-slate-100">
-      <header className="border-b bg-white">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4">
-          <div>
-            <p className="font-semibold text-emerald-950">Revive My Drive — Control Centre</p>
-            <p className="text-xs text-slate-500">Phase 1 foundation (live data when API connected)</p>
+    <div className="portal-root min-h-screen bg-[#1a1a1a] text-white overflow-x-hidden">
+      <header
+        className="sticky top-0 z-40 border-b border-white/10 bg-[#1a1a1a]/95 backdrop-blur md:pl-0"
+        style={{ paddingTop: "max(0.5rem, env(safe-area-inset-top))" }}
+      >
+        <div className="flex h-12 max-w-6xl items-center justify-between gap-3 px-4 md:mx-auto">
+          <div className="min-w-0">
+            <p className="truncate text-xs font-semibold uppercase tracking-[0.18em] text-[#eab308]">
+              {brand.legalName}
+            </p>
+            <p className="truncate text-sm font-medium text-white/90">{brand.portalTitle}</p>
           </div>
-          <button
-            type="button"
-            className="text-sm text-slate-600"
-            onClick={() => {
-              clearToken();
-              router.push("/dashboard/login");
-            }}
-          >
-            Sign out
-          </button>
+          <div className="flex shrink-0 items-center gap-2">
+            <button
+              type="button"
+              className="hidden rounded-lg p-2 text-white/70 hover:bg-white/10 md:inline-flex"
+              onClick={() => setSidebarCollapsed((c) => !c)}
+              aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+            >
+              {sidebarCollapsed ? <PanelLeftOpen className="h-5 w-5" /> : <PanelLeftClose className="h-5 w-5" />}
+            </button>
+            <button
+              type="button"
+              className="rounded-lg p-2 text-white/70 hover:bg-white/10"
+              onClick={() => {
+                clearToken();
+                router.push("/dashboard/login");
+              }}
+              aria-label="Sign out"
+            >
+              <LogOut className="h-5 w-5" />
+            </button>
+          </div>
         </div>
       </header>
-      <div className="mx-auto grid max-w-6xl gap-6 px-4 py-6 md:grid-cols-[200px_1fr]">
-        <nav className="space-y-1 text-sm">
-          {nav.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={`block rounded-lg px-3 py-2 ${
-                pathname === item.href ? "bg-emerald-900 text-white" : "text-slate-700 hover:bg-white"
-              }`}
-            >
-              {item.label}
-            </Link>
-          ))}
-        </nav>
-        <div className="min-h-[60vh] rounded-xl border bg-white p-6 shadow-sm">{children}</div>
+
+      <div className="mx-auto flex max-w-6xl">
+        <aside
+          className={`hidden shrink-0 border-r border-white/10 md:block ${
+            sidebarCollapsed ? "w-[4.25rem]" : "w-56"
+          }`}
+        >
+          <nav className="sticky top-14 max-h-[calc(100vh-3.5rem)] overflow-y-auto px-2 py-4 text-sm">
+            {NAV_SECTIONS.map((section) => (
+              <div key={section.id} className="mb-4">
+                {!sidebarCollapsed && (
+                  <p className="mb-1 px-2 text-[10px] font-semibold uppercase tracking-wide text-white/45">
+                    {section.title}
+                  </p>
+                )}
+                <ul className="space-y-0.5">
+                  {section.items.map((item) => {
+                    const active = isNavActive(pathname, item.href);
+                    return (
+                      <li key={item.href}>
+                        <Link
+                          href={item.href}
+                          title={item.label}
+                          className={`block rounded-lg px-2 py-2 ${
+                            active
+                              ? "bg-[#eab308] font-semibold text-[#1a1a1a]"
+                              : "text-white/75 hover:bg-white/10"
+                          } ${item.legacy ? "opacity-60" : ""} ${sidebarCollapsed ? "text-center text-xs" : ""}`}
+                        >
+                          {sidebarCollapsed ? item.label.charAt(0) : item.label}
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            ))}
+          </nav>
+        </aside>
+
+        <main
+          className={`min-w-0 flex-1 px-4 py-4 pb-[calc(5rem+env(safe-area-inset-bottom))] md:pb-6 ${contentTone}`}
+        >
+          <div
+            className={`mx-auto max-w-full ${
+              inMarketing ? "" : "rounded-2xl border border-white/10 bg-[#242424]/60 p-4 md:p-6"
+            }`}
+          >
+            {children}
+          </div>
+        </main>
       </div>
+
+      <nav
+        className="fixed bottom-0 left-0 right-0 z-50 border-t border-white/10 bg-[#1a1a1a]/98 backdrop-blur md:hidden"
+        style={{ paddingBottom: "max(0.35rem, env(safe-area-inset-bottom))" }}
+        aria-label="Primary"
+      >
+        <ul className="mx-auto flex max-w-lg items-stretch justify-around px-1 pt-1">
+          {BOTTOM_NAV.map((item) => {
+            const Icon = item.icon;
+            const isMore = item.href === "#more";
+            const active = !isMore && isNavActive(pathname, item.href, item.matchPrefix);
+            if (isMore) {
+              return (
+                <li key="more">
+                  <button
+                    type="button"
+                    onClick={() => setDrawerOpen(true)}
+                    className="flex min-h-[48px] min-w-[56px] flex-col items-center justify-center gap-0.5 px-2 text-[10px] text-white/70"
+                  >
+                    <Icon className="h-5 w-5" />
+                    <span>More</span>
+                  </button>
+                </li>
+              );
+            }
+            return (
+              <li key={item.href}>
+                <Link
+                  href={item.href}
+                  className={`flex min-h-[48px] min-w-[56px] flex-col items-center justify-center gap-0.5 px-2 text-[10px] ${
+                    active ? "font-semibold text-[#eab308]" : "text-white/70"
+                  }`}
+                >
+                  <Icon className="h-5 w-5" />
+                  <span>{item.label}</span>
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      </nav>
+
+      {drawerOpen && (
+        <div className="fixed inset-0 z-[60] md:hidden" role="dialog" aria-modal="true" aria-label="Menu">
+          <button
+            type="button"
+            className="absolute inset-0 bg-black/60"
+            aria-label="Close menu"
+            onClick={() => setDrawerOpen(false)}
+          />
+          <div
+            className="absolute bottom-0 left-0 right-0 max-h-[85vh] overflow-y-auto rounded-t-2xl border-t border-white/10 bg-[#1a1a1a] px-4 pt-3"
+            style={{ paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }}
+          >
+            <div className="mb-3 flex items-center justify-between">
+              <p className="text-sm font-semibold text-white">All areas</p>
+              <button
+                type="button"
+                onClick={() => setDrawerOpen(false)}
+                className="rounded-lg p-2 text-white/70 hover:bg-white/10"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            {NAV_SECTIONS.map((section) => (
+              <details key={section.id} className="border-b border-white/10 py-2" open={section.id === "overview"}>
+                <summary className="cursor-pointer list-none py-2 text-sm font-medium text-[#eab308]">
+                  {section.title}
+                </summary>
+                <ul className="pb-2 pl-1">
+                  {section.items.map((item) => (
+                    <li key={item.href}>
+                      <Link
+                        href={item.href}
+                        className={`block rounded-lg px-3 py-2.5 text-sm ${
+                          isNavActive(pathname, item.href)
+                            ? "bg-[#eab308]/20 font-medium text-[#eab308]"
+                            : "text-white/85"
+                        }`}
+                      >
+                        {item.label}
+                        {item.legacy ? <span className="ml-1 text-xs text-white/40">(legacy)</span> : null}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

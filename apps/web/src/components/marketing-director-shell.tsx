@@ -2,38 +2,41 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { PortalPageTitle } from "@/components/portal-ui";
 
 const TABS = [
   { href: "/dashboard/marketing/overview", label: "Overview" },
-  { href: "/dashboard/marketing/social-posts", label: "Social posts" },
+  { href: "/dashboard/marketing/social-posts", label: "Social" },
   { href: "/dashboard/marketing/campaigns", label: "Campaigns" },
   { href: "/dashboard/marketing/leads", label: "Leads" },
-  { href: "/dashboard/marketing/creative-intelligence", label: "Creative intelligence" },
+  { href: "/dashboard/marketing/creative-intelligence", label: "Creative" },
   { href: "/dashboard/marketing/geo", label: "Geo" },
   { href: "/dashboard/marketing/budget", label: "Budget" },
   { href: "/dashboard/marketing/growth-fund", label: "Growth fund" },
-  { href: "/dashboard/marketing/recommendations", label: "AI recommendations" },
+  { href: "/dashboard/marketing/recommendations", label: "AI" },
   { href: "/dashboard/marketing/integrations", label: "Integrations" },
 ] as const;
 
 export function MarketingDirectorShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   return (
-    <div className="min-h-screen bg-[#1a1a1a] text-white">
-      <header className="border-b border-white/10 px-4 py-4">
-        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#eab308]">SurfaceCoat</p>
-        <h1 className="text-xl font-semibold">Marketing director</h1>
-        <p className="mt-1 text-sm text-white/70">Facebook & Instagram · Preston · pre-launch safe</p>
-      </header>
-      <nav className="flex gap-2 overflow-x-auto border-b border-white/10 px-2 py-2 text-xs">
+    <div className="-mx-4 -mt-4 md:-mx-6 md:-mt-6">
+      <PortalPageTitle
+        title="Marketing director"
+        subtitle="Facebook & Instagram · Preston · pre-launch safe"
+      />
+      <nav
+        className="mb-4 flex max-w-full gap-2 overflow-x-auto pb-1 text-xs [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        aria-label="Marketing sections"
+      >
         {TABS.map((t) => {
           const active = pathname === t.href || pathname.startsWith(`${t.href}/`);
           return (
             <Link
               key={t.href}
               href={t.href}
-              className={`whitespace-nowrap rounded-full px-3 py-1.5 ${
-                active ? "bg-[#eab308] text-[#1a1a1a] font-semibold" : "bg-white/10 text-white/90"
+              className={`shrink-0 whitespace-nowrap rounded-full px-3 py-2 min-h-[40px] flex items-center ${
+                active ? "bg-[#eab308] font-semibold text-[#1a1a1a]" : "border border-white/15 bg-white/5 text-white/90"
               }`}
             >
               {t.label}
@@ -41,7 +44,7 @@ export function MarketingDirectorShell({ children }: { children: React.ReactNode
           );
         })}
       </nav>
-      <main className="mx-auto max-w-lg px-4 py-6">{children}</main>
+      <div className="max-w-full overflow-x-hidden">{children}</div>
     </div>
   );
 }
@@ -54,7 +57,7 @@ export function MarketingCard({
   children: React.ReactNode;
 }) {
   return (
-    <section className="mb-6 rounded-2xl border border-white/10 bg-white p-4 text-[#1a1a1a]">
+    <section className="mb-4 rounded-2xl border border-white/10 bg-white p-4 text-[#1a1a1a]">
       <h2 className="text-sm font-semibold text-[#1a1a1a]">{title}</h2>
       <div className="mt-3 text-sm">{children}</div>
     </section>
@@ -62,5 +65,9 @@ export function MarketingCard({
 }
 
 export function EmptyState({ message }: { message: string }) {
-  return <p className="rounded-lg bg-slate-100 px-3 py-4 text-center text-slate-600">{message}</p>;
+  return (
+    <p className="rounded-xl border border-white/15 bg-white/5 px-3 py-4 text-center text-sm text-white/75">
+      {message}
+    </p>
+  );
 }

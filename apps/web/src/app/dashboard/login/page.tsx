@@ -97,7 +97,7 @@ function LoginHeader() {
     <header className="text-center">
       <p className="text-xs font-semibold uppercase tracking-[0.25em] text-[#eab308]">SurfaceCoat</p>
       <h1 className="mt-2 text-2xl font-semibold tracking-tight text-white">Business portal</h1>
-      <p className="mt-2 text-sm text-white/70">Revive My Drive — authorised staff only</p>
+      <p className="mt-2 text-sm text-white/70">SurfaceCoat Ltd — authorised staff only</p>
     </header>
   );
 }

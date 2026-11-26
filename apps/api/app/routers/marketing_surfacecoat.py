@@ -1,5 +1,6 @@
 """SurfaceCoat Meta marketing director API."""
 
+import logging
 from typing import Annotated
 
 from fastapi import APIRouter, Depends
@@ -19,6 +20,8 @@ from app.services.marketing.meta_wizard import meta_connection_wizard, run_conne
 from app.services.marketing.organic_boost_recommender import recommend_organic_boosts
 from app.services.marketing.organic_post_sync import sync_all_organic
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/marketing/surfacecoat", tags=["marketing-surfacecoat"])
 
 
@@ -27,26 +30,45 @@ async def overview(
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[User, Depends(get_current_admin)],
 ) -> dict:
+    degraded: list[str] = []
     policy = await get_or_create_budget_policy(db)
     await ensure_launch_programme(policy)
     await db.commit()
+
     spend = await account_spend_last_7d()
     meta_spend = float(spend.get("spend_gbp") or 0) if spend.get("ok") else None
-    posts = await db.scalar(select(func.count()).select_from(MarketingOrganicPost))
-    from app.services.marketing.growth_fund import fund_summary
+    meta_source = "meta_api" if spend.get("ok") else (spend.get("message") or "Meta not connected")
 
-    growth = await fund_summary(db)
+    posts = 0
+    try:
+        posts = int(await db.scalar(select(func.count()).select_from(MarketingOrganicPost)) or 0)
+    except Exception:
+        logger.exception("marketing overview: organic post count failed")
+        await db.rollback()
+        degraded.append("organic_posts_unavailable")
+
+    growth: dict | None = None
+    try:
+        from app.services.marketing.growth_fund import fund_summary
+
+        growth = await fund_summary(db)
+    except Exception:
+        logger.exception("marketing overview: growth fund summary failed")
+        await db.rollback()
+        degraded.append("growth_fund_unavailable")
+
     return {
         "pre_launch_mode": not policy.live_paid_spend_approved,
         "weekly_budget_gbp": float(policy.weekly_limit_gbp),
         "remaining_budget_estimate_gbp": max(0.0, float(policy.weekly_limit_gbp) - (meta_spend or 0)),
         "meta_account_spend_7d_gbp": meta_spend,
-        "meta_spend_source": "meta_api" if spend.get("ok") else spend.get("message"),
-        "organic_posts_total": int(posts or 0),
+        "meta_spend_source": meta_source,
+        "organic_posts_total": posts,
         "director_mode": policy.director_operating_mode.value,
         "emergency_pause": policy.emergency_pause_all,
         "launch_programme": policy.launch_programme_json or DEFAULT_LAUNCH_PROGRAMME,
         "growth_fund": growth,
+        "degraded": degraded,
         "disclaimer": "Spend from Meta may lag; campaigns edited in Ads Manager may not appear immediately.",
     }
 
