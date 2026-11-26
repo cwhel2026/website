@@ -35,14 +35,14 @@ fi
 
 cd /api
 
-if [ "${DATABASE_MIGRATIONS_MANAGED:-false}" = "true" ] || [ "${ALEMBIC_ON_START:-0}" = "1" ]; then
-  echo "[rmd-api] running alembic upgrade head"
-  if ! alembic upgrade head; then
-    echo "[rmd-api] FATAL: alembic upgrade head failed" >&2
-    exit 1
-  fi
-  echo "[rmd-api] alembic upgrade head OK"
+# Alembic is the only schema authority. Additive, transactional, fail-closed:
+# on any error nothing is committed and the container refuses to start.
+echo "[rmd-api] running alembic upgrade head (with drift verification)"
+if ! python -m app.schema.cli upgrade; then
+  echo "[rmd-api] FATAL: schema migration failed or drift remains — not starting" >&2
+  exit 1
 fi
+echo "[rmd-api] schema at head"
 
 echo "[rmd-api] starting uvicorn on 127.0.0.1:8000"
 uvicorn app.main:app --host 127.0.0.1 --port 8000 --log-level info &

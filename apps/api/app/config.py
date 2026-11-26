@@ -81,7 +81,6 @@ class Settings(BaseSettings):
     weather_allow_simulation_for_booking: bool = False
     freeagent_api_base: str = "https://api.freeagent.com"
     rate_limit_storage_redis: bool = False
-    database_migrations_managed: bool = False
     finance_token_encryption_key: str | None = None
     finance_receipts_dir: str | None = None
     finance_receipts_backup_dir: str | None = None

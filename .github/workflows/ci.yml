@@ -55,9 +55,19 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+      - name: Migrate (Alembic is the only schema authority)
+        working-directory: apps/api
+        run: python -m app.schema.cli upgrade
       - name: Integration smoke
         working-directory: apps/api
         run: pytest -q tests/test_smoke_integration.py
+      - name: Migration paths (empty, legacy create_all, model drift, idempotency)
+        working-directory: apps/api
+        env:
+          MIGRATION_TEST_DATABASE_URL: postgresql://rmd:rmd_ci_password@localhost:5432/rmd_migration_test
+        run: |
+          PGPASSWORD=rmd_ci_password psql -h localhost -U rmd -d revive_my_drive -c "CREATE DATABASE rmd_migration_test"
+          pytest -q tests/test_migrations_integration.py
 
   web-build:
     runs-on: ubuntu-latest
