@@ -144,7 +144,27 @@ export default function SystemHealthPage() {
                   ) : null}
                 </div>
 
-                <div className="overflow-x-auto rounded-xl border">
+                <ul className="space-y-2 md:hidden" aria-label="Scheduled tasks">
+                  {w.schedules.map((s) => (
+                    <li key={s.key} className="rounded-xl border px-3 py-2 text-sm">
+                      <div className="flex items-baseline justify-between gap-2">
+                        <span className="min-w-0 break-words font-medium text-[#1a1a1a]">{s.key}</span>
+                        <span className={`shrink-0 text-xs ${STATUS_TONE[s.status]}`}>{STATUS_LABEL[s.status]}</span>
+                      </div>
+                      <dl className="mt-1 grid grid-cols-[auto_1fr] gap-x-3 text-xs text-slate-700">
+                        <dt className="text-slate-500">Last success</dt>
+                        <dd>{when(s.last_success_at)}</dd>
+                        <dt className="text-slate-500">Last failure</dt>
+                        <dd>{when(s.last_failure_at)}</dd>
+                        <dt className="text-slate-500">Next run (UK)</dt>
+                        <dd>{when(s.next_run_at)}</dd>
+                      </dl>
+                      {s.last_error ? <p className="mt-1 break-words text-xs text-red-700">{s.last_error}</p> : null}
+                    </li>
+                  ))}
+                </ul>
+
+                <div className="hidden overflow-x-auto rounded-xl border md:block">
                   <table className="min-w-full text-left text-sm">
                     <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
                       <tr>
@@ -181,7 +201,7 @@ export default function SystemHealthPage() {
                       {w.recent_failures.map((f, i) => (
                         <li key={`${f.task_name}-${i}`} className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-red-900">
                           <span className="font-medium">{f.task_name}</span> · {when(f.at)}
-                          {f.error ? <span className="block text-xs">{f.error}</span> : null}
+                          {f.error ? <span className="block break-words text-xs">{f.error}</span> : null}
                         </li>
                       ))}
                     </ul>

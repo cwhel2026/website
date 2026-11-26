@@ -92,11 +92,18 @@ export default function DashboardOverviewPage() {
 
   const revenue = formatGbp(analytics?.revenue_collected_gbp);
   const growthBal = marketing?.growth_fund?.virtual_reserve_balance_gbp;
-  const metaSpend =
-    marketing?.meta_account_spend_7d_gbp != null
-      ? formatGbp(marketing.meta_account_spend_7d_gbp)
-      : marketing?.meta_spend_source ?? "—";
-  const faState = finance?.freeagent?.state ?? "unknown";
+  const metaConnected = marketing?.meta_account_spend_7d_gbp != null;
+  const metaSpend = metaConnected ? formatGbp(marketing!.meta_account_spend_7d_gbp) : marketing ? "Not connected" : "—";
+  const metaHint = metaConnected ? undefined : marketing?.meta_spend_source;
+  const faState = finance?.freeagent?.state;
+  const faLabel =
+    faState === "connected" || faState === "ok"
+      ? "Connected"
+      : faState === "not_configured" || faState === "disconnected"
+        ? "Not connected"
+        : faState
+          ? faState.replaceAll("_", " ")
+          : "Unknown";
   const openQuotes = quotes.filter((q) => !["accepted", "declined", "expired"].includes(q.status.toLowerCase()));
   const outstandingInvoices = invoices.filter((i) => {
     const total = i.total_inc_vat_gbp ?? 0;
@@ -120,9 +127,9 @@ export default function DashboardOverviewPage() {
 
       <div className="mt-4 grid grid-cols-2 gap-2 md:grid-cols-3 lg:grid-cols-4">
         <PortalKpi label="Revenue (30d)" value={revenue} />
-        <PortalKpi label="FreeAgent" value={faState} hint={finance?.freeagent?.message} />
+        <PortalKpi label="FreeAgent" value={faLabel} hint={finance?.freeagent?.message} />
         <PortalKpi label="Growth fund" value={growthBal != null ? formatGbp(growthBal) : "—"} />
-        <PortalKpi label="Marketing (7d)" value={metaSpend} />
+        <PortalKpi label="Meta spend (7d)" value={metaSpend} hint={metaHint} />
         <PortalKpi label="New enquiries" value={String(analytics?.enquiries ?? enquiries.length)} />
         <PortalKpi
           label="Open quotes"
