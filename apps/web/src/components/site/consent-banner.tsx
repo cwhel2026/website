@@ -1,17 +1,20 @@
 "use client";
 
+import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
 const KEY = "rmd_analytics_consent";
 
 export function ConsentBanner() {
+  const pathname = usePathname();
   const [show, setShow] = useState(false);
 
   useEffect(() => {
     if (!localStorage.getItem(KEY)) setShow(true);
   }, []);
 
-  if (!show) return null;
+  // The admin portal sets no analytics cookies, and the banner would cover its bottom navigation.
+  if (!show || pathname?.startsWith("/dashboard")) return null;
 
   return (
     <div

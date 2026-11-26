@@ -51,7 +51,8 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   }
 
   const inMarketing = pathname.startsWith("/dashboard/marketing");
-  const contentTone = inMarketing ? "text-white" : "text-white";
+  // Pages not yet migrated to the dark portal components use light-theme text colours.
+  const darkNative = inMarketing || pathname === "/dashboard";
 
   return (
     <div className="portal-root min-h-screen bg-[#1a1a1a] text-white overflow-x-hidden">
@@ -129,12 +130,14 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
           </nav>
         </aside>
 
-        <main
-          className={`min-w-0 flex-1 px-4 py-4 pb-[calc(5rem+env(safe-area-inset-bottom))] md:pb-6 ${contentTone}`}
-        >
+        <main className="min-w-0 flex-1 px-4 py-4 pb-[calc(5rem+env(safe-area-inset-bottom))] md:pb-6">
           <div
             className={`mx-auto max-w-full ${
-              inMarketing ? "" : "rounded-2xl border border-white/10 bg-[#242424]/60 p-4 md:p-6"
+              inMarketing
+                ? "text-white"
+                : darkNative
+                  ? "rounded-2xl border border-white/10 bg-[#242424]/60 p-4 text-white md:p-6"
+                  : "overflow-x-auto rounded-2xl bg-white p-4 text-[#1a1a1a] md:p-6"
             }`}
           >
             {children}
