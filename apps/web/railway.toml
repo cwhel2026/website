@@ -1,9 +1,9 @@
-# Root directory may stay "apps/web" — dockerfilePath is relative to the **repo root**.
-# Combined image: site + FastAPI; start.sh runs both.
+# Root directory may stay "apps/web". In Railway → Settings, set Config file path: /apps/web/railway.toml
+# dockerfilePath is relative to the repository root (not apps/web). Never use apps/web/Dockerfile for login.
 
 [build]
 builder = "DOCKERFILE"
-dockerfilePath = "Dockerfile"
+dockerfilePath = "apps/combined/Dockerfile"
 watchPatterns = ["apps/web/**", "apps/api/**", "apps/combined/**"]
 
 [deploy]

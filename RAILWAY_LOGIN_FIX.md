@@ -7,10 +7,13 @@ You can keep **every variable on the website Railway service** — but the servi
 You can **keep Root directory = `apps/web`** (as in your screenshot). You must use the **combined** Dockerfile and start command.
 
 1. Open your **website** service in Railway.
-2. **Settings → Build → Dockerfile path:** `Dockerfile` (repo root — **not** `apps/web/Dockerfile`).
-3. **Settings → Deploy → Custom start command:** `/app/start.sh` (not `node server.js`).
-4. **Health check path:** `/health` (not `/`).
-5. **Redeploy** (pull latest `main` so `apps/web/railway.toml` applies).
+2. **Settings → Build → Dockerfile path:** `apps/combined/Dockerfile` (repo root path — **not** `Dockerfile` or `apps/web/Dockerfile`). Optional variable: `RAILWAY_DOCKERFILE_PATH=apps/combined/Dockerfile`.
+3. **Settings → Config file path:** `/apps/web/railway.toml` (so this service does not inherit the repo-root config alone).
+4. **Settings → Deploy → Custom start command:** leave **empty** (image `CMD` is `/app/start.sh`) **or** set `/app/start.sh` explicitly. Do **not** use `node server.js`.
+5. **Health check path:** `/health` (not `/`).
+6. **Redeploy** after merging the latest `main`.
+
+If deploy fails with **`/app/start.sh` could not be found**, Railway built the **web-only** image — fix step 2.
 
 **Alternative:** clear **Root directory** (empty) and redeploy — same combined image.
 

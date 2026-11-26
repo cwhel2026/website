@@ -1,32 +1,6 @@
-FROM node:22-alpine AS deps
-WORKDIR /app
-COPY package.json package-lock.json ./
-RUN npm ci
+# Fail fast: Root Directory apps/web must not build this file for production.
+# Railway → Build → Dockerfile path: apps/combined/Dockerfile (repository root).
+# Local web-only build: docker build -f apps/web/Dockerfile.web-only apps/web
 
-FROM node:22-alpine AS build
-WORKDIR /app
-COPY --from=deps /app/node_modules ./node_modules
-COPY . .
-ARG NEXT_PUBLIC_API_URL=http://localhost:8000
-ARG NEXT_PUBLIC_GIT_COMMIT=unknown
-ARG NEXT_PUBLIC_BUILD_TIME=
-ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
-ENV NEXT_PUBLIC_GIT_COMMIT=$NEXT_PUBLIC_GIT_COMMIT
-ENV NEXT_PUBLIC_BUILD_TIME=$NEXT_PUBLIC_BUILD_TIME
-RUN npm run build
-
-FROM node:22-alpine AS runner
-WORKDIR /app
-ENV NODE_ENV=production
-ENV PORT=3000
-ENV RMD_IMAGE_KIND=web-only
-
-RUN addgroup --system --gid 1001 nodejs && adduser --system --uid 1001 nextjs
-
-COPY --from=build /app/public ./public
-COPY --from=build --chown=nextjs:nodejs /app/.next/standalone ./
-COPY --from=build --chown=nextjs:nodejs /app/.next/static ./.next/static
-
-USER nextjs
-EXPOSE 3000
-CMD ["node", "server.js"]
+FROM alpine:3.20
+RUN echo "Wrong Dockerfile for production. Set Railway Dockerfile path to apps/combined/Dockerfile — see RAILWAY_LOGIN_FIX.md" >&2 && exit 1
