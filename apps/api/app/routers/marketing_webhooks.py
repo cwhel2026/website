@@ -1,7 +1,7 @@
 import json
-from typing import Any
+from typing import Annotated, Any
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Query, Request
 
 from app.config import get_settings
 from app.security.webhooks import (
@@ -24,7 +24,11 @@ def _parse_json(body: bytes) -> dict:
 
 
 @router.get("/meta/leads")
-async def meta_lead_verify(hub_mode: str = "", hub_verify_token: str = "", hub_challenge: str = "") -> Any:
+async def meta_lead_verify(
+    hub_mode: Annotated[str, Query(alias="hub.mode")] = "",
+    hub_verify_token: Annotated[str, Query(alias="hub.verify_token")] = "",
+    hub_challenge: Annotated[str, Query(alias="hub.challenge")] = "",
+) -> Any:
     return verify_subscription_challenge(
         get_settings().meta_webhook_verify_token, hub_mode, hub_verify_token, hub_challenge
     )
@@ -50,7 +54,11 @@ async def meta_lead_ingest(request: Request) -> dict:
 
 
 @router.get("/meta/feed")
-async def meta_feed_verify(hub_mode: str = "", hub_verify_token: str = "", hub_challenge: str = "") -> Any:
+async def meta_feed_verify(
+    hub_mode: Annotated[str, Query(alias="hub.mode")] = "",
+    hub_verify_token: Annotated[str, Query(alias="hub.verify_token")] = "",
+    hub_challenge: Annotated[str, Query(alias="hub.challenge")] = "",
+) -> Any:
     return verify_subscription_challenge(
         get_settings().meta_webhook_verify_token, hub_mode, hub_verify_token, hub_challenge
     )
