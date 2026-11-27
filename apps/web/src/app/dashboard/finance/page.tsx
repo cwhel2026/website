@@ -15,7 +15,8 @@ type FreeAgentInfo = {
 };
 
 export default function FinancePage() {
-  const [tax, setTax] = useState<Record<string, unknown> | null>(null);
+  const [reconciliation, setReconciliation] = useState<Record<string, number | string> | null>(null);
+  const [reconciliationError, setReconciliationError] = useState(false);
   const [status, setStatus] = useState<{ freeagent: FreeAgentInfo; mettle_feed: string } | null>(
     null,
   );
@@ -28,7 +29,8 @@ export default function FinancePage() {
   const load = useCallback(() => {
     const token = getToken();
     if (!token) return;
-    apiGet<Record<string, unknown>>("/api/v1/finance/tax-estimate", token).then(setTax).catch(withLoadError(() => setTax(null)));
+    setReconciliationError(false);
+    apiGet<Record<string, number | string>>("/api/v1/finance/insights/reconciliation", token).then(setReconciliation).catch(withLoadError(() => { setReconciliation(null); setReconciliationError(true); }));
     apiGet<{ freeagent: FreeAgentInfo; mettle_feed: string }>("/api/v1/finance/status", token)
       .then(setStatus)
       .catch(withLoadError(() => setStatus(null)));
@@ -91,7 +93,7 @@ export default function FinancePage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-semibold text-emerald-950">Finance</h1>
+      <header className="rounded-2xl bg-slate-950 p-5 text-white"><p className="text-xs font-semibold uppercase tracking-widest text-amber-300">SurfaceCoat · AI Accountant</p><h1 className="mt-2 text-2xl font-semibold">Finance command centre</h1><p className="mt-2 text-sm text-slate-300">Review, reconcile and understand your business finances.</p></header>
       <p className="mt-2 text-sm text-slate-600">
         SurfaceCoat Ltd — FreeAgent remains the authoritative books. Mettle feeds through FreeAgent when linked.
         Use <strong>Company setup</strong> for incorporation details and statutory checklist.
@@ -142,17 +144,18 @@ export default function FinancePage() {
         </section>
       )}
 
-      {tax && (
-        <section className="mt-6 rounded border p-4 text-sm">
-          <h2 className="font-semibold">Tax reserve estimate ({String(tax.tax_year)})</h2>
-          <p>Collected revenue: £{Number(tax.revenue_collected_gbp).toFixed(2)}</p>
-          <p>Expenses: £{Number(tax.expenses_gbp).toFixed(2)}</p>
-          <p>Suggested reserve: £{Number(tax.suggested_reserve_gbp).toFixed(2)}</p>
-          <p className="mt-2 text-xs text-slate-500">{(tax.notes as string[])?.join(" ")}</p>
-        </section>
-      )}
+      <section className="mt-6 rounded-xl border border-slate-200 bg-white p-4">
+        <div className="flex items-center justify-between gap-2"><h2 className="font-semibold">Reconciliation centre</h2><button type="button" onClick={load} className="rounded-lg border px-3 py-2 text-xs">Refresh</button></div>
+        {reconciliationError ? <p role="alert" className="mt-3 text-sm text-red-700">Could not load reconciliation records. Try refreshing.</p> : !reconciliation ? <p className="mt-3 text-sm">Loading records…</p> : <>
+          <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
+            {Object.entries({ imported_bank_lines: "Imported bank lines", reconciled_bank_lines: "Marked reconciled", unreconciled_bank_lines: "Awaiting reconciliation", flagged_duplicates: "Flagged duplicates", receipts_without_bank_match: "Unmatched receipts", pending_reviews: "Pending reviews" }).map(([key, label]) => (
+              <div key={key} className="rounded-xl bg-slate-50 p-3"><p className="text-xs text-slate-600">{label}</p><p className="mt-2 text-2xl font-semibold tabular-nums">{reconciliation[key] ?? "Unknown"}</p></div>
+            ))}
+          </div><p className="mt-3 text-xs text-slate-500">{reconciliation.basis}</p>
+        </>}
+      </section>
       <section className="mt-6">
-        <h2 className="font-semibold">Territory profitability (quoted contribution − expenses)</h2>
+        <h2 className="font-semibold">Territory estimated quoted contribution</h2>
         <ul className="mt-2 text-sm">
           {territories.map((t) => (
             <li key={t.territory_code} className="border-b py-1">
