@@ -1,22 +1,22 @@
 import type { Metadata, Viewport } from "next";
-import { Newsreader, Outfit } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 import { ConsentBanner } from "@/components/site/consent-banner";
 import { AttributionBootstrap } from "@/components/site/attribution-bootstrap";
 import { publicBrand } from "@/lib/public-brand";
 
-const body = Outfit({
+const body = localFont({
+  src: "../fonts/outfit-latin.woff2",
   variable: "--font-body",
-  subsets: ["latin"],
   display: "swap",
-  weight: ["400", "500", "600"],
+  weight: "400 600",
 });
 
-const display = Newsreader({
+const display = localFont({
+  src: "../fonts/newsreader-latin.woff2",
   variable: "--font-display",
-  subsets: ["latin"],
   display: "swap",
-  weight: ["400", "500", "600"],
+  weight: "400 600",
 });
 
 export const metadata: Metadata = {
