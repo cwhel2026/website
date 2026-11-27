@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { apiGet } from "@/lib/api";
-import { PRIORITY_TOWNS } from "@/lib/site-content";
+import { publicBrand } from "@/lib/public-brand";
+import { LOCAL_PAGES, PRIORITY_TOWNS } from "@/lib/site-content";
 
 type Territory = {
   code: string;
@@ -29,69 +31,68 @@ export function CoverageChecker() {
         `/api/v1/public/coverage?postcode=${encodeURIComponent(postcode.trim())}`,
       );
       if (data.covered) {
-        setResult(`Good news — ${postcode.toUpperCase()} is in our ${data.territory_name} operating area.`);
+        setResult(`${postcode.toUpperCase()} is within the area we can quote.`);
       } else {
-        setResult(data.message ?? "We could not confirm coverage for this postcode yet.");
+        setResult(data.message ?? "We could not confirm this postcode yet. You can still start an estimate.");
       }
     } catch {
-      setResult("Unable to check coverage right now. You can still start a quotation.");
+      setResult("The coverage check is unavailable right now. You can still start an estimate.");
     }
   }
 
-  const localityNames = new Set(
-    territories.flatMap((t) => t.localities.map((l) => l.name)),
-  );
+  const localityNames = new Set(territories.flatMap((territory) => territory.localities.map((item) => item.name)));
 
   return (
-    <section className="bg-white py-20" id="areas">
-      <div className="site-container">
-        <p className="section-eyebrow">Regional coverage</p>
-        <h2 className="mt-2 font-display text-3xl font-semibold text-asphalt md:text-4xl">
-          Serving the North West from Lancashire HQ
-        </h2>
-        <p className="mt-4 max-w-2xl text-asphalt/75">
-          Territories A–I are configured in your operating system — we match postcodes to real coverage
-          areas rather than guessing from a static map.
-        </p>
+    <div>
+      <form onSubmit={check} className="flex max-w-lg flex-col gap-2 sm:flex-row">
+        <label className="sr-only" htmlFor="coverage-postcode">
+          Postcode
+        </label>
+        <input
+          id="coverage-postcode"
+          value={postcode}
+          onChange={(e) => setPostcode(e.target.value)}
+          placeholder="Postcode"
+          className="min-h-12 flex-1 border border-brand-line bg-white px-4 text-base"
+          required
+        />
+        <button type="submit" className="btn-primary">
+          Check postcode
+        </button>
+      </form>
+      {result ? <p className="mt-3 text-sm font-medium text-brand-ink">{result}</p> : null}
 
-        <form onSubmit={check} className="mt-8 flex max-w-md flex-col gap-2 sm:flex-row">
-          <input
-            value={postcode}
-            onChange={(e) => setPostcode(e.target.value)}
-            placeholder="Postcode"
-            className="flex-1 rounded-md border border-stone-line px-4 py-3"
-            required
-          />
-          <button type="submit" className="btn-primary">
-            Check postcode
-          </button>
-        </form>
-        {result && <p className="mt-3 text-sm font-medium text-restore-dark">{result}</p>}
+      <ul className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {publicBrand.counties.map((county) => (
+          <li key={county} className="border border-brand-line bg-white px-4 py-4 text-sm font-medium">
+            {county}
+          </li>
+        ))}
+        <li className="border border-brand-line bg-white px-4 py-4 text-sm font-medium">Surrounding areas</li>
+      </ul>
 
-        <div className="mt-10 grid gap-6 lg:grid-cols-2">
-          <div
-            aria-hidden
-            className="relative min-h-[220px] overflow-hidden rounded-lg border border-stone-line bg-gradient-to-br from-asphalt-900 via-asphalt-800 to-restore-dark/90"
+      <ul className="mt-6 flex flex-wrap gap-2 text-sm">
+        {PRIORITY_TOWNS.map((town) => (
+          <li
+            key={town}
+            className={`border px-3 py-1.5 ${
+              localityNames.has(town) ? "border-brand-ink bg-brand-ink text-white" : "border-brand-line bg-white"
+            }`}
           >
-            <div className="absolute inset-0 opacity-30 bg-[radial-gradient(circle_at_30%_40%,#3d8f6c_0%,transparent_55%)]" />
-            <p className="absolute bottom-4 left-4 right-4 text-sm text-white/80">
-              Illustrative map — live coverage is determined by configured postcode districts.
-            </p>
-          </div>
-          <ul className="flex flex-wrap gap-2 text-sm">
-            {PRIORITY_TOWNS.map((town) => (
-              <li
-                key={town}
-                className={`rounded-full border px-3 py-1 ${
-                  localityNames.has(town) ? "border-restore-green/40 bg-restore-muted/50" : "border-stone-line"
-                }`}
-              >
-                {town}
-              </li>
-            ))}
-          </ul>
-        </div>
-      </div>
-    </section>
+            {town}
+          </li>
+        ))}
+      </ul>
+
+      <ul className="mt-8 space-y-2 text-sm">
+        {LOCAL_PAGES.map((page) => (
+          <li key={page.slug}>
+            <Link href={`/areas/${page.slug}`} className="font-semibold text-brand-ink underline-offset-4 hover:underline">
+              {page.label}
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }

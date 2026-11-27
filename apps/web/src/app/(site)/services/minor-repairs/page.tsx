@@ -1,17 +1,20 @@
 import { ServicePage } from "@/components/site/service-page";
 
-export const metadata = { title: "Minor surface repairs" };
+export const metadata = {
+  title: "Surface repairs",
+  description: "Surface repairs agreed and priced separately from the restoration estimate.",
+};
 
 export default function Page() {
   return (
     <ServicePage
       slug="minor-repairs"
-      title="Minor surface repairs"
-      intro="Targeted repairs alongside wider restoration programmes — scoped once we understand the defect, not every driveway."
+      title="Surface repairs"
+      intro="Local repairs that may sit alongside restoration. They are looked at, priced and agreed before they are added. Minor edge wear is not an automatic charge."
       benefits={[
-        "Localized defect treatment where compatible with restoration coatings.",
-        "Honest scoping when replacement of failed areas is more appropriate.",
-        "Quoted after measurements and condition assessment.",
+        "Close-up photographs help us see cracks and damaged areas.",
+        "A photograph does not confirm the structure and does not change the restoration total.",
+        "If a repair is not the right answer, we say so before any work is agreed.",
       ]}
     />
   );

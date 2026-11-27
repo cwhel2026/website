@@ -74,14 +74,14 @@ export default function LaterPhotographsPage() {
   }
 
   return (
-    <div className="site-container py-10 text-[#1a1a1a]">
+    <div className="site-container py-10 text-brand-ink">
       <h1 className="font-display text-3xl font-semibold">Add driveway photographs</h1>
       <p className="mt-3 max-w-xl text-sm leading-relaxed">
         If you have any cracks or areas that may need repairing, please include a close-up photograph. Minor wear
         around edges is perfectly normal.
       </p>
       <div className="mt-6 flex max-w-xl flex-col gap-3 sm:flex-row">
-        <label className="w-full rounded-md border border-[#1a1a1a] px-4 py-3 text-center text-sm font-semibold">
+        <label className="flex min-h-12 w-full items-center justify-center border border-brand-ink px-4 py-3 text-center text-sm font-semibold">
           Take a photo
           <input
             type="file"
@@ -91,7 +91,7 @@ export default function LaterPhotographsPage() {
             onChange={(event) => void upload(event.target.files)}
           />
         </label>
-        <label className="w-full rounded-md border border-[#1a1a1a] px-4 py-3 text-center text-sm font-semibold">
+        <label className="flex min-h-12 w-full items-center justify-center border border-brand-ink px-4 py-3 text-center text-sm font-semibold">
           Choose from gallery
           <input
             type="file"
@@ -118,7 +118,7 @@ export default function LaterPhotographsPage() {
             <li key={item.id}>
               <p>{item.status === "failed" ? "Upload paused" : `Uploading ${item.progress}%`}</p>
               <div className="mt-1 h-1.5 overflow-hidden rounded bg-stone-line" role="progressbar" aria-valuenow={item.progress} aria-valuemin={0} aria-valuemax={100}>
-                <div className="h-full bg-[#e0b323]" style={{ width: `${item.progress}%` }} />
+                <div className="h-full bg-brand-gold" style={{ width: `${item.progress}%` }} />
               </div>
               {item.status === "failed" && item.blob && (
                 <button type="button" className="mt-1 underline" onClick={() => void sendOne(item.id, item.blob!)}>

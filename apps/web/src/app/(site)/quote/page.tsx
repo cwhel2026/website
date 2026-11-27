@@ -3,7 +3,7 @@ import { QuoteWizard } from "@/components/quote/quote-wizard";
 
 export const metadata = {
   title: "Instant quotation",
-  description: "Multi-step provisional driveway restoration quotation for North West England.",
+  description: "Instant driveway estimate. One total for tarmac restoration. Photographs are optional and do not delay the price.",
 };
 
 export default function QuotePage() {

@@ -26,6 +26,13 @@ export default {
           wash: "#f4f2ee",
           line: "#e2ded6",
         },
+        brand: {
+          ink: "#151515",
+          charcoal: "#242424",
+          gold: "#DDB747",
+          paper: "#F8F8F5",
+          line: "#E4E1D8",
+        },
       },
       fontFamily: {
         display: ["var(--font-display)", "system-ui", "sans-serif"],

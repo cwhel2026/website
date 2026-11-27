@@ -1,20 +1,22 @@
-import type { Metadata } from "next";
-import { DM_Sans, Fraunces } from "next/font/google";
+import type { Metadata, Viewport } from "next";
+import localFont from "next/font/local";
 import "./globals.css";
 import { ConsentBanner } from "@/components/site/consent-banner";
 import { AttributionBootstrap } from "@/components/site/attribution-bootstrap";
 import { publicBrand } from "@/lib/public-brand";
 
-const body = DM_Sans({
+const body = localFont({
+  src: "../fonts/outfit-latin.woff2",
   variable: "--font-body",
-  subsets: ["latin"],
   display: "swap",
+  weight: "400 600",
 });
 
-const display = Fraunces({
+const display = localFont({
+  src: "../fonts/newsreader-latin.woff2",
   variable: "--font-display",
-  subsets: ["latin"],
   display: "swap",
+  weight: "400 600",
 });
 
 export const metadata: Metadata = {
@@ -25,12 +27,25 @@ export const metadata: Metadata = {
     default: `${publicBrand.tradingName} | ${publicBrand.tagline}`,
     template: `%s | ${publicBrand.tradingName}`,
   },
-  description: `Premium tarmac, block paving and imprinted concrete restoration across ${publicBrand.coverageAreas}. Instant provisional quotations online.`,
+  description: `Driveway and surface restoration across ${publicBrand.coverageAreas}. Instant estimates for tarmac restoration. ${publicBrand.tagline}`,
+  alternates: { canonical: "./" },
   openGraph: {
     type: "website",
     locale: "en_GB",
-    siteName: publicBrand.tradingName,
+    siteName: publicBrand.legalName,
+    images: [
+      {
+        url: "/media/approved/hero-home.webp",
+        alt: "UK residential tarmac driveway used as a reference photograph",
+      },
+    ],
   },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#151515",
+  width: "device-width",
+  initialScale: 1,
 };
 
 export default function RootLayout({

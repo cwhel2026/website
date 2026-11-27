@@ -13,10 +13,12 @@ export default function WebsiteDashboardPage() {
   return (
     <div>
       <h1 className="text-2xl font-semibold text-asphalt">Website &amp; marketing</h1>
-      <p className="mt-2 text-sm text-asphalt/70">
+        <p className="mt-2 text-sm text-asphalt/70">
         Public imagery is configured in <code className="text-xs">apps/web/src/lib/media-assets.ts</code> with
         committed files under <code className="text-xs">apps/web/public/media/approved/</code>. Reference photos are
-        labelled on the live site and must not be presented as completed projects.
+        labelled on the live site and must not be presented as completed projects. Pre-launch mode is on unless{" "}
+        <code className="text-xs">NEXT_PUBLIC_PRELAUNCH</code> is <code className="text-xs">false</code>. Turning it
+        off hides the March 2027 notice. It does not confirm bookings by itself.
       </p>
 
       <section className="mt-8 rounded-lg border border-stone-line bg-white p-6">

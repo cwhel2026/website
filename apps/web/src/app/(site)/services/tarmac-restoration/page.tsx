@@ -2,19 +2,20 @@ import { ServicePage } from "@/components/site/service-page";
 
 export const metadata = {
   title: "Tarmac restoration",
-  description: "Professional tarmac driveway restoration and protective coatings across the North West.",
+  description: "Professional tarmac driveway restoration with an instant estimate and one customer total.",
 };
 
 export default function Page() {
   return (
     <ServicePage
       slug="tarmac-restoration"
+      estimate="instant"
       title="Tarmac restoration"
-      intro="Revive faded and weathered tarmac with structured preparation and specialist restoration coatings — where the existing surface is suitable."
+      intro="Clean, prepare and coat faded tarmac when the existing driveway is suitable to keep. The online estimate shows one total."
       benefits={[
-        "Refresh kerb appeal without replacing sound hardstanding.",
-        "Two-visit wash and coat workflow when washing is required.",
-        "Pricing from your live regional engine — provisional online, verified on site.",
+        "A published instant estimate from your measurements.",
+        "Preparation and coating arranged as separate visits when washing is included.",
+        "Repairs discussed separately and added only after you agree.",
       ]}
     />
   );
