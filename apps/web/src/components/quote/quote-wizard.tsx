@@ -31,6 +31,8 @@ type QuoteState = {
   address_line2: string;
   consent_marketing: boolean;
   consent_service_messages: boolean;
+  intention: "" | "ready_to_book" | "callback_requested" | "estimate_requested";
+  callback_preferred_time: string;
 };
 
 type PackageItem = { title: string; detail: string };
@@ -48,9 +50,18 @@ type ProvisionalQuotation = {
   total_area_sqm?: string | number | null;
 };
 
-type SavedQuotation = ProvisionalQuotation & {
+type SuggestedWindow = { label: string; starts: string; kind: string };
+
+type SavedQuotation = {
   reference: string;
-  status: string;
+  total_gbp: string | number;
+  vat_applied: boolean;
+  intention: string;
+  appointment_confirmed: boolean;
+  email_sent: boolean;
+  email_status: string;
+  next_steps: string;
+  suggested_windows: SuggestedWindow[];
 };
 
 const SURFACE_TYPES = [
@@ -88,6 +99,8 @@ function defaultState(postcode = ""): QuoteState {
     address_line2: "",
     consent_marketing: false,
     consent_service_messages: true,
+    intention: "",
+    callback_preferred_time: "",
   };
 }
 
@@ -165,6 +178,7 @@ export function QuoteWizard() {
   useEffect(() => {
     setProvisional(null);
     setSaved(null);
+    sessionStorage.removeItem(IDEMPOTENCY_KEY);
   }, [pricingInputKey]);
 
   const totalSqm = useMemo(() => {
@@ -267,15 +281,16 @@ export function QuoteWizard() {
     }
     const payload = {
       ...buildPricingPayload(),
-      town: state.town || "Pending",
       full_name: state.full_name.trim(),
       email: state.email.trim(),
       phone: state.phone?.trim() || null,
       address_line1: state.address_line1.trim(),
       address_line2: state.address_line2?.trim() || null,
       visible_damage: state.visible_damage || null,
-      consent_service_messages: state.consent_service_messages,
+      consent_service_messages: true,
       consent_marketing: state.consent_marketing,
+      intention: state.intention || "estimate_requested",
+      callback_preferred_time: state.callback_preferred_time.trim() || null,
       input_fingerprint: provisional.input_fingerprint,
       idempotency_key: idempotencyKey,
       source: utm.source ?? "website",
@@ -283,7 +298,7 @@ export function QuoteWizard() {
     };
     try {
       const data = await apiPost<SavedQuotation>("/api/v1/quotations/submit", payload);
-      setSaved({ ...provisional, reference: data.reference, status: data.status });
+      setSaved(data);
       sessionStorage.removeItem(STORAGE_KEY);
       void trackFunnel("quote_complete", 6);
     } catch (err) {
@@ -305,6 +320,12 @@ export function QuoteWizard() {
 
   function back() {
     setStep((s) => Math.max(s - 1, 0));
+  }
+
+  function chooseAction(intention: QuoteState["intention"]) {
+    patch({ intention });
+    setError(null);
+    setStep(6);
   }
 
   return (
@@ -353,6 +374,7 @@ export function QuoteWizard() {
               loading={loading}
               error={error}
               onRecalc={() => void calculateProvisional()}
+              onChoose={chooseAction}
             />
           )}
           {step === 6 && (
@@ -371,22 +393,14 @@ export function QuoteWizard() {
             <button type="button" onClick={back} disabled={step === 0} className="btn-secondary disabled:opacity-40">
               Back
             </button>
-            {step < 6 && (
+            {step < 6 && !(step === 5 && provisional) && (
               <button
                 type="button"
                 onClick={next}
                 disabled={step === 0 && !state.postcode.trim()}
-                className={
-                  step === 5 && provisional
-                    ? "inline-flex items-center justify-center rounded-md bg-[#1a1a1a] px-6 py-3.5 text-sm font-semibold text-white hover:bg-black"
-                    : "btn-primary"
-                }
+                className="btn-primary"
               >
-                {step === 5 && provisional
-                  ? "Request my quotation"
-                  : step === 5
-                    ? "Calculate estimate"
-                    : "Continue"}
+                {step === 5 ? "Calculate estimate" : "Continue"}
               </button>
             )}
           </div>
@@ -412,7 +426,7 @@ function StepLocation({
   return (
     <div>
       <h2 className="font-display text-xl font-semibold">Where is the property?</h2>
-      <p className="mt-2 text-sm text-asphalt/70">We check live territory configuration — no guesswork.</p>
+      <p className="mt-2 text-sm text-asphalt/70">Enter the property postcode so we can check we cover the area.</p>
       <label className="mt-6 block text-sm font-medium">
         Postcode
         <input
@@ -653,13 +667,15 @@ function StepQuote({
   loading,
   error,
   onRecalc,
+  onChoose,
 }: {
   result: ProvisionalQuotation | null;
   loading: boolean;
   error: string | null;
   onRecalc: () => void;
+  onChoose: (intention: QuoteState["intention"]) => void;
 }) {
-  if (loading) return <p className="text-center py-12 text-asphalt/70">Calculating your provisional estimate…</p>;
+  if (loading) return <p className="text-center py-12 text-asphalt/70">Calculating your estimate…</p>;
   if (error) return (
     <div>
       <p className="text-sm text-red-700">{error}</p>
@@ -668,11 +684,17 @@ function StepQuote({
       </button>
     </div>
   );
-  if (!result) return <p className="text-sm text-asphalt/70">Press continue to calculate from your pricing engine.</p>;
-  return <QuoteResultCard result={result} />;
+  if (!result) return <p className="text-sm text-asphalt/70">Press Calculate estimate to see your price.</p>;
+  return <QuoteResultCard result={result} onChoose={onChoose} />;
 }
 
-function QuoteResultCard({ result }: { result: ProvisionalQuotation }) {
+function QuoteResultCard({
+  result,
+  onChoose,
+}: {
+  result: ProvisionalQuotation;
+  onChoose: (intention: QuoteState["intention"]) => void;
+}) {
   return (
     <div className="text-center text-[#1a1a1a]">
       <p className="text-sm tracking-wide text-[#1a1a1a]/70">Your estimated price</p>
@@ -701,6 +723,29 @@ function QuoteResultCard({ result }: { result: ProvisionalQuotation }) {
       </ul>
       <p className="mx-auto mt-6 max-w-md text-sm leading-relaxed text-[#1a1a1a]/75">{result.repairs_note}</p>
       <p className="mx-auto mt-3 max-w-md text-sm leading-relaxed text-[#1a1a1a]/75">{result.customer_note}</p>
+      <div className="mx-auto mt-8 flex max-w-md flex-col gap-3 text-left">
+        <button
+          type="button"
+          onClick={() => onChoose("ready_to_book")}
+          className="w-full rounded-md bg-[#e0b323] px-6 py-4 text-base font-semibold text-[#1a1a1a] hover:brightness-95"
+        >
+          Book me in ASAP
+        </button>
+        <button
+          type="button"
+          onClick={() => onChoose("callback_requested")}
+          className="w-full rounded-md border border-[#1a1a1a] bg-white px-6 py-4 text-base font-semibold text-[#1a1a1a]"
+        >
+          Request a callback
+        </button>
+        <button
+          type="button"
+          onClick={() => onChoose("estimate_requested")}
+          className="w-full rounded-md border border-[#1a1a1a] bg-white px-6 py-4 text-base font-semibold text-[#1a1a1a]"
+        >
+          Email me my estimate
+        </button>
+      </div>
     </div>
   );
 }
@@ -722,86 +767,149 @@ function StepContact({
   error: string | null;
   onSubmit: () => void;
 }) {
+  const needsPhone = state.intention === "ready_to_book" || state.intention === "callback_requested";
+  const phoneDigits = state.phone.replace(/\D/g, "");
   const formValid =
     provisional &&
     state.full_name.trim().length >= 2 &&
     state.email.includes("@") &&
     state.address_line1.trim().length >= 3 &&
-    state.consent_service_messages;
+    (!needsPhone || phoneDigits.length >= 8) &&
+    (state.intention !== "callback_requested" || state.callback_preferred_time.trim().length >= 2);
+
+  if (saved) {
+    return (
+      <div>
+        <h2 className="font-display text-xl font-semibold text-[#1a1a1a]">What happens next</h2>
+        <p className="mt-4 text-sm leading-relaxed text-[#1a1a1a]/80">{saved.next_steps}</p>
+        <p className="mt-4 text-sm font-semibold text-[#1a1a1a]">
+          Reference {saved.reference} · £{Number(saved.total_gbp).toFixed(2)}
+          {saved.vat_applied ? " including VAT" : ""}
+        </p>
+        {saved.suggested_windows.length > 0 && (
+          <ul className="mt-4 space-y-2 text-sm">
+            {saved.suggested_windows.map((window) => (
+              <li key={`${window.kind}-${window.starts}`} className="rounded-md border border-[#e0b323]/60 px-3 py-2">
+                <p className="font-semibold">{window.label}</p>
+                <p className="text-[#1a1a1a]/70">
+                  {new Date(window.starts).toLocaleString("en-GB", { timeZone: "Europe/London" })}. Nothing is reserved.
+                </p>
+              </li>
+            ))}
+          </ul>
+        )}
+        {saved.appointment_confirmed === false && (
+          <p className="mt-4 text-sm text-[#1a1a1a]/75">Your appointment is not confirmed yet.</p>
+        )}
+      </div>
+    );
+  }
+
+  const title =
+    state.intention === "ready_to_book"
+      ? "Book the earliest visit"
+      : state.intention === "callback_requested"
+        ? "Request a callback"
+        : "Email me my estimate";
+  const submitLabel =
+    state.intention === "ready_to_book"
+      ? "Book me in ASAP"
+      : state.intention === "callback_requested"
+        ? "Request my callback"
+        : "Email my estimate";
 
   return (
     <div>
-      <h2 className="font-display text-xl font-semibold">Your details</h2>
-      <p className="mt-2 text-sm text-asphalt/70">
-        {provisional
-          ? saved
-            ? `Quotation ${saved.reference} saved. We will follow up using your contact details.`
-            : "Save your estimate with genuine contact details — nothing is stored until you submit."
-          : "Calculate your estimate on the previous step first."}
+      <h2 className="font-display text-xl font-semibold text-[#1a1a1a]">{title}</h2>
+      <p className="mt-3 rounded-md bg-stone-wash px-3 py-2 text-sm text-[#1a1a1a]/80">
+        {[state.address_line1, state.town, state.postcode].filter(Boolean).join(", ") || state.postcode}
       </p>
-      <div className="mt-6 grid gap-4 md:grid-cols-2">
-        <label className="text-sm">
-          Full name
+      <div className="mt-6 grid gap-4">
+        <label className="text-sm font-medium">
+          Your name
           <input
             required
+            autoComplete="name"
             value={state.full_name}
             onChange={(e) => patch({ full_name: e.target.value })}
-            className="mt-1 w-full rounded-md border px-3 py-2"
+            className="mt-1 w-full rounded-md border border-stone-line px-4 py-3"
           />
         </label>
-        <label className="text-sm">
+        <label className="text-sm font-medium">
           Email
           <input
             type="email"
             required
+            autoComplete="email"
             value={state.email}
             onChange={(e) => patch({ email: e.target.value })}
-            className="mt-1 w-full rounded-md border px-3 py-2"
+            className="mt-1 w-full rounded-md border border-stone-line px-4 py-3"
           />
         </label>
-        <label className="text-sm">
-          Phone
+        {needsPhone && (
+          <label className="text-sm font-medium">
+            Telephone
+            <input
+              required
+              type="tel"
+              autoComplete="tel"
+              value={state.phone}
+              onChange={(e) => patch({ phone: e.target.value })}
+              className="mt-1 w-full rounded-md border border-stone-line px-4 py-3"
+            />
+          </label>
+        )}
+        {state.intention === "callback_requested" && (
+          <label className="text-sm font-medium">
+            Best time to call
+            <input
+              required
+              value={state.callback_preferred_time}
+              onChange={(e) => patch({ callback_preferred_time: e.target.value })}
+              placeholder="Weekday mornings"
+              className="mt-1 w-full rounded-md border border-stone-line px-4 py-3"
+            />
+          </label>
+        )}
+        <label className="text-sm font-medium">
+          Property address
           <input
-            value={state.phone}
-            onChange={(e) => patch({ phone: e.target.value })}
-            className="mt-1 w-full rounded-md border px-3 py-2"
-          />
-        </label>
-        <label className="text-sm md:col-span-2">
-          Address line 1
-          <input
+            required
+            autoComplete="street-address"
             value={state.address_line1}
             onChange={(e) => patch({ address_line1: e.target.value })}
-            className="mt-1 w-full rounded-md border px-3 py-2"
+            className="mt-1 w-full rounded-md border border-stone-line px-4 py-3"
           />
         </label>
       </div>
-      <label className="mt-4 flex items-start gap-2 text-sm">
+      <p className="mt-4 text-sm text-[#1a1a1a]/75">
+        We use these details to respond to this request.{" "}
+        <a href="/privacy" className="underline">
+          Privacy notice
+        </a>
+      </p>
+      <label className="mt-3 flex items-start gap-2 text-sm text-[#1a1a1a]/80">
         <input
           type="checkbox"
-          checked={state.consent_service_messages}
-          onChange={(e) => patch({ consent_service_messages: e.target.checked })}
+          className="mt-1"
+          checked={state.consent_marketing}
+          onChange={(e) => patch({ consent_marketing: e.target.checked })}
         />
-        <span>I agree to service messages about this quotation (required)</span>
-      </label>
-      <label className="mt-3 flex items-center gap-2 text-sm">
-        <input type="checkbox" checked={state.consent_marketing} onChange={(e) => patch({ consent_marketing: e.target.checked })} />
-        Email me occasional offers (optional)
+        Send me occasional news from SurfaceCoat. This is optional.
       </label>
       {error && <p className="mt-4 text-sm text-red-700">{error}</p>}
-      {provisional && !saved && (
+      {provisional && (
         <button
           type="button"
-          className="btn-primary mt-6"
+          className={
+            state.intention === "ready_to_book"
+              ? "mt-6 w-full rounded-md bg-[#e0b323] px-6 py-4 text-base font-semibold text-[#1a1a1a] disabled:opacity-50"
+              : "btn-primary mt-6 w-full disabled:opacity-50"
+          }
           disabled={!formValid || submitting}
           onClick={onSubmit}
         >
-          {submitting ? "Saving…" : "Save quotation & request follow-up"}
-        </button>
-      )}
-      {!provisional && (
-        <button type="button" className="btn-secondary mt-4" onClick={() => window.history.back()}>
-          Back to estimate
+          {submitting ? "Sending…" : submitLabel}
         </button>
       )}
     </div>

@@ -37,8 +37,22 @@ test("complete provisional tarmac quote on mobile", async ({ page }) => {
   await expect(page.getByText(/inc\. VAT|Ex VAT|Travel|live pricing|not saved yet/i)).toHaveCount(0);
   await expect(page.getByText("Visit 1 — Cleaning and preparation")).toBeVisible();
   await expect(page.getByText("Visit 2 — Restoration coating")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Request my quotation" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Book me in ASAP" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Request a callback" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Email me my estimate" })).toBeVisible();
+
+  await page.getByRole("button", { name: "Book me in ASAP" }).click();
+  await page.getByLabel("Your name").fill("Test Customer");
+  await page.getByLabel("Email").fill("mobile.book@example.co.uk");
+  await page.getByLabel("Telephone").fill("07123456789");
+  await page.getByLabel("Property address").fill("1 Test Lane");
+  await page.getByRole("button", { name: "Book me in ASAP" }).click();
+
+  await expect(page.getByRole("heading", { name: "What happens next" })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText(/not a confirmed booking/i)).toBeVisible();
+  await expect(page.getByText(/We have emailed/i)).toHaveCount(0);
+  await expect(page.getByText(/Your appointment is not confirmed yet/i)).toBeVisible();
 
   const stored = await page.evaluate(() => sessionStorage.getItem("rmd_quote_draft"));
-  expect(stored).toContain(draft.postcode);
+  expect(stored).toBeNull();
 });

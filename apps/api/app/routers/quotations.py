@@ -20,8 +20,14 @@ from app.schemas.quotation import (
     QuotationSectionOut,
     QuotationOut,
     QuotationSubmitRequest,
+    SuggestedWindowOut,
 )
 from app.services.quotation_persist import load_active_service, persist_submitted_quotation
+from app.services.quote_conversion import (
+    customer_next_steps,
+    follow_up_customer_request,
+    validate_conversion_request,
+)
 from app.services.quotation_workflow import (
     CUSTOMER_NOTE,
     REPAIRS_NOTE,
@@ -90,16 +96,12 @@ async def submit_quotation(
     request: Request,
     body: QuotationSubmitRequest,
     db: Annotated[AsyncSession, Depends(get_db)],
-) -> QuotationOut:
-    if not body.consent_service_messages:
-        raise HTTPException(status_code=400, detail="Service communication consent is required")
-    if "@" not in body.email or body.email.endswith("@example.com"):
-        raise HTTPException(status_code=400, detail="A valid customer email is required")
-    if len(body.full_name.strip()) < 2:
-        raise HTTPException(status_code=400, detail="Full name is required")
-    if len(body.address_line1.strip()) < 3:
-        raise HTTPException(status_code=400, detail="Address line 1 is required")
-    saved = await persist_submitted_quotation(
+) -> PublicQuotationOut:
+    validate_conversion_request(body)
+    # A quotation request is itself permission to reply about this job.
+    # Marketing consent stays optional and is never required.
+    body.consent_service_messages = True
+    saved, enquiry, _created = await persist_submitted_quotation(
         db,
         body,
         input_fingerprint=body.input_fingerprint,
@@ -111,6 +113,17 @@ async def submit_quotation(
         customer_washed_already=body.customer_washed_already,
         requires_coating=bool(service.requires_coating),
     )
+    windows: list[dict] = []
+    if enquiry is not None:
+        windows = await follow_up_customer_request(
+            db,
+            quotation_id=saved.id,
+            enquiry=enquiry,
+            body=body,
+            included=[item["title"] for item in package["included"]],
+            two_stage=len(package["visits"]) > 1,
+        )
+    email_status = enquiry.email_delivery if enquiry is not None else "not_requested"
     return PublicQuotationOut(
         id=saved.id,
         reference=saved.reference,
@@ -126,6 +139,13 @@ async def submit_quotation(
         visits=package["visits"],
         created_at=saved.created_at,
         sections=[QuotationSectionOut.model_validate(section) for section in saved.sections],
+        intention=enquiry.intention if enquiry and enquiry.intention else body.intention,
+        appointment_confirmed=False,
+        email_sent=email_status == "sent",
+        email_status=email_status,
+        telegram_notified=bool(enquiry.telegram_notified) if enquiry is not None else False,
+        next_steps=customer_next_steps(enquiry, windows, email=body.email) if enquiry is not None else "",
+        suggested_windows=[SuggestedWindowOut.model_validate(window) for window in windows],
     )
 
 

@@ -2,7 +2,7 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, Enum, ForeignKey, String, Text, func
+from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, String, Text, func, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -104,6 +104,19 @@ class Enquiry(Base):
     utm_source: Mapped[str | None] = mapped_column(String(120), nullable=True)
     utm_medium: Mapped[str | None] = mapped_column(String(120), nullable=True)
     utm_campaign: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    quotation_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True, index=True)
+    intention: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    priority: Mapped[str] = mapped_column(String(20), default="normal", server_default=text("'normal'"))
+    callback_phone: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    callback_preferred_time: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    callback_status: Mapped[str] = mapped_column(
+        String(40), default="not_applicable", server_default=text("'not_applicable'")
+    )
+    callback_outcome: Mapped[str | None] = mapped_column(Text, nullable=True)
+    email_delivery: Mapped[str] = mapped_column(
+        String(40), default="not_requested", server_default=text("'not_requested'")
+    )
+    telegram_notified: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

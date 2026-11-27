@@ -70,13 +70,18 @@ async def find_conflicts(
 async def propose_two_stage_slots(
     db: AsyncSession,
     *,
-    job: Job,
+    job: Job | None = None,
     lat: float,
     lon: float,
     product_profile,
     search_from: datetime | None = None,
     max_prep_slots: int = 5,
 ) -> tuple[list[SlotProposal], list[SlotProposal]]:
+    """Find open preparation and coating windows. Does not create a job or appointment.
+
+    ``job`` is accepted for existing callers and is not written.
+    """
+    del job
     settings = await get_scheduling_settings(db)
     search_from = search_from or datetime.now(UTC).replace(hour=9, minute=0, second=0, microsecond=0)
 

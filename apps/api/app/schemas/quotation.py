@@ -69,7 +69,7 @@ class InstantQuotationRequest(BaseModel):
     phone: str | None = None
     address_line1: str
     address_line2: str | None = None
-    town: str
+    town: str | None = None
     postcode: str
     service_slug: str
     surface_type: SurfaceType
@@ -84,6 +84,8 @@ class InstantQuotationRequest(BaseModel):
     consent_marketing: bool = False
     source: str | None = "website"
     campaign: str | None = None
+    intention: str = "estimate_requested"
+    callback_preferred_time: str | None = None
 
 
 class QuotationSubmitRequest(InstantQuotationRequest):
@@ -101,6 +103,12 @@ class QuotationSectionOut(ORMModel):
     area_sqm: Decimal
 
 
+class SuggestedWindowOut(BaseModel):
+    label: str
+    starts: datetime
+    kind: str
+
+
 class PublicQuotationOut(ORMModel):
     id: UUID
     reference: str
@@ -116,6 +124,13 @@ class PublicQuotationOut(ORMModel):
     visits: list[PackageItem] = []
     created_at: datetime
     sections: list[QuotationSectionOut] = []
+    intention: str = "estimate_requested"
+    appointment_confirmed: bool = False
+    email_sent: bool = False
+    email_status: str = "not_requested"
+    telegram_notified: bool = False
+    next_steps: str = ""
+    suggested_windows: list[SuggestedWindowOut] = []
 
 
 class QuotationOut(ORMModel):

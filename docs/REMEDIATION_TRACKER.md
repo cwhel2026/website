@@ -118,10 +118,16 @@ Nothing below is marked as working in production. Production still runs `main` (
 | P1 | Tarmac launch £10/m² and standard £12/m² | **Verified (local + integration)** | New profile `surfacecoat-tarmac`. Previous profile deactivated, not deleted. Public default tier is launch. |
 | P2 | Minimum £350, applied before travel | **Verified (local)** | Formula unchanged: works are raised to max(rule, territory minimum), then travel is added. Amount is now £350. |
 | P3 | Travel £0.45/mile and £25/hour; both returns; two visits when wash and coat are separate | **Verified (local)** | Replaces the old territory £/km return charge so mileage is not counted twice. |
-| P4 | Round the VAT-inclusive total up to the next £5 | **Verified (integration)** | Uplift is split back into ex-VAT and VAT so the two still add up to the rounded total. |
+| P4 | Round the customer total up to the next £5 | **Verified (integration)** | When VAT is off, the rounded amount is the customer total. When VAT is on, VAT is calculated first and the round-up stays on the gross total. |
 | P5 | Block paving and imprinted concrete configurable, no invented prices | **Verified (integration)** | Existing per-m² rules deactivated, not deleted. Quote returns 422 until a rule is added. |
-| P6 | Do not mark instant quote operational | **Open** | A price is showing in production. Customer presentation and VAT treatment are corrected on `cursor/phase2-quote-presentation-vat-9428` and still need a production check after that branch is deployed. |
-| P7 | Public quote showed an internal breakdown and 20% VAT while the company is not VAT registered | **Fixed on branch** | VAT is off until Company setup records Registered and an effective date. The customer total is rounded up to £5 before VAT is added, and only when VAT applies. The £0.24 line was that VAT-inclusive uplift, which is why £600 + £74.80 did not equal £675. Public API no longer returns the costing lines. |
+| P6 | Do not mark instant quote operational | **Open** | A price is showing in production. VAT presentation is on `main` (PR #59). The booking, callback and email actions are on `cursor/phase2-quote-conversion-9428`. Still needs a full production check on a phone. |
+| P7 | Public quote showed an internal breakdown and 20% VAT while the company is not VAT registered | **Merged (PR #59)** | VAT is off until Company setup records Registered and an effective date. The customer total is rounded up to £5. Public API no longer returns the costing lines. |
+| C3 | After the price, offer Book me in ASAP, Request a callback, and Email me my estimate | **On branch** | Primary action uses golden yellow. Contact step asks only for the details that action needs. Property postcode is carried forward. Marketing consent stays optional and unchecked. |
+| C4 | Record Ready to book, Callback requested, or Estimate requested on the enquiry | **On branch** | Same quotation idempotency key does not create a second enquiry. Campaign source is kept. Ready to book is high priority and `booking_pending`, which is not a confirmed job. |
+| C5 | Callback task with completion and outcome | **On branch** | Stored on the enquiry. The customers page can mark it complete. No separate task system. |
+| C6 | Email the estimate only when SMTP is connected | **On branch** | Disconnected email is saved and the confirmation says it was not emailed. |
+| C7 | Tell the owner on Telegram only when the bot is connected | **On branch** | `telegram_notified` stays false when the token or chat is missing. The customer page does not claim a notification was sent. |
+| C8 | Suggest diary windows without confirming a booking | **On branch** | Uses the existing scheduler and live weather when both are available. No job or appointment row is created. Confirming the appointment and creating the job remain L3. |
 
 ### Future enhancements (explicitly not built in Phase 2)
 
@@ -141,7 +147,7 @@ Nothing below is marked as working in production. Production still runs `main` (
 |----|-------------------|-------|------------|
 | L1 | One Telegram implementation (FastAPI); remove Next.js handlers [9] | 2 | — |
 | L2 | Campaign/UTM keys on Enquiry → Quote → Job → Invoice [11] | 2 | D1 |
-| L3 | Quote acceptance + job creation [12] | 2 | L2 |
+| L3 | Quote acceptance + job creation [12] | 2 | L2. The public “Book me in ASAP” request records intent and may suggest windows. It must not confirm the appointment or create the job until this milestone. |
 | L4 | Job completion → FreeAgent invoice [13] | 2 | L3 |
 | L5 | Bank ↔ invoice matching; Growth Fund inputs [14] | 3 | L4, W1 |
 | L6 | Per-campaign profitability, Meta CAPI [15–16] | 4 | L5 |

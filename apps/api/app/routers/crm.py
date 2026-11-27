@@ -1,6 +1,8 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from uuid import UUID
+
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -8,7 +10,7 @@ from app.auth import get_current_admin
 from app.database import get_db
 from app.models.crm import Customer, Enquiry, PipelineStage
 from app.models.user import User
-from app.schemas.crm import CustomerOut, EnquiryCreate, EnquiryOut
+from app.schemas.crm import CallbackOutcomeIn, CustomerOut, EnquiryCreate, EnquiryOut
 from app.services.customer_records import ensure_property, upsert_customer
 from app.services.territory_lookup import resolve_territory_for_postcode
 
@@ -71,6 +73,23 @@ async def create_enquiry(
         utm_source=body.customer.source,
     )
     db.add(enquiry)
+    await db.commit()
+    await db.refresh(enquiry)
+    return enquiry
+
+
+@router.patch("/enquiries/{enquiry_id}/callback", response_model=EnquiryOut)
+async def record_callback_outcome(
+    enquiry_id: UUID,
+    body: CallbackOutcomeIn,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[User, Depends(get_current_admin)],
+) -> Enquiry:
+    enquiry = await db.get(Enquiry, enquiry_id)
+    if enquiry is None or enquiry.intention != "callback_requested":
+        raise HTTPException(status_code=404, detail="Callback request not found")
+    enquiry.callback_status = "completed" if body.completed else "open"
+    enquiry.callback_outcome = body.outcome.strip()
     await db.commit()
     await db.refresh(enquiry)
     return enquiry

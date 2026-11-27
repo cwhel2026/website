@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { apiGet } from "@/lib/api";
+import { apiGet, apiPatch } from "@/lib/api";
 import { getToken } from "@/lib/auth-client";
 
 type Customer = {
@@ -13,9 +13,29 @@ type Customer = {
   created_at: string;
 };
 
+type Enquiry = {
+  id: string;
+  intention: string | null;
+  priority: string;
+  callback_status: string;
+  callback_preferred_time: string | null;
+  callback_outcome: string | null;
+  email_delivery: string;
+  utm_source: string | null;
+  utm_campaign: string | null;
+};
+
+const INTENTION_LABELS: Record<string, string> = {
+  ready_to_book: "Ready to book",
+  callback_requested: "Callback requested",
+  estimate_requested: "Estimate requested",
+};
+
 export default function CustomersPage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [enquiries, setEnquiries] = useState<Enquiry[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [outcome, setOutcome] = useState<Record<string, string>>({});
 
   useEffect(() => {
     const token = getToken();
@@ -23,7 +43,23 @@ export default function CustomersPage() {
     apiGet<Customer[]>("/api/v1/crm/customers", token)
       .then(setCustomers)
       .catch(() => setError("Could not load customers."));
+    apiGet<Enquiry[]>("/api/v1/crm/enquiries", token)
+      .then(setEnquiries)
+      .catch(() => setError("Could not load enquiries."));
   }, []);
+
+  async function saveCallback(enquiry: Enquiry, completed: boolean) {
+    const note = (outcome[enquiry.id] || enquiry.callback_outcome || "").trim();
+    if (note.length < 2) {
+      setError("Add a short note about the callback.");
+      return;
+    }
+    const updated = await apiPatch<Enquiry>(`/api/v1/crm/enquiries/${enquiry.id}/callback`, {
+      completed,
+      outcome: note,
+    });
+    setEnquiries((rows) => rows.map((row) => (row.id === updated.id ? { ...row, ...updated } : row)));
+  }
 
   return (
     <div>
@@ -53,6 +89,53 @@ export default function CustomersPage() {
             ))}
           </tbody>
         </table>
+      )}
+
+      <h2 className="mt-12 text-xl font-semibold text-emerald-950">Quotation requests</h2>
+      <p className="mt-2 text-sm text-slate-600">
+        Ready to book, callback requested, or estimate requested. A callback stays open until you record the outcome.
+      </p>
+      {enquiries.length === 0 ? (
+        <p className="mt-6 text-sm text-slate-500">No quotation requests yet.</p>
+      ) : (
+        <ul className="mt-6 space-y-4">
+          {enquiries.map((enquiry) => (
+            <li key={enquiry.id} className="rounded-md border p-4 text-sm">
+              <p className="font-medium">
+                {INTENTION_LABELS[enquiry.intention ?? ""] ?? "Quotation"} · {enquiry.priority}
+              </p>
+              <p className="mt-1 text-slate-600">
+                {enquiry.utm_source ?? "website"}
+                {enquiry.utm_campaign ? ` · ${enquiry.utm_campaign}` : ""}
+                {enquiry.intention === "estimate_requested" ? ` · email ${enquiry.email_delivery.split("_").join(" ")}` : ""}
+              </p>
+              {enquiry.intention === "callback_requested" && (
+                <div className="mt-3 space-y-2">
+                  <p>
+                    {enquiry.callback_preferred_time ?? "No time given"} · {enquiry.callback_status.split("_").join(" ")}
+                  </p>
+                  <label className="block">
+                    Outcome
+                    <input
+                      value={outcome[enquiry.id] ?? enquiry.callback_outcome ?? ""}
+                      onChange={(event) =>
+                        setOutcome((current) => ({ ...current, [enquiry.id]: event.target.value }))
+                      }
+                      className="mt-1 w-full rounded-md border px-3 py-2"
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    className="rounded-md bg-emerald-900 px-3 py-2 text-white"
+                    onClick={() => void saveCallback(enquiry, true)}
+                  >
+                    Mark callback complete
+                  </button>
+                </div>
+              )}
+            </li>
+          ))}
+        </ul>
       )}
     </div>
   );
