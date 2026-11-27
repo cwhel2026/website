@@ -17,8 +17,13 @@ test("complete provisional tarmac quote on mobile", async ({ page }) => {
     customer_washed_already: false,
   };
   await page.goto("/quote");
+  const essential = page.getByRole("button", { name: "Essential only" });
+  if (await essential.isVisible().catch(() => false)) {
+    await essential.click();
+  }
 
   await page.getByLabel("Postcode").fill(draft.postcode);
+  await page.getByLabel("Town (optional)").fill(draft.town);
   await page.getByRole("button", { name: "Check coverage" }).click();
   await page.getByRole("button", { name: "Continue" }).click();
 
@@ -48,7 +53,12 @@ test("complete provisional tarmac quote on mobile", async ({ page }) => {
   await page.getByLabel("Property address").fill("1 Test Lane");
   await page.getByRole("button", { name: "Book me in ASAP" }).click();
 
-  await expect(page.getByRole("heading", { name: "What happens next" })).toBeVisible({ timeout: 30_000 });
+  const confirmation = page.getByRole("heading", { name: "What happens next" });
+  const problem = page.locator("p.text-red-700");
+  await expect(confirmation.or(problem)).toBeVisible({ timeout: 30_000 });
+  if (await problem.isVisible()) {
+    throw new Error(await problem.innerText());
+  }
   await expect(page.getByText(/not a confirmed booking/i)).toBeVisible();
   await expect(page.getByText(/We have emailed/i)).toHaveCount(0);
   await expect(page.getByText(/Your appointment is not confirmed yet/i)).toBeVisible();

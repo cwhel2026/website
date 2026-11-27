@@ -9,6 +9,7 @@ from sqlalchemy.orm import selectinload
 
 from app.auth import get_current_admin
 from app.database import get_db
+from app.models.crm import Enquiry
 from app.models.quotation import Quotation, QuotationCalculation
 from app.models.user import User
 from app.rate_limit import limiter
@@ -115,14 +116,20 @@ async def submit_quotation(
     )
     windows: list[dict] = []
     if enquiry is not None:
-        windows = await follow_up_customer_request(
-            db,
-            quotation_id=saved.id,
-            enquiry=enquiry,
-            body=body,
-            included=[item["title"] for item in package["included"]],
-            two_stage=len(package["visits"]) > 1,
-        )
+        try:
+            windows = await follow_up_customer_request(
+                db,
+                quotation_id=saved.id,
+                enquiry=enquiry,
+                body=body,
+                included=[item["title"] for item in package["included"]],
+                two_stage=len(package["visits"]) > 1,
+            )
+        except Exception:
+            enquiry_id = enquiry.id
+            await db.rollback()
+            enquiry = await db.get(Enquiry, enquiry_id)
+            windows = []
     email_status = enquiry.email_delivery if enquiry is not None else "not_requested"
     return PublicQuotationOut(
         id=saved.id,

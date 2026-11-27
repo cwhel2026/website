@@ -176,6 +176,28 @@ async def notify_owner(db: AsyncSession, enquiry: Enquiry, *, reference: str, su
         return False
 
 
+async def _search_open_windows(
+    latitude: float,
+    longitude: float,
+) -> tuple[list, list]:
+    """Diary search on its own session so a slow weather call cannot spoil the customer save."""
+    from app.database import SessionLocal
+
+    async with SessionLocal() as search_db:
+        profile = (
+            await search_db.execute(select(ProductProfile).where(ProductProfile.is_active.is_(True)).limit(1))
+        ).scalar_one_or_none()
+        if profile is None:
+            return [], []
+        return await propose_two_stage_slots(
+            search_db,
+            lat=latitude,
+            lon=longitude,
+            product_profile=profile,
+            max_prep_slots=1,
+        )
+
+
 async def suggest_unconfirmed_windows(
     db: AsyncSession,
     *,
@@ -183,29 +205,24 @@ async def suggest_unconfirmed_windows(
     longitude: float | None,
     two_stage: bool,
 ) -> list[dict]:
-    """Read the diary and weather. Does not insert a job or appointment."""
+    """Read the diary and weather. Does not insert a job or appointment.
+
+    ``db`` is unused so a failed search cannot roll back the enquiry that was just saved.
+    The search gives up after a few seconds and the customer still receives a confirmation.
+    """
+    del db
     if latitude is None or longitude is None:
         return []
+    task = asyncio.create_task(_search_open_windows(float(latitude), float(longitude)))
+    done, _pending = await asyncio.wait({task}, timeout=4)
+    if not done:
+        task.cancel()
+        logger.info("Unconfirmed window search timed out")
+        return []
     try:
-        profile = (
-            await db.execute(select(ProductProfile).where(ProductProfile.is_active.is_(True)).limit(1))
-        ).scalar_one_or_none()
-        if profile is None:
-            return []
-
-        async def _search():
-            return await propose_two_stage_slots(
-                db,
-                lat=float(latitude),
-                lon=float(longitude),
-                product_profile=profile,
-                max_prep_slots=1,
-            )
-
-        prep, coat = await asyncio.wait_for(_search(), timeout=8)
+        prep, coat = task.result()
     except Exception:
         logger.info("Unconfirmed window search unavailable")
-        await db.rollback()
         return []
     windows: list[dict] = []
     if prep:

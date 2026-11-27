@@ -127,7 +127,7 @@ Nothing below is marked as working in production. Production still runs `main` (
 | C5 | Callback task with completion and outcome | **On branch** | Stored on the enquiry. The customers page can mark it complete. No separate task system. |
 | C6 | Email the estimate only when SMTP is connected | **On branch** | Disconnected email is saved and the confirmation says it was not emailed. |
 | C7 | Tell the owner on Telegram only when the bot is connected | **On branch** | `telegram_notified` stays false when the token or chat is missing. The customer page does not claim a notification was sent. |
-| C8 | Suggest diary windows without confirming a booking | **On branch** | Uses the existing scheduler and live weather when both are available. No job or appointment row is created. Confirming the appointment and creating the job remain L3. |
+| C8 | Suggest diary windows without confirming a booking | **On branch** | Uses the existing scheduler and live weather when both answer within a few seconds. If they do not, the customer still gets the confirmation and nothing is reserved. No job or appointment row is created. Confirming the appointment and creating the job remain L3. |
 
 ### Future enhancements (explicitly not built in Phase 2)
 
