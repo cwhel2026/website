@@ -83,7 +83,11 @@ async def deliver_telegram_outbox_item(db: AsyncSession, item: NotificationOutbo
     if item.status == OutboxStatus.CANCELLED:
         return False
     settings = get_settings()
+    payload = json.loads(item.payload_json or "{}")
     chats = list(dict.fromkeys(_chat_ids()))
+    if item.category == "assistant_reply":
+        target = payload.get("reply_chat_id")
+        chats = [target] if isinstance(target, int) and target in settings.telegram_admin_id_list else []
     if not settings.telegram_bot_token or not chats:
         item.last_error = "Telegram not configured (TELEGRAM_BOT_TOKEN or admin/owner chat id missing)"
         item.status = OutboxStatus.PENDING
@@ -99,7 +103,6 @@ async def deliver_telegram_outbox_item(db: AsyncSession, item: NotificationOutbo
     text = f"{item.title}\n\n{item.body}" if item.title else item.body
     errors: list[str] = []
     last_result: dict | None = None
-    payload = json.loads(item.payload_json or "{}")
     delivered_chats = list(payload.get("telegram_chat_ids", []))
     for chat_id in chats:
         if chat_id in delivered_chats:
