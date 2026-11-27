@@ -10,16 +10,20 @@ from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.service import Service, SurfaceType
+from app.services.vat_settings import vat_position_on
 from app.schemas.quotation import QuotationSectionIn
 from app.services.pricing_engine import PricingInput, QuotationSectionInput, calculate_quotation
 from app.services.quotation_travel import travel_km_from_base
 from app.services.territory_lookup import resolve_territory_for_postcode
 
-PROVISIONAL_DISCLAIMER = (
-    "This is a provisional online estimate from your live pricing rules. "
-    "Final pricing is confirmed after measurement verification and site inspection. "
-    "Complex surfaces, access limits or weather may adjust scope."
+CUSTOMER_NOTE = (
+    "This estimate is for the work described below. "
+    "We confirm the final price after checking the measurements on site."
 )
+REPAIRS_NOTE = (
+    "Additional repairs are not included. Any repair work is agreed with you separately before we carry it out."
+)
+PROVISIONAL_DISCLAIMER = CUSTOMER_NOTE
 
 
 def section_area(section: QuotationSectionIn) -> Decimal:
@@ -97,14 +101,79 @@ def quotation_input_fingerprint(payload: dict[str, Any]) -> str:
     return hashlib.sha256(canonical.encode()).hexdigest()
 
 
-def public_pricing_breakdown(breakdown: dict | None) -> dict | None:
-    if not breakdown:
-        return None
-    lines = []
-    for line in breakdown.get("lines") or []:
-        if line.get("amount_gbp") is not None:
-            lines.append({"label": line["label"], "amount_gbp": line["amount_gbp"]})
-    return {"lines": lines} if lines else None
+def customer_package(
+    *,
+    requires_washing: bool,
+    customer_washed_already: bool,
+    requires_coating: bool,
+) -> dict[str, Any]:
+    """What the customer is buying. No prices, rates or internal rules."""
+    washing_visit = requires_washing and not customer_washed_already
+    coating_visit = requires_coating
+    included: list[dict[str, str]] = []
+    visits: list[dict[str, str]] = []
+    if washing_visit:
+        included.append(
+            {
+                "title": "Professional driveway cleaning",
+                "detail": "We clean the surface before any restoration work.",
+            }
+        )
+        included.append(
+            {
+                "title": "Surface preparation",
+                "detail": "We prepare the surface so the coating can bond.",
+            }
+        )
+    if coating_visit:
+        included.append(
+            {
+                "title": "Specialist restoration coating",
+                "detail": "Applied once the surface is dry and the weather is suitable.",
+            }
+        )
+    if not washing_visit and not coating_visit:
+        included.append(
+            {
+                "title": "The agreed restoration work",
+                "detail": "We complete the selected service in a single visit.",
+            }
+        )
+    included.append(
+        {
+            "title": "All materials and labour",
+            "detail": "Materials and labour for the work above are included in this estimate.",
+        }
+    )
+    if washing_visit and coating_visit:
+        visits = [
+            {"title": "Visit 1 — Cleaning and preparation", "detail": "We clean and prepare the surface."},
+            {
+                "title": "Visit 2 — Restoration coating",
+                "detail": "We apply the specialist restoration coating once the surface is dry and the weather is suitable.",
+            },
+        ]
+    elif coating_visit:
+        visits = [
+            {
+                "title": "One visit — Restoration coating",
+                "detail": "We apply the specialist restoration coating once the surface is dry and the weather is suitable.",
+            }
+        ]
+    elif washing_visit:
+        visits = [
+            {"title": "One visit — Cleaning and preparation", "detail": "We clean and prepare the surface."}
+        ]
+    else:
+        visits = [
+            {"title": "One visit", "detail": "We complete the agreed work in a single visit."}
+        ]
+    return {
+        "included": included,
+        "visits": visits,
+        "repairs_note": REPAIRS_NOTE,
+        "customer_note": CUSTOMER_NOTE,
+    }
 
 
 async def price_quotation_inputs(
@@ -156,6 +225,7 @@ async def price_quotation_inputs(
     if not supported:
         return None, fingerprint, False, unsupported_reason, territory
 
+    charge_vat, vat_rate, _percent = await vat_position_on(db, datetime.now(UTC).date())
     pricing = await calculate_quotation(
         db,
         PricingInput(
@@ -168,6 +238,8 @@ async def price_quotation_inputs(
             territory=territory,
             distance_km_from_base=distance_km_from_base,
             pricing_tier=pricing_tier,
+            charge_vat=charge_vat,
+            vat_rate=vat_rate,
         ),
     )
     return pricing, fingerprint, True, unsupported_reason, territory

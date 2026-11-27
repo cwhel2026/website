@@ -33,17 +33,19 @@ type QuoteState = {
   consent_service_messages: boolean;
 };
 
+type PackageItem = { title: string; detail: string };
+
 type ProvisionalQuotation = {
   input_fingerprint: string;
-  total_inc_vat_gbp: string | number | null;
-  subtotal_ex_vat_gbp: string | number | null;
-  vat_gbp?: string | number | null;
-  requires_approval: boolean | null;
-  provisional_disclaimer: string;
+  total_gbp: string | number | null;
+  vat_applied: boolean;
+  customer_note: string;
+  repairs_note: string;
+  included: PackageItem[];
+  visits: PackageItem[];
   surface_supported: boolean;
   unsupported_reason?: string | null;
   total_area_sqm?: string | number | null;
-  breakdown?: { lines?: { label: string; amount_gbp?: number }[] };
 };
 
 type SavedQuotation = ProvisionalQuotation & {
@@ -229,7 +231,7 @@ export function QuoteWizard() {
         setProvisional(null);
         return;
       }
-      if (data.total_inc_vat_gbp == null) {
+      if (data.total_gbp == null) {
         setError("Unable to calculate a price for these inputs.");
         return;
       }
@@ -374,9 +376,17 @@ export function QuoteWizard() {
                 type="button"
                 onClick={next}
                 disabled={step === 0 && !state.postcode.trim()}
-                className="btn-primary"
+                className={
+                  step === 5 && provisional
+                    ? "inline-flex items-center justify-center rounded-md bg-[#1a1a1a] px-6 py-3.5 text-sm font-semibold text-white hover:bg-black"
+                    : "btn-primary"
+                }
               >
-                {step === 5 && !provisional ? "Calculate estimate" : "Continue"}
+                {step === 5 && provisional
+                  ? "Request my quotation"
+                  : step === 5
+                    ? "Calculate estimate"
+                    : "Continue"}
               </button>
             )}
           </div>
@@ -663,33 +673,34 @@ function StepQuote({
 }
 
 function QuoteResultCard({ result }: { result: ProvisionalQuotation }) {
-  const lines = result.breakdown?.lines?.filter((l) => typeof l.amount_gbp === "number") ?? [];
   return (
-    <div className="text-center">
-      <p className="text-sm text-asphalt/60">Provisional estimate (not saved yet)</p>
-      <p className="mt-2 font-display text-4xl font-semibold text-asphalt">
-        £{Number(result.total_inc_vat_gbp).toFixed(2)}
-        <span className="text-base font-normal text-asphalt/60"> inc. VAT</span>
+    <div className="text-center text-[#1a1a1a]">
+      <p className="text-sm tracking-wide text-[#1a1a1a]/70">Your estimated price</p>
+      <p className="mt-2 font-display text-4xl font-semibold">
+        £{Number(result.total_gbp).toFixed(2)}
+        {result.vat_applied ? (
+          <span className="text-base font-normal text-[#1a1a1a]/60"> including VAT</span>
+        ) : null}
       </p>
-      {result.subtotal_ex_vat_gbp != null && result.vat_gbp != null && (
-        <p className="mt-1 text-xs text-asphalt/55">
-          Ex VAT £{Number(result.subtotal_ex_vat_gbp).toFixed(2)} · VAT £{Number(result.vat_gbp).toFixed(2)}
-        </p>
-      )}
-      {result.requires_approval && (
-        <p className="mt-2 text-sm text-amber-800">This estimate requires owner verification before booking.</p>
-      )}
-      {lines.length > 0 && (
-        <ul className="mx-auto mt-6 max-w-sm space-y-1 text-left text-sm text-asphalt/75">
-          {lines.map((line) => (
-            <li key={line.label} className="flex justify-between gap-4 border-b border-stone-line py-1">
-              <span>{line.label}</span>
-              {line.amount_gbp != null && <span>£{line.amount_gbp.toFixed(2)}</span>}
-            </li>
-          ))}
-        </ul>
-      )}
-      <p className="mx-auto mt-6 max-w-md text-sm leading-relaxed text-asphalt/75">{result.provisional_disclaimer}</p>
+      <div className="mx-auto mt-6 h-1 w-16 rounded-full bg-[#e0b323]" />
+      <ul className="mx-auto mt-6 max-w-md space-y-3 text-left text-sm">
+        {result.included.map((item) => (
+          <li key={item.title}>
+            <p className="font-semibold">{item.title}</p>
+            <p className="text-[#1a1a1a]/70">{item.detail}</p>
+          </li>
+        ))}
+      </ul>
+      <ul className="mx-auto mt-6 max-w-md space-y-3 text-left text-sm">
+        {result.visits.map((item) => (
+          <li key={item.title} className="rounded-md border border-[#e0b323]/50 bg-white px-3 py-2">
+            <p className="font-semibold">{item.title}</p>
+            <p className="text-[#1a1a1a]/70">{item.detail}</p>
+          </li>
+        ))}
+      </ul>
+      <p className="mx-auto mt-6 max-w-md text-sm leading-relaxed text-[#1a1a1a]/75">{result.repairs_note}</p>
+      <p className="mx-auto mt-3 max-w-md text-sm leading-relaxed text-[#1a1a1a]/75">{result.customer_note}</p>
     </div>
   );
 }

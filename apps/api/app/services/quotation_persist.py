@@ -171,6 +171,8 @@ async def persist_submitted_quotation(
         subtotal_ex_vat_gbp=pricing.subtotal_ex_vat_gbp,
         vat_gbp=pricing.vat_gbp,
         total_inc_vat_gbp=pricing.total_inc_vat_gbp,
+        vat_charged=pricing.vat_charged,
+        vat_rate_percent=pricing.vat_rate_percent,
         estimated_labour_hours=pricing.estimated_labour_hours,
         estimated_materials_gbp=pricing.estimated_materials_gbp,
         estimated_travel_gbp=pricing.estimated_travel_gbp,

@@ -24,6 +24,9 @@ type Summary = {
     registered_office?: string | null;
     company_utr?: string | null;
     vat_status: string;
+    vat_number?: string | null;
+    vat_rate_percent?: string | number | null;
+    vat_effective_from?: string | null;
     paye_status: string;
     corporation_tax_registered?: boolean | null;
     accountant_name?: string | null;
@@ -53,6 +56,10 @@ export default function CompanySetupPage() {
           company_utr: s.profile.company_utr ?? "",
           accountant_name: s.profile.accountant_name ?? "",
           accountant_email: s.profile.accountant_email ?? "",
+          vat_status: s.profile.vat_status ?? "not_registered",
+          vat_number: s.profile.vat_number ?? "",
+          vat_rate_percent: s.profile.vat_rate_percent != null ? String(s.profile.vat_rate_percent) : "20",
+          vat_effective_from: s.profile.vat_effective_from ?? "",
         });
       })
       .catch(withLoadError(() => setData(null)));
@@ -76,6 +83,9 @@ export default function CompanySetupPage() {
       if (!body.trading_start_date) {
         body.trading_start_date = null;
       }
+      if (!body.vat_effective_from) body.vat_effective_from = null;
+      if (!body.vat_number) body.vat_number = null;
+      if (body.vat_rate_percent) body.vat_rate_percent = Number(body.vat_rate_percent);
       if (form.corporation_tax_registered === "true") {
         body.corporation_tax_registered = true;
       } else if (form.corporation_tax_registered === "false") {
@@ -153,6 +163,47 @@ export default function CompanySetupPage() {
             <option value="true">Yes</option>
             <option value="false">Not yet</option>
           </select>
+        </label>
+        <h2 className="pt-2 font-semibold text-slate-900">VAT registration</h2>
+        <p className="text-slate-600">
+          SurfaceCoat is not VAT registered. Estimates and invoices exclude VAT until you record a registration and the
+          date it takes effect. Quotes already issued keep the tax treatment they were given.
+        </p>
+        <label className="block">
+          <span className="text-slate-700">VAT status</span>
+          <select
+            className="mt-1 w-full rounded border border-slate-300 px-3 py-2"
+            value={form.vat_status ?? "not_registered"}
+            onChange={(e) => setForm((f) => ({ ...f, vat_status: e.target.value }))}
+          >
+            <option value="not_registered">Not registered</option>
+            <option value="applied">Applied, not yet registered</option>
+            <option value="registered">Registered</option>
+          </select>
+        </label>
+        <label className="block">
+          <span className="text-slate-700">VAT number</span>
+          <input
+            className="mt-1 w-full rounded border border-slate-300 px-3 py-2"
+            value={form.vat_number ?? ""}
+            onChange={(e) => setForm((f) => ({ ...f, vat_number: e.target.value }))}
+          />
+        </label>
+        <label className="block">
+          <span className="text-slate-700">VAT rate (%)</span>
+          <input
+            className="mt-1 w-full rounded border border-slate-300 px-3 py-2"
+            value={form.vat_rate_percent ?? "20"}
+            onChange={(e) => setForm((f) => ({ ...f, vat_rate_percent: e.target.value }))}
+          />
+        </label>
+        <label className="block">
+          <span className="text-slate-700">Effective from (YYYY-MM-DD)</span>
+          <input
+            className="mt-1 w-full rounded border border-slate-300 px-3 py-2"
+            value={form.vat_effective_from ?? ""}
+            onChange={(e) => setForm((f) => ({ ...f, vat_effective_from: e.target.value }))}
+          />
         </label>
         <button
           type="button"

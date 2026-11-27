@@ -30,7 +30,14 @@ class ProvisionalQuotationRequest(BaseModel):
     pricing_tier: str = "launch"
 
 
+class PackageItem(BaseModel):
+    title: str
+    detail: str
+
+
 class ProvisionalQuotationOut(BaseModel):
+    """Public price. No internal rates, travel, VAT splits or rounding lines."""
+
     input_fingerprint: str
     priced_at: datetime
     covered: bool
@@ -38,11 +45,12 @@ class ProvisionalQuotationOut(BaseModel):
     surface_supported: bool
     unsupported_reason: str | None = None
     total_area_sqm: Decimal | None = None
-    subtotal_ex_vat_gbp: Decimal | None = None
-    vat_gbp: Decimal | None = None
-    total_inc_vat_gbp: Decimal | None = None
-    provisional_disclaimer: str
-    breakdown: dict | None = None
+    total_gbp: Decimal | None = None
+    vat_applied: bool = False
+    included: list[PackageItem] = []
+    visits: list[PackageItem] = []
+    repairs_note: str
+    customer_note: str
 
 
 class AdminProvisionalQuotationOut(ProvisionalQuotationOut):
@@ -50,6 +58,8 @@ class AdminProvisionalQuotationOut(ProvisionalQuotationOut):
     estimated_labour_hours: Decimal | None = None
     meets_minimum_margin: bool | None = None
     requires_approval: bool | None = None
+    subtotal_ex_vat_gbp: Decimal | None = None
+    vat_gbp: Decimal | None = None
     internal_breakdown: dict | None = None
 
 
@@ -98,18 +108,34 @@ class PublicQuotationOut(ORMModel):
     surface_type: SurfaceType
     surface_condition: SurfaceCondition
     total_area_sqm: Decimal
+    total_gbp: Decimal
+    vat_applied: bool
+    customer_note: str
+    repairs_note: str
+    included: list[PackageItem] = []
+    visits: list[PackageItem] = []
+    created_at: datetime
+    sections: list[QuotationSectionOut] = []
+
+
+class QuotationOut(ORMModel):
+    """Owner dashboard — full costing. Not returned by the public quote endpoints."""
+
+    id: UUID
+    reference: str
+    status: QuotationStatus
+    surface_type: SurfaceType
+    surface_condition: SurfaceCondition
+    total_area_sqm: Decimal
     subtotal_ex_vat_gbp: Decimal
     vat_gbp: Decimal
     total_inc_vat_gbp: Decimal
+    vat_charged: bool = False
+    vat_rate_percent: Decimal = Decimal("0")
     provisional_disclaimer: str
     created_at: datetime
     sections: list[QuotationSectionOut] = []
     breakdown: dict | None = None
-
-
-class QuotationOut(PublicQuotationOut):
-    """Owner dashboard — includes internal costing fields."""
-
     estimated_labour_hours: Decimal
     estimated_materials_gbp: Decimal
     estimated_travel_gbp: Decimal

@@ -32,9 +32,12 @@ test("complete provisional tarmac quote on mobile", async ({ page }) => {
   await page.getByRole("button", { name: "Calculate estimate" }).click();
 
   await expect(page.getByText(/Internal Server Error/i)).toHaveCount(0);
-  await expect(page.getByText(/provisional/i).first()).toBeVisible({ timeout: 30_000 });
-  const price = page.locator("text=/£[0-9]/");
-  await expect(price.first()).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText("Your estimated price")).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText(/£[0-9]/).first()).toBeVisible();
+  await expect(page.getByText(/inc\. VAT|Ex VAT|Travel|live pricing|not saved yet/i)).toHaveCount(0);
+  await expect(page.getByText("Visit 1 — Cleaning and preparation")).toBeVisible();
+  await expect(page.getByText("Visit 2 — Restoration coating")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Request my quotation" })).toBeVisible();
 
   const stored = await page.evaluate(() => sessionStorage.getItem("rmd_quote_draft"));
   expect(stored).toContain(draft.postcode);

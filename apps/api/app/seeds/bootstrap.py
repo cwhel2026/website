@@ -440,8 +440,9 @@ async def _seed_message_templates(session: AsyncSession) -> None:
             MessageChannel.EMAIL,
             MessageCategory.TRANSACTIONAL,
             "Your provisional quotation {{reference}}",
-            "Hello {{name}},\n\nYour provisional quotation {{reference}} is {{total}} inc. VAT. "
-            "This remains subject to on-site verification.\n\nRevive My Drive",
+            "Hello {{name}},\n\nYour provisional quotation {{reference}} is {{total}}. "
+            "This remains subject to checking the measurements on site. "
+            "Additional repairs are agreed separately.\n\nSurfaceCoat",
         ),
         (
             "appointment_reminder",

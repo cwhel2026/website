@@ -17,15 +17,17 @@ from app.schemas.quotation import (
     ProvisionalQuotationOut,
     ProvisionalQuotationRequest,
     PublicQuotationOut,
+    QuotationSectionOut,
     QuotationOut,
     QuotationSubmitRequest,
 )
 from app.services.quotation_persist import load_active_service, persist_submitted_quotation
 from app.services.quotation_workflow import (
-    PROVISIONAL_DISCLAIMER,
+    CUSTOMER_NOTE,
+    REPAIRS_NOTE,
+    customer_package,
     priced_at_now,
     price_quotation_inputs,
-    public_pricing_breakdown,
 )
 
 router = APIRouter(prefix="/quotations", tags=["quotations"])
@@ -57,6 +59,11 @@ async def calculate_provisional_quotation(
         message = str(exc)
         status = 422 if "not configured" in message else 503
         raise HTTPException(status_code=status, detail=message) from exc
+    package = customer_package(
+        requires_washing=body.requires_washing,
+        customer_washed_already=body.customer_washed_already,
+        requires_coating=bool(service.requires_coating),
+    )
     out = ProvisionalQuotationOut(
         input_fingerprint=fingerprint,
         priced_at=priced_at_now(),
@@ -64,15 +71,16 @@ async def calculate_provisional_quotation(
         territory_name=territory.name if territory else None,
         surface_supported=supported,
         unsupported_reason=unsupported_reason,
-        provisional_disclaimer=PROVISIONAL_DISCLAIMER,
+        customer_note=package["customer_note"],
+        repairs_note=package["repairs_note"],
+        included=package["included"],
+        visits=package["visits"],
     )
     if pricing is None:
         return out
     out.total_area_sqm = pricing.total_area_sqm
-    out.subtotal_ex_vat_gbp = pricing.subtotal_ex_vat_gbp
-    out.vat_gbp = pricing.vat_gbp
-    out.total_inc_vat_gbp = pricing.total_inc_vat_gbp
-    out.breakdown = public_pricing_breakdown(pricing.breakdown)
+    out.total_gbp = pricing.total_inc_vat_gbp
+    out.vat_applied = pricing.vat_charged
     return out
 
 
@@ -97,9 +105,28 @@ async def submit_quotation(
         input_fingerprint=body.input_fingerprint,
         idempotency_key=body.idempotency_key,
     )
-    public = PublicQuotationOut.model_validate(saved)
-    public.breakdown = public_pricing_breakdown(saved.breakdown)
-    return public
+    service = await load_active_service(db, body.service_slug)
+    package = customer_package(
+        requires_washing=body.requires_washing,
+        customer_washed_already=body.customer_washed_already,
+        requires_coating=bool(service.requires_coating),
+    )
+    return PublicQuotationOut(
+        id=saved.id,
+        reference=saved.reference,
+        status=saved.status,
+        surface_type=saved.surface_type,
+        surface_condition=saved.surface_condition,
+        total_area_sqm=saved.total_area_sqm,
+        total_gbp=saved.total_inc_vat_gbp,
+        vat_applied=saved.vat_charged,
+        customer_note=CUSTOMER_NOTE,
+        repairs_note=REPAIRS_NOTE,
+        included=package["included"],
+        visits=package["visits"],
+        created_at=saved.created_at,
+        sections=[QuotationSectionOut.model_validate(section) for section in saved.sections],
+    )
 
 
 @router.post("/instant", response_model=PublicQuotationOut)
@@ -123,11 +150,19 @@ async def list_quotations(
     _: Annotated[User, Depends(get_current_admin)],
 ) -> list[QuotationOut]:
     result = await db.execute(
-        select(Quotation).options(selectinload(Quotation.sections)).order_by(
-            Quotation.created_at.desc()
-        ).limit(200)
+        select(Quotation)
+        .options(selectinload(Quotation.sections), selectinload(Quotation.calculations))
+        .order_by(Quotation.created_at.desc())
+        .limit(200)
     )
-    return [QuotationOut.model_validate(q) for q in result.scalars().all()]
+    rows: list[QuotationOut] = []
+    for q in result.scalars().all():
+        out = QuotationOut.model_validate(q)
+        if q.calculations:
+            latest = max(q.calculations, key=lambda calc: calc.version)
+            out.breakdown = json.loads(latest.breakdown_json)
+        rows.append(out)
+    return rows
 
 
 @router.get("/{quotation_id}", response_model=QuotationOut)
