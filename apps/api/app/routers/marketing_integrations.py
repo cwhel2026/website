@@ -46,3 +46,8 @@ async def outreach_stats(
     _: Annotated[User, Depends(get_current_admin)],
 ) -> dict:
     return {"sent_today": await sent_count_today(db)}
+
+@router.post("/test/provider-health")
+async def provider_health(_: Annotated[User, Depends(get_current_admin)]) -> dict:
+    from app.services.provider_health import probe_providers
+    return {"checks": await probe_providers()}
