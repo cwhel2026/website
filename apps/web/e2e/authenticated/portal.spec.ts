@@ -87,3 +87,18 @@ test("command centre links to launch readiness", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Launch centre", exact: true })).toBeVisible();
   await assertNoHorizontalOverflow(page);
 });
+
+ test("mobile workspace navigation is searchable and dismissible", async ({ page }) => {
+  test.skip((page.viewportSize()?.width ?? 1280) >= 768, "Mobile navigation only");
+  await enforceReadOnly(page);
+  await page.goto("/dashboard", { waitUntil: "networkidle" });
+  await expect(page.getByRole("heading", {name:"Business command centre"})).toBeVisible();
+  await page.getByRole("navigation", {name:"Primary"}).getByRole("button", {name:"More"}).click();
+  const menu = page.getByRole("dialog", {name:"Menu"});
+  await expect(menu).toBeVisible();
+  await menu.getByRole("textbox", {name:"Find a department"}).fill("quot");
+  await expect(menu.getByRole("link").first()).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(menu).not.toBeVisible();
+  await assertNoHorizontalOverflow(page);
+});
