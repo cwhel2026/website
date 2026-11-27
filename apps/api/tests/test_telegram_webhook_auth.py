@@ -31,3 +31,11 @@ def test_business_report_empty_and_unknown():
     assert "target date: unknown" in report
     assert "None recorded" in report
     assert "Read-only report" in report
+
+
+def test_review_buttons_require_https_and_known_command():
+    from app.routers.telegram import report_review_markup
+    assert report_review_markup("/approvals", "https://example.com")["inline_keyboard"][0][0]["url"] == "https://example.com/dashboard/approvals"
+    assert report_review_markup("/schedule", "http://example.com") is None
+    assert report_review_markup("/approvals", "https://user:pass@example.com") is None
+    assert report_review_markup("/today", "https://example.com") is None
