@@ -17,6 +17,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   const [ready, setReady] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [navSearch, setNavSearch] = useState("");
+  const currentSection = NAV_SECTIONS.flatMap(s => s.items).filter(i => isNavActive(pathname, i.href)).sort((a,b) => b.href.length-a.href.length)[0];
   useEffect(() => {
     if (!drawerOpen) return;
     const close = (e: KeyboardEvent) => { if (e.key === 'Escape') setDrawerOpen(false); };
@@ -81,17 +82,17 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   const darkNative = inMarketing || pathname === "/dashboard" || pathname === "/dashboard/launch-readiness";
 
   return (
-    <div className="portal-root min-h-screen bg-[#1a1a1a] text-white overflow-x-hidden">
+    <div className="portal-root min-h-screen bg-[#141716] text-white overflow-x-hidden">
       <header
         className="sticky top-0 z-40 border-b border-white/10 bg-[#1a1a1a]/95 backdrop-blur md:pl-0"
         style={{ paddingTop: "max(0.5rem, env(safe-area-inset-top))" }}
       >
-        <div className="flex h-12 max-w-6xl items-center justify-between gap-3 px-4 md:mx-auto">
+        <div className="flex h-12 max-w-[1440px] items-center justify-between gap-3 px-4 md:mx-auto">
           <div className="min-w-0">
             <p className="truncate text-xs font-semibold uppercase tracking-[0.18em] text-[#eab308]">
               {brand.legalName}
             </p>
-            <p className="truncate text-sm font-medium text-white/90">{brand.portalTitle}</p>
+            <p className="truncate text-sm font-medium text-white/90">{currentSection?.label ?? brand.portalTitle}</p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
             <button
@@ -117,7 +118,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
         </div>
       </header>
 
-      <div className="mx-auto flex max-w-6xl">
+      <div className="mx-auto flex max-w-[1440px]">
         <aside
           className={`hidden shrink-0 border-r border-white/10 md:block ${
             sidebarCollapsed ? "w-[4.25rem]" : "w-56"
@@ -156,14 +157,14 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
           </nav>
         </aside>
 
-        <main className="min-w-0 flex-1 px-2 sm:px-4 py-4 pb-[calc(5rem+env(safe-area-inset-bottom))] md:pb-6">
+        <main className="min-w-0 flex-1 px-3 sm:px-6 py-5 pb-[calc(5rem+env(safe-area-inset-bottom))] md:pb-6">
           <div
             className={`mx-auto max-w-full ${
               inMarketing
                 ? "text-white"
                 : darkNative
-                  ? "rounded-2xl border border-white/10 bg-[#242424]/60 p-4 text-white md:p-6"
-                  : "overflow-x-auto rounded-2xl bg-white p-4 text-[#1a1a1a] md:p-6"
+                  ? "rounded-3xl text-white"
+                  : "overflow-x-auto rounded-3xl border border-white/10 bg-white p-4 text-[#1a1a1a] shadow-lg md:p-6"
             }`}
           >
             {loadErrors.length > 0 && (
@@ -201,7 +202,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
       </div>
 
       <nav
-        className="fixed bottom-0 left-0 right-0 z-50 border-t border-white/10 bg-[#1a1a1a]/98 backdrop-blur md:hidden"
+        className="fixed bottom-0 left-0 right-0 z-50 border-t border-amber-300/15 bg-[#191d1b]/95 backdrop-blur-xl md:hidden"
         style={{ paddingBottom: "max(0.35rem, env(safe-area-inset-bottom))" }}
         aria-label="Primary"
       >
@@ -216,6 +217,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
                   <button
                     type="button"
                     aria-expanded={drawerOpen}
+                    aria-controls="portal-menu"
                     onClick={() => setDrawerOpen(true)}
                     className="flex min-h-[48px] min-w-[56px] flex-col items-center justify-center gap-0.5 px-2 text-[10px] text-white/70"
                   >
@@ -229,8 +231,9 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
               <li key={item.href}>
                 <Link
                   href={item.href}
+                  aria-current={active ? "page" : undefined}
                   className={`flex min-h-[48px] min-w-[56px] flex-col items-center justify-center gap-0.5 px-2 text-[10px] ${
-                    active ? "font-semibold text-[#eab308]" : "text-white/70"
+                    active ? "rounded-xl bg-amber-300/10 font-semibold text-[#eab308]" : "text-white/70"
                   }`}
                 >
                   <Icon className="h-5 w-5" />
@@ -243,7 +246,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
       </nav>
 
       {drawerOpen && (
-        <div className="fixed inset-0 z-[60] md:hidden" role="dialog" aria-modal="true" aria-label="Menu">
+        <div className="fixed inset-0 z-[60] md:hidden" id="portal-menu" role="dialog" aria-modal="true" aria-label="Menu">
           <button
             type="button"
             className="absolute inset-0 bg-black/60"
@@ -251,20 +254,21 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
             onClick={() => setDrawerOpen(false)}
           />
           <div
-            className="absolute bottom-0 left-0 right-0 max-h-[85vh] overflow-y-auto rounded-t-2xl border-t border-white/10 bg-[#1a1a1a] px-4 pt-3"
+            className="absolute bottom-0 left-0 right-0 max-h-[85dvh] overflow-y-auto rounded-t-3xl border-t border-white/10 bg-[#1a1a1a] px-4 pt-3"
             style={{ paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }}
           >
             <div className="mb-3 flex items-center justify-between">
-              <p className="text-sm font-semibold text-white">All areas</p>
+              <p className="text-lg font-semibold text-white">All areas</p>
               <button
                 type="button"
                 onClick={() => setDrawerOpen(false)}
+                aria-label="Close navigation"
                 className="rounded-lg p-2 text-white/70 hover:bg-white/10"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
-            <input aria-label="Find a department" placeholder="Find a department…" value={navSearch} onChange={e => setNavSearch(e.target.value)} className="mb-3 w-full rounded-lg border border-white/20 bg-black/20 p-3 text-base text-white" />
+            <input autoFocus aria-label="Find a department" placeholder="Find a department…" value={navSearch} onChange={e => setNavSearch(e.target.value)} className="mb-3 w-full rounded-lg border border-white/20 bg-black/20 p-3 text-base text-white" />
             {NAV_SECTIONS.filter(section => section.items.some(item => item.label.toLowerCase().includes(navSearch.toLowerCase()))).map((section) => (
               <details key={section.id} className="border-b border-white/10 py-2" open={!!navSearch || section.id === "overview"}>
                 <summary className="cursor-pointer list-none py-2 text-sm font-medium text-[#eab308]">
