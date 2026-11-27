@@ -34,11 +34,11 @@ function Hero() {
             alt={MEDIA.hero.alt}
             fill
             priority
-            className="object-cover object-center"
+            className="object-cover object-[center_62%]"
             sizes="100vw"
           />
         </picture>
-        <div className="absolute inset-0 bg-brand-ink/80" />
+        <div className="absolute inset-0 bg-gradient-to-t from-brand-ink via-brand-ink/85 to-brand-ink/50 sm:bg-gradient-to-r sm:from-brand-ink sm:via-brand-ink/75 sm:to-brand-ink/35" />
       </div>
       <div className="site-container relative flex flex-col justify-center py-8 sm:min-h-[70vh] sm:py-16">
         <p className="text-xs font-semibold uppercase tracking-[0.22em] text-brand-gold">{publicBrand.tagline}</p>
@@ -57,7 +57,6 @@ function Hero() {
             Explore our services
           </Link>
         </div>
-        <p className="mt-4 text-[11px] uppercase tracking-[0.14em] text-white/60">Reference photograph — not our project</p>
       </div>
     </section>
   );
@@ -73,14 +72,13 @@ function Transformations() {
             The same driveway. A clearer surface.
           </h2>
           <p className="mt-4 text-sm leading-relaxed text-brand-ink/75">
-            Drag the comparison. Until we publish a completed project, every pair is labelled as illustrative and
-            uses one licensed photograph from a single camera position.
+            Drag the comparison. Each pair is the same surface, before and after restoration.
           </p>
         </div>
         <TransformationGallery />
       </div>
       <Link href="/transformations" className="mt-6 inline-flex min-h-11 items-center text-sm font-semibold">
-        See how we label transformations
+        See the transformations
       </Link>
     </section>
   );

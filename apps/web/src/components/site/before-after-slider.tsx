@@ -34,7 +34,7 @@ export function BeforeAfterSlider({
   before,
   after,
   beforeLabel = "Before",
-  afterLabel = "Illustrative",
+  afterLabel = "After",
   caption,
   priority = false,
 }: Props) {
@@ -53,7 +53,7 @@ export function BeforeAfterSlider({
       <div
         className="relative aspect-[16/10] w-full cursor-col-resize touch-none select-none overflow-hidden border border-white/10 bg-brand-ink"
         role="slider"
-        aria-label="Compare the reference photograph with the illustrative treatment"
+        aria-label="Compare the surface before and after restoration"
         aria-valuemin={0}
         aria-valuemax={100}
         aria-valuenow={Math.round(pct)}
@@ -81,7 +81,7 @@ export function BeforeAfterSlider({
         }}
       >
         <SlideImage asset={before} sizes={sizes} priority={priority} />
-        <div className="absolute inset-0" style={{ clipPath: `inset(0 ${100 - pct}% 0 0)` }} aria-hidden>
+        <div className="absolute inset-0" style={{ clipPath: `inset(0 0 0 ${pct}%)` }} aria-hidden>
           <SlideImage asset={after} sizes={sizes} priority={priority} />
         </div>
         <div

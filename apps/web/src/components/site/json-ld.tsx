@@ -9,7 +9,7 @@ export function BusinessJsonLd() {
     name: publicBrand.legalName,
     slogan: publicBrand.tagline,
     url: siteUrl,
-    image: `${siteUrl}/media/approved/hero-home.webp`,
+    image: `${siteUrl}/media/approved/tarmac-approach-after.webp`,
     description: `Driveway and surface restoration across ${publicBrand.coverageAreas}. Instant estimates for tarmac restoration.`,
     areaServed: publicBrand.counties.map((name) => ({
       "@type": "AdministrativeArea",

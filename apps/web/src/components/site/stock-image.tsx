@@ -42,7 +42,7 @@ export function StockImage({
           src={asset.srcWebp}
           alt={asset.alt}
           fill
-          className="object-cover object-center"
+          className="object-cover object-[center_72%]"
           sizes={sizes}
           priority={priority}
         />
@@ -52,9 +52,11 @@ export function StockImage({
           {badge}
         </span>
       ) : null}
-      <figcaption className="sr-only">
-        {asset.credit}. {asset.license}.
-      </figcaption>
+      {asset.credit || asset.license ? (
+        <figcaption className="sr-only">
+          {[asset.credit, asset.license].filter(Boolean).join(". ")}
+        </figcaption>
+      ) : null}
     </figure>
   );
 }

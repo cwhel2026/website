@@ -4,7 +4,7 @@ import { TransformationGallery } from "@/components/site/transformation-gallery"
 export const metadata = {
   title: "Transformations",
   description:
-    "Illustrative before-and-after comparisons. These are not completed SurfaceCoat projects until genuine photographs are published.",
+    "Before and after photographs of tarmac, pattern-imprinted concrete and block paving restoration.",
 };
 
 export default function TransformationsPage() {
@@ -14,11 +14,11 @@ export default function TransformationsPage() {
         <div className="site-container py-12 md:py-16">
           <p className="section-eyebrow text-brand-gold">Transformations</p>
           <h1 className="mt-3 max-w-3xl font-display text-4xl font-medium leading-tight md:text-5xl">
-            Illustrative, until the work is ours.
+            The same surface, before and after.
           </h1>
           <p className="mt-4 max-w-2xl text-lg leading-relaxed text-white/75">
-            Comparisons use one licensed photograph and the same camera position. The refreshed side is a treatment
-            of that photograph. It is not a finished SurfaceCoat driveway.
+            Tarmac, pattern-imprinted concrete and block paving, photographed from the same position before and after
+            restoration.
           </p>
         </div>
       </header>
