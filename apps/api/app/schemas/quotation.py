@@ -27,6 +27,7 @@ class ProvisionalQuotationRequest(BaseModel):
     sections: list[QuotationSectionIn] = Field(..., min_length=1)
     requires_washing: bool = True
     customer_washed_already: bool = False
+    pricing_tier: str = "launch"
 
 
 class ProvisionalQuotationOut(BaseModel):

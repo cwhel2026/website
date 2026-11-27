@@ -298,23 +298,54 @@ async def _seed_pricing(session: AsyncSession) -> None:
     profile = PricingProfile(name="default", version=1, is_active=True)
     session.add(profile)
     await session.flush()
-    rules = [
-        (PricingRuleType.PER_SQM, SurfaceType.TARMAC, Decimal("16.50")),
-        (PricingRuleType.PER_SQM, SurfaceType.BLOCK_PAVING, Decimal("14.00")),
-        (PricingRuleType.PER_SQM, SurfaceType.IMPRINTED_CONCRETE, Decimal("17.50")),
-        (PricingRuleType.MINIMUM_JOB, None, Decimal("250.00")),
-        (PricingRuleType.WASHING_SURCHARGE, None, Decimal("2.50")),
-        (PricingRuleType.COATING_SURCHARGE, None, Decimal("4.25")),
-        (PricingRuleType.VAT_RATE, None, Decimal("20.00")),
-        (PricingRuleType.MIN_CONTRIBUTION_MARGIN, None, Decimal("35.00")),
-        (PricingRuleType.COMMERCIAL_MULTIPLIER, None, Decimal("1.30")),
-    ]
-    for rule_type, surface, amount in rules:
+    profile.notes = (
+        "Tarmac launch £10/m² and standard £12/m². "
+        "Block paving and imprinted concrete stay unpriced until research is finished. "
+        "Minimum £350 applies to works before travel. "
+        "Travel is £0.45/mile and £25/hour, both return journeys, per visit."
+    )
+    session.add(
+        PricingRule(
+            profile_id=profile.id,
+            rule_type=PricingRuleType.PER_SQM,
+            surface_type=SurfaceType.TARMAC,
+            amount_gbp=Decimal("10.00"),
+            label="launch",
+        )
+    )
+    session.add(
+        PricingRule(
+            profile_id=profile.id,
+            rule_type=PricingRuleType.PER_SQM,
+            surface_type=SurfaceType.TARMAC,
+            amount_gbp=Decimal("12.00"),
+            label="standard",
+        )
+    )
+    session.add(
+        PricingRule(
+            profile_id=profile.id,
+            rule_type=PricingRuleType.MINIMUM_JOB,
+            amount_gbp=Decimal("350.00"),
+        )
+    )
+    session.add(
+        PricingRule(
+            profile_id=profile.id,
+            rule_type=PricingRuleType.TRAVEL,
+            amount_gbp=Decimal("0.45"),
+            percentage=Decimal("25"),
+        )
+    )
+    for rule_type, amount in (
+        (PricingRuleType.VAT_RATE, Decimal("20.00")),
+        (PricingRuleType.MIN_CONTRIBUTION_MARGIN, Decimal("35.00")),
+        (PricingRuleType.COMMERCIAL_MULTIPLIER, Decimal("1.30")),
+    ):
         session.add(
             PricingRule(
                 profile_id=profile.id,
                 rule_type=rule_type,
-                surface_type=surface,
                 amount_gbp=amount,
             )
         )

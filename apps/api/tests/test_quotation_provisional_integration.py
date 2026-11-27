@@ -38,5 +38,45 @@ def test_provisional_quote_returns_computed_price(monkeypatch):
         body = res.json()
         assert body["surface_supported"] is True
         assert body["total_inc_vat_gbp"] is not None
-        assert float(body["total_inc_vat_gbp"]) > 0
+        total = Decimal(body["total_inc_vat_gbp"])
+        assert total > 0
+        assert total % Decimal("5") == 0
+        assert Decimal(body["subtotal_ex_vat_gbp"]) + Decimal(body["vat_gbp"]) == total
+        surface = next(line for line in body["breakdown"]["lines"] if line["label"] == "Surface restoration")
+        assert Decimal(str(surface["amount_gbp"])) == Decimal("400.00")
         assert body.get("input_fingerprint")
+
+        standard = client.post(
+            "/api/v1/quotations/provisional",
+            json={
+                "postcode": "L39 2JG",
+                "town": "Ormskirk",
+                "service_slug": "tarmac-driveway-restoration",
+                "surface_type": "tarmac",
+                "surface_condition": "good",
+                "pricing_tier": "standard",
+                "requires_washing": False,
+                "customer_washed_already": True,
+                "sections": [{"label": "Drive", "length_m": 10, "width_m": 4, "area_sqm": 40}],
+            },
+        )
+        assert standard.status_code == 200, standard.text
+        standard_surface = next(
+            line
+            for line in standard.json()["breakdown"]["lines"]
+            if line["label"] == "Surface restoration"
+        )
+        assert Decimal(str(standard_surface["amount_gbp"])) == Decimal("480.00")
+
+        blocked = client.post(
+            "/api/v1/quotations/provisional",
+            json={
+                "postcode": "L39 2JG",
+                "town": "Ormskirk",
+                "service_slug": "tarmac-driveway-restoration",
+                "surface_type": "block_paving",
+                "sections": [{"label": "Drive", "area_sqm": 40}],
+            },
+        )
+        assert blocked.status_code == 422
+        assert "not configured" in blocked.json()["detail"]

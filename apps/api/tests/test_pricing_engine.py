@@ -125,7 +125,7 @@ async def test_minimum_job_charge_applied_for_small_area():
 
 
 @pytest.mark.asyncio
-async def test_poor_condition_increases_price():
+async def test_condition_does_not_change_published_rate():
     db = FakeSession(_profile_with_rules())
     good = await calculate_quotation(
         db,
@@ -153,7 +153,103 @@ async def test_poor_condition_increases_price():
             distance_km_from_base=Decimal("0"),
         ),
     )
-    assert poor.subtotal_ex_vat_gbp > good.subtotal_ex_vat_gbp
+    assert poor.subtotal_ex_vat_gbp == good.subtotal_ex_vat_gbp
+    assert poor.breakdown["condition_recorded"] == "poor"
+
+
+@pytest.mark.asyncio
+async def test_two_visits_charge_two_return_journeys():
+    db = FakeSession(_profile_with_rules())
+    common = dict(
+        service=_service_restoration(),
+        surface_type=SurfaceType.TARMAC,
+        surface_condition=SurfaceCondition.GOOD,
+        sections=[QuotationSectionInput("Main", None, None, Decimal("80"))],
+        territory=None,
+        distance_km_from_base=Decimal("16.09344"),
+    )
+    two = await calculate_quotation(
+        db,
+        PricingInput(
+            requires_washing=True,
+            customer_washed_already=False,
+            **common,
+        ),
+    )
+    one = await calculate_quotation(
+        db,
+        PricingInput(
+            requires_washing=False,
+            customer_washed_already=True,
+            **common,
+        ),
+    )
+    assert two.breakdown["visits"] == 2
+    assert one.breakdown["visits"] == 1
+    assert two.estimated_travel_gbp == one.estimated_travel_gbp * 2
+
+
+@pytest.mark.asyncio
+async def test_total_rounds_up_to_five_pounds():
+    db = FakeSession(_profile_with_rules())
+    result = await calculate_quotation(
+        db,
+        PricingInput(
+            service=_service_restoration(),
+            surface_type=SurfaceType.TARMAC,
+            surface_condition=SurfaceCondition.GOOD,
+            sections=[QuotationSectionInput("Main", None, None, Decimal("40"))],
+            requires_washing=False,
+            customer_washed_already=True,
+            territory=None,
+            distance_km_from_base=Decimal("0"),
+        ),
+    )
+    assert result.total_inc_vat_gbp % Decimal("5") == 0
+    assert result.subtotal_ex_vat_gbp + result.vat_gbp == result.total_inc_vat_gbp
+
+
+@pytest.mark.asyncio
+async def test_unconfigured_surface_is_refused():
+    db = FakeSession(_profile_with_rules())
+    with pytest.raises(ValueError, match="not configured"):
+        await calculate_quotation(
+            db,
+            PricingInput(
+                service=_service_restoration(),
+                surface_type=SurfaceType.BLOCK_PAVING,
+                surface_condition=SurfaceCondition.GOOD,
+                sections=[QuotationSectionInput("Main", None, None, Decimal("40"))],
+                requires_washing=False,
+                customer_washed_already=True,
+                territory=None,
+                distance_km_from_base=Decimal("0"),
+            ),
+        )
+
+
+@pytest.mark.asyncio
+async def test_minimum_applies_before_travel():
+    db = FakeSession(_profile_with_rules())
+    result = await calculate_quotation(
+        db,
+        PricingInput(
+            service=_service_restoration(),
+            surface_type=SurfaceType.TARMAC,
+            surface_condition=SurfaceCondition.GOOD,
+            sections=[QuotationSectionInput("Main", None, None, Decimal("5"))],
+            requires_washing=False,
+            customer_washed_already=True,
+            territory=None,
+            distance_km_from_base=Decimal("0"),
+        ),
+    )
+    minimum_line = next(
+        line for line in result.breakdown["lines"] if line["label"] == "Minimum job adjustment"
+    )
+    assert Decimal(str(minimum_line["minimum_gbp"])) == Decimal("250")
+    assert Decimal(str(minimum_line["amount_gbp"])) > 0
+    assert result.estimated_travel_gbp == Decimal("0")
 
 
 def test_money_rounding():

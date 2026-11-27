@@ -1,39 +1,18 @@
 from typing import Annotated
-from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import func, select
+from fastapi import APIRouter, Depends
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_admin
 from app.database import get_db
-from app.models.crm import Customer, CustomerProperty, Enquiry, PipelineStage
+from app.models.crm import Customer, Enquiry, PipelineStage
 from app.models.user import User
 from app.schemas.crm import CustomerOut, EnquiryCreate, EnquiryOut
+from app.services.customer_records import ensure_property, upsert_customer
 from app.services.territory_lookup import resolve_territory_for_postcode
 
 router = APIRouter(prefix="/crm", tags=["crm"])
-
-
-async def upsert_customer(
-    db: AsyncSession, email: str, phone: str | None, full_name: str, **kwargs
-) -> Customer:
-    result = await db.execute(
-        select(Customer).where(func.lower(Customer.email) == email.lower())
-    )
-    customer = result.scalar_one_or_none()
-    if customer:
-        customer.full_name = full_name
-        if phone:
-            customer.phone = phone
-        for k, v in kwargs.items():
-            if v is not None:
-                setattr(customer, k, v)
-        return customer
-    customer = Customer(email=email, phone=phone, full_name=full_name, **kwargs)
-    db.add(customer)
-    await db.flush()
-    return customer
 
 
 @router.get("/customers", response_model=list[CustomerOut])
@@ -73,26 +52,23 @@ async def create_enquiry(
     territory = await resolve_territory_for_postcode(
         db, body.property.postcode, body.property.town
     )
-    prop_result = await db.execute(
-        select(CustomerProperty).where(
-            CustomerProperty.customer_id == customer.id,
-            func.replace(func.upper(CustomerProperty.postcode), " ", "")
-            == body.property.postcode.upper().replace(" ", ""),
-        )
+    prop = await ensure_property(
+        db,
+        customer=customer,
+        address_line1=body.property.address_line1,
+        address_line2=body.property.address_line2,
+        town=body.property.town,
+        postcode=body.property.postcode,
+        territory_id=territory.id if territory else None,
     )
-    prop = prop_result.scalar_one_or_none()
-    if prop is None:
-        prop = CustomerProperty(
-            customer_id=customer.id,
-            territory_id=territory.id if territory else None,
-            **body.property.model_dump(),
-        )
-        db.add(prop)
     enquiry = Enquiry(
         customer_id=customer.id,
+        property_id=prop.id if prop else None,
         surface_type=body.surface_type,
         message=body.message,
         stage=PipelineStage.NEW_ENQUIRY,
+        utm_campaign=body.campaign or body.customer.campaign,
+        utm_source=body.customer.source,
     )
     db.add(enquiry)
     await db.commit()

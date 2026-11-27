@@ -76,6 +76,7 @@ def pricing_payload_dict(
     town: str | None,
     sections: list[dict[str, Any]],
     distance_km_from_base: str | float,
+    pricing_tier: str = "launch",
 ) -> dict[str, Any]:
     return {
         "service_slug": service_slug,
@@ -87,6 +88,7 @@ def pricing_payload_dict(
         "town": (town or "").strip(),
         "sections": sections,
         "distance_km_from_base": str(distance_km_from_base),
+        "pricing_tier": pricing_tier,
     }
 
 
@@ -116,6 +118,7 @@ async def price_quotation_inputs(
     customer_washed_already: bool,
     postcode: str,
     town: str | None,
+    pricing_tier: str = "launch",
 ) -> tuple[Any, str, bool, str | None, Any]:
     supported, unsupported_reason = surface_supported(service, surface_type)
     sections_in = validate_sections(sections_raw)
@@ -142,6 +145,7 @@ async def price_quotation_inputs(
         town=town,
         sections=section_dicts,
         distance_km_from_base=distance_km_from_base,
+        pricing_tier=pricing_tier,
     )
     fingerprint = quotation_input_fingerprint(fingerprint_basis)
     if territory is None:
@@ -163,6 +167,7 @@ async def price_quotation_inputs(
             customer_washed_already=customer_washed_already,
             territory=territory,
             distance_km_from_base=distance_km_from_base,
+            pricing_tier=pricing_tier,
         ),
     )
     return pricing, fingerprint, True, unsupported_reason, territory
