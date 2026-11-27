@@ -325,7 +325,7 @@ async def telegram_webhook(
             from app.services.assistant_tools import (
                 tool_jobs_today, tool_jobs_next_week, tool_quotations_awaiting,
                 tool_pending_approvals, tool_rain_risk_appointments,
-                tool_analytics_snapshot, tool_wash_pending_coat,
+                tool_analytics_snapshot, tool_schedule_proposals,
             )
             commands = {
                 "/today": ("TODAY'S CONFIRMED JOBS", tool_jobs_today),
@@ -334,7 +334,7 @@ async def telegram_webhook(
                 "/finance": ("30-DAY BUSINESS FINANCES", tool_analytics_snapshot),
                 "/weather": ("KNOWN COATING WEATHER RISKS", tool_rain_risk_appointments),
                 "/approvals": ("PENDING APPROVALS", tool_pending_approvals),
-                "/schedule": ("COATING DEADLINES FOR REVIEW", tool_wash_pending_coat),
+                "/schedule": ("COATING PROPOSALS FOR REVIEW", tool_schedule_proposals),
             }
             command = commands.get(text.lower())
             if command:
