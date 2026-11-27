@@ -32,71 +32,68 @@ export default function CommercialPage() {
   }
 
   return (
-    <div className="site-container py-16 md:py-24">
-      <p className="section-eyebrow">Commercial restoration</p>
-      <h1 className="mt-2 font-display text-4xl font-semibold text-asphalt">Partner with SurfaceCoat</h1>
-      <p className="mt-4 max-w-2xl text-lg leading-relaxed text-asphalt/75">
-        Car parks, forecourts, retail parks, industrial estates, hotels and managing agents — surface
-        restoration and maintenance enquiries routed to your commercial CRM pipeline.
-      </p>
+    <div>
+      <header className="bg-brand-ink text-white">
+        <div className="site-container py-12 md:py-16">
+          <p className="section-eyebrow text-brand-gold">Commercial</p>
+          <h1 className="mt-3 font-display text-4xl font-medium md:text-5xl">Commercial surface restoration</h1>
+          <p className="mt-4 max-w-2xl text-lg leading-relaxed text-white/75">
+            Car parks, forecourts and business yards. This form records an enquiry. It does not confirm a booking or
+            show a price.
+          </p>
+        </div>
+      </header>
+      <div className="site-container py-12 md:py-16">
+        <figure>
+          <StockImage asset={MEDIA.services["commercial-car-parks"]} aspect="aspect-[21/9]" sizes="100vw" />
+          <figcaption className="mt-2 text-xs text-brand-ink/60">
+            Licensed UK reference photograph. Not a completed SurfaceCoat project.
+          </figcaption>
+        </figure>
 
-      <div className="mt-8 overflow-hidden rounded-lg border border-stone-line shadow-sm">
-        <StockImage asset={MEDIA.services["commercial-car-parks"]} aspect="aspect-[21/9]" sizes="100vw" />
-        <p className="border-t border-stone-line bg-stone-wash px-4 py-2 text-xs text-asphalt/60">
-          Licensed UK reference photo — not a completed SurfaceCoat commercial project.
-        </p>
+        {status === "ok" ? (
+          <p className="mt-10 max-w-xl border border-brand-gold bg-white p-6 text-sm">
+            Thank you. The enquiry was received. We will reply using the details you gave. This is not a confirmed booking.
+          </p>
+        ) : (
+          <form onSubmit={onSubmit} className="mt-10 max-w-xl space-y-4 border border-brand-line bg-white p-6">
+            <label className="block text-sm font-medium">
+              Company name
+              <input name="business_name" required className="mt-1 min-h-12 w-full border border-brand-line px-3" />
+            </label>
+            <div className="grid gap-4 md:grid-cols-2">
+              <label className="block text-sm font-medium">
+                Email
+                <input name="contact_email" type="email" required className="mt-1 min-h-12 w-full border border-brand-line px-3" />
+              </label>
+              <label className="block text-sm font-medium">
+                Phone
+                <input name="contact_phone" className="mt-1 min-h-12 w-full border border-brand-line px-3" />
+              </label>
+            </div>
+            <label className="block text-sm font-medium">
+              Site postcode
+              <input name="postcode" className="mt-1 min-h-12 w-full border border-brand-line px-3" />
+            </label>
+            <label className="block text-sm font-medium">
+              Site type
+              <input name="category" placeholder="For example, retail park" className="mt-1 min-h-12 w-full border border-brand-line px-3" />
+            </label>
+            <label className="block text-sm font-medium">
+              Project details
+              <textarea name="notes" required rows={5} className="mt-1 w-full border border-brand-line px-3 py-3" />
+            </label>
+            <button type="submit" disabled={status === "loading"} className="btn-primary">
+              {status === "loading" ? "Sending…" : "Submit commercial enquiry"}
+            </button>
+            {status === "err" ? <p className="text-sm text-red-700">Could not submit. Try again shortly.</p> : null}
+          </form>
+        )}
+
+        <Link href="/quote" className="mt-8 inline-flex min-h-11 items-center text-sm font-semibold">
+          Domestic instant estimate
+        </Link>
       </div>
-
-      <ul className="mt-8 grid gap-3 sm:grid-cols-2 text-sm text-asphalt/80">
-        {["Car park re-colouring", "Forecourt restoration", "Scheduled cleaning", "Targeted repairs"].map((i) => (
-          <li key={i} className="border-l-2 border-restore-green pl-3">
-            {i}
-          </li>
-        ))}
-      </ul>
-
-      {status === "ok" ? (
-        <p className="mt-10 rounded-lg border border-restore-green/40 bg-restore-muted/50 p-6 text-restore-dark">
-          Thank you — your enquiry was received. We will respond using the contact details provided.
-        </p>
-      ) : (
-        <form onSubmit={onSubmit} className="mt-10 max-w-xl space-y-4 rounded-lg border border-stone-line bg-white p-8">
-          <label className="block text-sm font-medium">
-            Company name
-            <input name="business_name" required className="mt-1 w-full rounded-md border px-3 py-2" />
-          </label>
-          <div className="grid gap-4 md:grid-cols-2">
-            <label className="block text-sm font-medium">
-              Email
-              <input name="contact_email" type="email" required className="mt-1 w-full rounded-md border px-3 py-2" />
-            </label>
-            <label className="block text-sm font-medium">
-              Phone
-              <input name="contact_phone" className="mt-1 w-full rounded-md border px-3 py-2" />
-            </label>
-          </div>
-          <label className="block text-sm font-medium">
-            Site postcode
-            <input name="postcode" className="mt-1 w-full rounded-md border px-3 py-2" />
-          </label>
-          <label className="block text-sm font-medium">
-            Site type
-            <input name="category" placeholder="e.g. retail park" className="mt-1 w-full rounded-md border px-3 py-2" />
-          </label>
-          <label className="block text-sm font-medium">
-            Project details (area, services, access restrictions)
-            <textarea name="notes" required rows={5} className="mt-1 w-full rounded-md border px-3 py-2" />
-          </label>
-          <button type="submit" disabled={status === "loading"} className="btn-primary">
-            {status === "loading" ? "Sending…" : "Submit commercial enquiry"}
-          </button>
-          {status === "err" && <p className="text-sm text-red-700">Could not submit — try again shortly.</p>}
-        </form>
-      )}
-
-      <Link href="/quote" className="mt-8 inline-block text-sm font-semibold text-restore-dark">
-        Domestic instant quote →
-      </Link>
     </div>
   );
 }

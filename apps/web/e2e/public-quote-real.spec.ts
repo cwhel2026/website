@@ -203,3 +203,33 @@ test("a failed photograph upload can be retried without losing the quotation", a
   await page.getByRole("button", { name: "I just want an estimate" }).click();
   await expect(page.getByText("Your estimated price")).toBeVisible({ timeout: 30_000 });
 });
+
+test("a callback request keeps the estimate and does not confirm a visit", async ({ page }) => {
+  await page.goto("/quote");
+  const essential = page.getByRole("button", { name: "Essential only" });
+  if (await essential.isVisible().catch(() => false)) {
+    await essential.click();
+  }
+  await page.getByLabel("Postcode").fill("L39 2YG");
+  await page.getByLabel("Town (optional)").fill("Ormskirk");
+  await page.getByRole("button", { name: "Check coverage" }).click();
+  await page.getByRole("button", { name: "Continue" }).click();
+  await page.getByRole("button", { name: "Continue" }).click();
+  await page.getByPlaceholder("Length (m)").first().fill("8");
+  await page.getByPlaceholder("Width (m)").first().fill("3");
+  await page.getByRole("button", { name: "Continue" }).click();
+  await page.getByRole("button", { name: "Continue" }).click();
+  await page.getByRole("button", { name: "Continue" }).click();
+  await page.getByRole("button", { name: "I just want an estimate" }).click();
+  await expect(page.getByText("Your estimated price")).toBeVisible({ timeout: 30_000 });
+  await page.getByRole("button", { name: "Request a callback" }).click();
+  await page.getByLabel("Your name").fill("Callback Customer");
+  await page.getByLabel("Email").fill("mobile.callback@example.co.uk");
+  await page.getByLabel("Telephone").fill("07123456780");
+  await page.getByLabel("Best time to call").fill("Weekday mornings");
+  await page.getByLabel("Property address").fill("2 Test Lane");
+  await page.getByRole("button", { name: "Request my callback" }).click();
+  await expect(page.getByRole("heading", { name: "What happens next" })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText(/Your visit is not booked/i)).toBeVisible();
+  await expect(page.getByText(/Your appointment is not confirmed yet/i)).toBeVisible();
+});

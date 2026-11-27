@@ -3,10 +3,11 @@
 @tailwind utilities;
 
 :root {
-  --background: #f4f2ee;
-  --foreground: #1a1f1e;
+  --background: #f8f8f5;
+  --foreground: #151515;
   --portal-charcoal: #1a1a1a;
   --portal-gold: #eab308;
+  --consent-offset: 0px;
 }
 
 .portal-root {
@@ -24,6 +25,7 @@ body {
   font-family: var(--font-body), system-ui, sans-serif;
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
+  overflow-x: clip;
 }
 
 @layer utilities {
@@ -37,12 +39,23 @@ body {
 
 @layer components {
   .btn-primary {
-    @apply inline-flex items-center justify-center rounded-md bg-restore-green px-6 py-3.5 text-sm font-semibold tracking-wide text-white transition hover:bg-restore-dark focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-restore-green;
+    @apply inline-flex min-h-12 items-center justify-center bg-brand-gold px-6 py-3.5 text-sm font-semibold tracking-wide text-brand-ink transition hover:brightness-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-gold;
   }
   .btn-secondary {
-    @apply inline-flex items-center justify-center rounded-md border border-asphalt-800/20 bg-white px-6 py-3.5 text-sm font-semibold text-asphalt transition hover:border-asphalt-800/40 hover:bg-stone-wash;
+    @apply inline-flex min-h-12 items-center justify-center border border-brand-ink/20 bg-white px-6 py-3.5 text-sm font-semibold text-brand-ink transition hover:border-brand-ink/50 hover:bg-brand-paper;
+  }
+  .btn-on-dark {
+    @apply inline-flex min-h-12 items-center justify-center border border-white/40 bg-transparent px-6 py-3.5 text-sm font-semibold text-white transition hover:bg-white/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white;
   }
   .section-eyebrow {
-    @apply text-xs font-semibold uppercase tracking-[0.2em] text-restore-dark;
+    @apply text-xs font-semibold uppercase tracking-[0.22em] text-brand-ink;
+  }
+  .quote-journey input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+  .quote-journey select,
+  .quote-journey textarea {
+    @apply min-h-12 rounded-sm border border-brand-line bg-white px-3 py-3 text-base text-brand-ink;
+  }
+  .quote-journey textarea {
+    min-height: 6.5rem;
   }
 }

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { StockImage } from "@/components/site/stock-image";
+import { HOW_IT_WORKS, type ServiceEstimate } from "@/lib/site-content";
 import { serviceMedia } from "@/lib/media-assets";
 
 export function ServicePage({
@@ -8,80 +9,89 @@ export function ServicePage({
   intro,
   benefits,
   slug,
+  estimate = "on-request",
 }: {
   title: string;
   intro: string;
   benefits: string[];
   slug: string;
+  estimate?: ServiceEstimate;
 }) {
   const media = serviceMedia(slug);
   return (
-    <article className="site-container py-16 md:py-24">
-      <p className="section-eyebrow">Service</p>
-      <h1 className="mt-2 font-display text-4xl font-semibold text-asphalt">{title}</h1>
-      <p className="mt-4 max-w-2xl text-lg text-asphalt/75">{intro}</p>
+    <article>
+      <header className="bg-brand-ink text-white">
+        <div className="site-container py-12 md:py-16">
+          <p className="section-eyebrow text-brand-gold">Our services</p>
+          <h1 className="mt-3 max-w-3xl font-display text-4xl font-medium leading-[1.05] md:text-5xl">{title}</h1>
+          <p className="mt-4 max-w-2xl text-lg leading-relaxed text-white/75">{intro}</p>
+        </div>
+      </header>
 
-      {media ? (
-        <div className="mt-10 overflow-hidden rounded-lg border border-stone-line shadow-sm">
-          <StockImage asset={media} aspect="aspect-[21/9]" sizes="100vw" />
-          <p className="border-t border-stone-line bg-stone-wash px-4 py-2 text-xs text-asphalt/60">
-            {media.caption ??
-              (media.kind === "owned_project"
-                ? "Completed SurfaceCoat project imagery."
-                : `Licensed reference photo (${media.credit}) — not a completed SurfaceCoat project.`)}
+      <div className="site-container py-12 md:py-16">
+        {media ? (
+          <figure>
+            <StockImage asset={media} aspect="aspect-[21/9]" sizes="(max-width: 1152px) 100vw, 1152px" />
+            <figcaption className="mt-2 text-xs leading-relaxed text-brand-ink/60">
+              {media.caption ??
+                `Licensed reference photograph (${media.credit}). Not a completed SurfaceCoat project.`}
+            </figcaption>
+          </figure>
+        ) : (
+          <p
+            className="border border-brand-line bg-white px-4 py-8 text-sm text-brand-ink/70"
+            role="status"
+          >
+            A verified photograph for this service has not been approved yet. We are not using a stand-in image.
           </p>
+        )}
+
+        <h2 className="mt-12 font-display text-3xl font-medium">What this covers</h2>
+        <ul className="mt-6 grid gap-4 md:grid-cols-3">
+          {benefits.map((benefit) => (
+            <li key={benefit} className="border-t-2 border-brand-gold pt-4 text-sm leading-relaxed text-brand-ink/80">
+              {benefit}
+            </li>
+          ))}
+        </ul>
+
+        <h2 className="mt-14 font-display text-3xl font-medium">How the work is arranged</h2>
+        <ol className="mt-6 grid gap-6 md:grid-cols-2">
+          {HOW_IT_WORKS.map((step, index) => (
+            <li key={step.title} className="border-t border-brand-line pt-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-brand-ink">0{index + 1}</p>
+              <p className="mt-2 font-semibold">{step.title}</p>
+              <p className="mt-1 text-sm leading-relaxed text-brand-ink/70">{step.detail}</p>
+            </li>
+          ))}
+        </ol>
+        <p className="mt-6 max-w-2xl text-sm leading-relaxed text-brand-ink/70">
+          Coating appointments depend on suitable weather and surface conditions.
+        </p>
+
+        <div className="mt-10 flex flex-col gap-3 sm:flex-row">
+          <Link href={`/quote?service=${slug}`} className="btn-primary">
+            {estimate === "instant" ? "Get my instant estimate" : "Request a quotation"}
+          </Link>
+          <Link href="/service-areas" className="btn-secondary">
+            Areas we cover
+          </Link>
         </div>
-      ) : (
-        <div
-          className="mt-10 flex aspect-[21/9] items-center justify-center rounded-lg border border-dashed border-stone-line bg-stone-wash text-sm text-asphalt/55"
-          role="status"
-        >
-          Service photography pending — upload via Website &amp; marketing when ready.
-        </div>
-      )}
-
-      <h2 className="mt-12 font-display text-2xl font-semibold text-asphalt">Why customers choose this</h2>
-      <ul className="mt-4 space-y-3">
-        {benefits.map((b) => (
-          <li key={b} className="border-l-2 border-restore-green pl-4 text-asphalt/80">
-            {b}
-          </li>
-        ))}
-      </ul>
-
-      <h2 className="mt-12 font-display text-2xl font-semibold text-asphalt">Typical process</h2>
-      <ProcessSteps />
-
-      <div className="mt-12 flex flex-wrap gap-3">
-        <Link href={`/quote?service=${slug}`} className="btn-primary">
-          Instant quotation
-        </Link>
-        <Link href="/service-areas" className="btn-secondary">
-          Check coverage
-        </Link>
+        {estimate === "instant" ? (
+          <p className="mt-4 max-w-2xl text-sm leading-relaxed text-brand-ink/70">
+            You will see one total. It is not a confirmed booking.
+          </p>
+        ) : (
+          <p className="mt-4 max-w-2xl text-sm leading-relaxed text-brand-ink/70">
+            A published instant price is available for tarmac restoration. This service does not show a price until
+            one is confirmed, and requesting a quotation does not confirm a booking.
+          </p>
+        )}
       </div>
     </article>
   );
 }
 
-function ProcessSteps() {
-  const steps = [
-    "Site suitability and measurement (online or visit).",
-    "Preparation — professional washing where included.",
-    "Restoration coating or sealing as specified.",
-    "Aftercare guidance for your surface type.",
-  ];
-  return (
-    <ol className="mt-4 grid gap-4 md:grid-cols-2">
-      {steps.map((s, i) => (
-        <li key={s} className="text-sm text-asphalt/80">
-          <span className="font-bold text-restore-dark">{i + 1}.</span> {s}
-        </li>
-      ))}
-    </ol>
-  );
-}
-
 export function ServiceFaq({ children }: { children: ReactNode }) {
-  return <section className="mt-16 border-t border-stone-line pt-12">{children}</section>;
+  return <section className="site-container border-t border-brand-line py-12">{children}</section>;
 }

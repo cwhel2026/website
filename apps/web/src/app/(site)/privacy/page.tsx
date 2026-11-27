@@ -1,14 +1,18 @@
-export const metadata = { title: "Privacy policy" };
+export const metadata = { title: "Privacy" };
 
 export default function PrivacyPage() {
   return (
-    <div className="prose prose-emerald mx-auto max-w-3xl px-4 py-12">
-      <h1>Privacy policy</h1>
-      <p>
-        SurfaceCoat processes personal data for quotations, bookings and service communications
-        in line with UK GDPR. Full policy text will be published with legal review before live
-        marketing campaigns. Contact preferences and consent flags are stored in the business CRM.
+    <article className="site-container max-w-3xl py-14">
+      <h1 className="font-display text-4xl font-medium">Privacy</h1>
+      <p className="mt-4 text-sm leading-relaxed text-brand-ink/75">
+        SurfaceCoat Ltd uses the details you submit to prepare an estimate, record a booking request, callback or
+        emailed estimate, and to reply to you. Marketing cookies are stored only after you accept analytics. Driveway
+        photographs are kept for the quotation and are not used in marketing unless you give separate permission.
       </p>
-    </div>
+      <p className="mt-4 text-sm leading-relaxed text-brand-ink/75">
+        A full privacy notice will be published after legal review, before paid advertising. This page does not invent
+        a company number, a postal address or a data-protection registration.
+      </p>
+    </article>
   );
 }

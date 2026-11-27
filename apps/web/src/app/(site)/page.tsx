@@ -1,222 +1,191 @@
 import Link from "next/link";
-import { BeforeAfterSlider } from "@/components/site/before-after-slider";
-import { HeroPostcode } from "@/components/home/hero-postcode";
+import Image from "next/image";
 import { CoverageChecker } from "@/components/home/coverage-checker";
 import { StockImage } from "@/components/site/stock-image";
-import { FAQ_ITEMS, SERVICE_CARDS } from "@/lib/site-content";
+import { TransformationGallery } from "@/components/site/transformation-gallery";
+import { FAQ_ITEMS, HOW_IT_WORKS, SERVICE_CARDS, WHY_RESTORE } from "@/lib/site-content";
 import { MEDIA, serviceMedia } from "@/lib/media-assets";
+import { publicBrand } from "@/lib/public-brand";
 
 export default function HomePage() {
   return (
     <>
-      <section className="relative overflow-hidden bg-asphalt text-stone-wash">
-        <div className="absolute inset-0">
-          <StockImage
-            asset={MEDIA.hero}
-            priority
-            aspect=""
-            className="absolute inset-0 opacity-35"
-            sizes="100vw"
-          />
-        </div>
-        <div className="absolute inset-0 bg-gradient-to-r from-asphalt via-asphalt/92 to-asphalt/70" />
-        <div className="site-container relative grid gap-12 py-16 md:grid-cols-2 md:items-center md:py-24 lg:py-28">
-          <div className="animate-fade-up">
-            <p className="section-eyebrow text-restore-green">North West surface specialists</p>
-            <h1 className="mt-4 font-display text-4xl font-semibold leading-[1.08] md:text-5xl lg:text-[3.25rem]">
-              Don&apos;t replace your driveway. Revive it.
-            </h1>
-            <p className="mt-6 max-w-lg text-lg leading-relaxed text-stone-wash/85">
-              Transform tired, faded surfaces with professional restoration across Lancashire, Merseyside
-              and Greater Manchester — without the disruption of a full replacement.
-            </p>
-            <SignatureCtas />
-            <HeroPostcode />
-          </div>
-          <div className="relative">
-            <BeforeAfterSlider
-              before={MEDIA.beforeAfter.before}
-              after={MEDIA.beforeAfter.after}
-              caption={MEDIA.beforeAfter.caption}
-            />
-          </div>
-        </div>
-      </section>
-
+      <Hero />
+      <Transformations />
+      <Services />
       <WhyRestore />
-
-      <section className="site-container py-20">
-        <p className="section-eyebrow">Services</p>
-        <h2 className="mt-2 font-display text-3xl font-semibold text-asphalt">Crafted surface restoration</h2>
-        <div className="mt-8 flex gap-4 overflow-x-auto pb-2 snap-x snap-mandatory [-ms-overflow-style:none] [scrollbar-width:none] sm:mt-10 sm:grid sm:grid-cols-2 sm:gap-6 sm:overflow-visible sm:pb-0 lg:grid-cols-3 [&::-webkit-scrollbar]:hidden">
-          {SERVICE_CARDS.map((s) => (
-            <article
-              key={s.slug}
-              className="group flex min-w-[78vw] max-w-[78vw] snap-start flex-col overflow-hidden rounded-lg border border-stone-line bg-white shadow-sm transition hover:shadow-lift sm:min-w-0 sm:max-w-none"
-            >
-              {(() => {
-                const img = serviceMedia(s.slug);
-                return img ? (
-                  <StockImage
-                    asset={img}
-                    aspect="aspect-[16/10]"
-                    className="rounded-t-lg"
-                    sizes="(max-width: 640px) 78vw, 33vw"
-                  />
-                ) : (
-                  <PendingServiceImage name={s.name} />
-                );
-              })()}
-              <div className="flex flex-1 flex-col p-4 sm:p-5">
-                <h3 className="font-display text-lg font-semibold text-asphalt sm:text-xl">{s.name}</h3>
-                <p className="mt-1.5 line-clamp-3 flex-1 text-sm leading-relaxed text-asphalt/70">{s.blurb}</p>
-                <Link href={s.href} className="mt-3 text-sm font-semibold text-restore-dark hover:underline">
-                  View service →
-                </Link>
-              </div>
-            </article>
-          ))}
-        </div>
-      </section>
-
       <HowItWorks />
-      <RestoreVsReplace />
-      <CoverageChecker />
-
-      <CommercialTeaser />
+      <Coverage />
       <FaqSection />
       <FinalCta />
     </>
   );
 }
 
-function PendingServiceImage({ name }: { name: string }) {
+function Hero() {
   return (
-    <div
-      className="flex aspect-[16/10] flex-col items-center justify-center gap-1 bg-asphalt-900 px-4 text-center"
-      role="img"
-      aria-label={`${name} — verified photography pending`}
-    >
-      <span className="text-[10px] font-semibold uppercase tracking-widest text-restore-green">Asset pending</span>
-      <span className="text-xs text-stone-wash/75">Verified UK reference photo not yet approved</span>
-    </div>
+    <section className="relative overflow-hidden bg-brand-ink text-white">
+      <div className="absolute inset-0">
+        <picture className="absolute inset-0 block">
+          {MEDIA.hero.srcAvif ? <source srcSet={MEDIA.hero.srcAvif} type="image/avif" /> : null}
+          <source srcSet={MEDIA.hero.srcWebp} type="image/webp" />
+          <Image
+            src={MEDIA.hero.srcWebp}
+            alt={MEDIA.hero.alt}
+            fill
+            priority
+            className="object-cover object-center"
+            sizes="100vw"
+          />
+        </picture>
+        <div className="absolute inset-0 bg-brand-ink/80" />
+      </div>
+      <div className="site-container relative flex flex-col justify-center py-8 sm:min-h-[70vh] sm:py-16">
+        <p className="text-xs font-semibold uppercase tracking-[0.22em] text-brand-gold">{publicBrand.tagline}</p>
+        <h1 className="mt-3 max-w-xl font-display text-[2.15rem] font-medium leading-[1.02] sm:text-6xl sm:leading-[0.98]">
+          Don’t replace it. Restore it.
+        </h1>
+        <p className="mt-4 max-w-lg text-sm leading-relaxed text-white/85 sm:mt-5 sm:text-lg">
+          Transform your tired driveway with professional surface restoration, without the expense and disruption of
+          a complete replacement.
+        </p>
+        <div className="mt-7 flex flex-col gap-3 sm:flex-row">
+          <Link href="/quote" className="btn-primary">
+            Get my instant estimate
+          </Link>
+          <Link href="/services" className="btn-on-dark">
+            Explore our services
+          </Link>
+        </div>
+        <p className="mt-4 text-[11px] uppercase tracking-[0.14em] text-white/60">Reference photograph — not our project</p>
+      </div>
+    </section>
   );
 }
 
-function SignatureCtas() {
+function Transformations() {
   return (
-    <div className="mt-8 flex flex-wrap gap-3">
-      <Link href="/quote" className="btn-primary">
-        Get my instant quote
+    <section className="site-container py-14 md:py-20" id="transformations">
+      <div className="grid gap-8 lg:grid-cols-[0.8fr_1.2fr] lg:items-start">
+        <div>
+          <p className="section-eyebrow">Transformations</p>
+          <h2 className="mt-3 font-display text-3xl font-medium leading-tight md:text-4xl">
+            The same driveway. A clearer surface.
+          </h2>
+          <p className="mt-4 text-sm leading-relaxed text-brand-ink/75">
+            Drag the comparison. Until we publish a completed project, every pair is labelled as illustrative and
+            uses one licensed photograph from a single camera position.
+          </p>
+        </div>
+        <TransformationGallery />
+      </div>
+      <Link href="/transformations" className="mt-6 inline-flex min-h-11 items-center text-sm font-semibold">
+        See how we label transformations
       </Link>
-      <Link href="/services" className="btn-secondary border-white/25 bg-transparent text-white hover:bg-white/10">
-        Explore our services
-      </Link>
-    </div>
+    </section>
+  );
+}
+
+function Services() {
+  return (
+    <section className="border-y border-brand-line bg-white py-14 md:py-20">
+      <div className="site-container">
+        <p className="section-eyebrow">Our services</p>
+        <h2 className="mt-3 max-w-xl font-display text-3xl font-medium md:text-4xl">
+          Restoration for the surface you already have.
+        </h2>
+        <div className="mt-10 grid gap-px bg-brand-line sm:grid-cols-2 lg:grid-cols-3">
+          {SERVICE_CARDS.map((service) => {
+            const image = serviceMedia(service.slug);
+            return (
+              <article key={service.slug} className="flex flex-col bg-white">
+                {image ? (
+                  <StockImage asset={image} aspect="aspect-[16/10]" sizes="(max-width: 1024px) 100vw, 33vw" />
+                ) : (
+                  <p
+                    className="flex aspect-[16/10] items-end bg-brand-ink p-4 text-xs uppercase tracking-[0.14em] text-white/70"
+                    role="img"
+                    aria-label={`${service.name}. Verified photography is not approved yet.`}
+                  >
+                    Photograph pending approval
+                  </p>
+                )}
+                <div className="flex flex-1 flex-col p-5">
+                  <h3 className="font-display text-2xl font-medium">{service.name}</h3>
+                  <p className="mt-2 flex-1 text-sm leading-relaxed text-brand-ink/70">{service.blurb}</p>
+                  <Link href={service.href} className="mt-4 inline-flex min-h-11 items-center text-sm font-semibold">
+                    View service
+                  </Link>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      </div>
+    </section>
   );
 }
 
 function WhyRestore() {
-  const points = [
-    "Improved kerb appeal without laying new hardstanding.",
-    "Often less disruptive than full excavation and replacement.",
-    "Professional washing, preparation and protective treatments.",
-    "Regional teams based around Burscough with territory-aware pricing.",
-  ];
   return (
-    <section className="bg-stone-wash py-20">
-      <div className="site-container grid gap-12 md:grid-cols-2 md:items-center">
-        <div>
-          <p className="section-eyebrow">Why restore?</p>
-          <h2 className="mt-2 font-display text-3xl font-semibold text-asphalt">
-            Why replace when you can restore?
-          </h2>
-          <p className="mt-4 text-asphalt/75">
-            Where the underlying construction is sound, restoration can refresh appearance and protection.
-            We will tell you honestly when replacement or heavier repairs are more appropriate.
-          </p>
-          <ul className="mt-6 space-y-3 text-sm text-asphalt/80">
-            {points.map((p) => (
-              <li key={p} className="flex gap-2 border-l-2 border-restore-green pl-3">
-                {p}
-              </li>
-            ))}
-          </ul>
-        </div>
-        <BeforeAfterSlider
-          before={MEDIA.beforeAfter.before}
-          after={MEDIA.beforeAfter.after}
-          caption={MEDIA.beforeAfter.caption}
-        />
-      </div>
+    <section className="site-container py-14 md:py-20">
+      <p className="section-eyebrow">Why restore rather than replace?</p>
+      <h2 className="mt-3 max-w-2xl font-display text-3xl font-medium md:text-4xl">
+        Keep a sound driveway. Refresh what people see.
+      </h2>
+      <p className="mt-4 max-w-2xl text-sm leading-relaxed text-brand-ink/75">
+        Restoration can suit a driveway whose construction is still sound. It is not a promise that every surface can
+        be saved, and it is not a guaranteed saving against replacement.
+      </p>
+      <ul className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {WHY_RESTORE.map((point) => (
+          <li key={point} className="border-t-2 border-brand-gold pt-4 text-sm font-medium leading-relaxed">
+            {point}
+          </li>
+        ))}
+      </ul>
     </section>
   );
 }
 
 function HowItWorks() {
-  const steps = [
-    "Get an instant provisional quotation online.",
-    "Arrange verification and booking.",
-    "We prepare the surface (wash visit where required).",
-    "Protective restoration coating — enjoy the finished result.",
-  ];
   return (
-    <section className="border-y border-stone-line bg-white py-20">
+    <section className="bg-brand-ink py-14 text-white md:py-20" id="how-it-works">
       <div className="site-container">
-        <p className="section-eyebrow">How it works</p>
-        <h2 className="mt-2 font-display text-3xl font-semibold text-asphalt">A clear customer journey</h2>
-        <ol className="mt-10 grid gap-6 md:grid-cols-4">
-          {steps.map((step, i) => (
-            <li key={step} className="border-t-2 border-restore-green pt-4">
-              <span className="text-xs font-bold text-restore-dark">0{i + 1}</span>
-              <p className="mt-2 text-sm leading-relaxed text-asphalt/80">{step}</p>
+        <p className="section-eyebrow text-brand-gold">How it works</p>
+        <h2 className="mt-3 font-display text-3xl font-medium md:text-4xl">Four steps. No surprise visit.</h2>
+        <ol className="mt-10 grid gap-8 md:grid-cols-4">
+          {HOW_IT_WORKS.map((step, index) => (
+            <li key={step.title}>
+              <p className="font-display text-3xl text-brand-gold">0{index + 1}</p>
+              <p className="mt-3 font-semibold">{step.title}</p>
+              <p className="mt-2 text-sm leading-relaxed text-white/70">{step.detail}</p>
             </li>
           ))}
         </ol>
-      </div>
-    </section>
-  );
-}
-
-function RestoreVsReplace() {
-  return (
-    <section className="site-container py-20">
-      <div className="grid gap-8 md:grid-cols-2">
-        <div className="rounded-lg border border-restore-green/30 bg-restore-muted/40 p-8">
-          <h2 className="font-display text-2xl font-semibold text-asphalt">Restoration may suit when…</h2>
-          <ul className="mt-4 list-inside list-disc space-y-2 text-sm text-asphalt/80">
-            <li>Surface is faded but structurally sound.</li>
-            <li>Moss, algae or cosmetic wear are the main issues.</li>
-            <li>You want to refresh without full dig-out.</li>
-          </ul>
-        </div>
-        <div className="rounded-lg border border-stone-line bg-white p-8">
-          <h2 className="font-display text-2xl font-semibold text-asphalt">Further work may be needed when…</h2>
-          <ul className="mt-4 list-inside list-disc space-y-2 text-sm text-asphalt/80">
-            <li>Significant base failure or widespread structural cracking.</li>
-            <li>Unsuitable or failed previous coatings.</li>
-            <li>Drainage or levels need major correction.</li>
-          </ul>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function CommercialTeaser() {
-  return (
-    <section className="bg-asphalt py-20 text-stone-wash">
-      <div className="site-container flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
-        <div>
-          <p className="section-eyebrow text-restore-green">Commercial</p>
-          <h2 className="mt-2 font-display text-3xl font-semibold">Car parks, forecourts & business sites</h2>
-          <p className="mt-3 max-w-xl text-stone-wash/80">
-            Dedicated commercial enquiries for retail parks, industrial estates, hotels and managing agents.
-          </p>
-        </div>
-        <Link href="/commercial" className="btn-primary bg-white text-asphalt hover:bg-stone-wash">
-          Commercial enquiry
+        <p className="mt-8 max-w-2xl text-sm leading-relaxed text-white/70">
+          Coating appointments depend on suitable weather and surface conditions.
+        </p>
+        <Link href="/how-it-works" className="btn-on-dark mt-6">
+          Read the process
         </Link>
+      </div>
+    </section>
+  );
+}
+
+function Coverage() {
+  return (
+    <section className="site-container py-14 md:py-20" id="coverage">
+      <p className="section-eyebrow">Areas we cover</p>
+      <h2 className="mt-3 max-w-2xl font-display text-3xl font-medium md:text-4xl">
+        {publicBrand.coverageAreas}.
+      </h2>
+      <p className="mt-4 max-w-2xl text-sm leading-relaxed text-brand-ink/75">
+        Check a postcode before you start an estimate. We do not advertise a public office.
+      </p>
+      <div className="mt-8">
+        <CoverageChecker />
       </div>
     </section>
   );
@@ -224,34 +193,36 @@ function CommercialTeaser() {
 
 function FaqSection() {
   return (
-    <section className="site-container py-20" id="faq">
-      <p className="section-eyebrow">FAQ</p>
-      <h2 className="mt-2 font-display text-3xl font-semibold text-asphalt">Straight answers</h2>
-      <dl className="mt-10 space-y-6">
-        {FAQ_ITEMS.map((item) => (
-          <div key={item.q} className="border-b border-stone-line pb-6">
-            <dt className="font-semibold text-asphalt">{item.q}</dt>
-            <dd className="mt-2 text-sm leading-relaxed text-asphalt/75">{item.a}</dd>
-          </div>
-        ))}
-      </dl>
-      <Link href="/faq" className="mt-6 inline-block text-sm font-semibold text-restore-dark">
-        Full FAQ →
-      </Link>
+    <section className="border-t border-brand-line bg-white py-14 md:py-20" id="faq">
+      <div className="site-container">
+        <p className="section-eyebrow">Questions</p>
+        <h2 className="mt-3 font-display text-3xl font-medium md:text-4xl">Before you ask us to call.</h2>
+        <dl className="mt-8 divide-y divide-brand-line border-y border-brand-line">
+          {FAQ_ITEMS.map((item) => (
+            <div key={item.q} className="py-5">
+              <dt className="font-semibold">{item.q}</dt>
+              <dd className="mt-2 max-w-3xl text-sm leading-relaxed text-brand-ink/75">{item.a}</dd>
+            </div>
+          ))}
+        </dl>
+        <Link href="/faq" className="mt-6 inline-flex min-h-11 items-center text-sm font-semibold">
+          All questions
+        </Link>
+      </div>
     </section>
   );
 }
 
 function FinalCta() {
   return (
-    <section className="border-t border-stone-line bg-stone-wash py-20">
-      <div className="site-container text-center">
-        <h2 className="font-display text-3xl font-semibold text-asphalt">Ready to revive your driveway?</h2>
-        <p className="mx-auto mt-3 max-w-lg text-asphalt/70">
-          Start with your postcode and measurements for an estimated price.
-        </p>
-        <Link href="/quote" className="btn-primary mt-8">
-          Get my instant quote
+    <section className="bg-brand-gold text-brand-ink">
+      <div className="site-container py-16 md:py-20">
+        <h2 className="max-w-xl font-display text-4xl font-medium leading-[1.02] md:text-5xl">
+          Give your driveway a second life.
+        </h2>
+        <p className="mt-4 text-lg">Get your free instant estimate today.</p>
+        <Link href="/quote" className="mt-8 inline-flex min-h-12 items-center bg-brand-ink px-6 py-3.5 text-sm font-semibold text-white">
+          Get my instant estimate
         </Link>
       </div>
     </section>

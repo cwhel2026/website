@@ -1,14 +1,18 @@
-export const metadata = { title: "Terms and conditions" };
+export const metadata = { title: "Terms" };
 
 export default function TermsPage() {
   return (
-    <div className="prose prose-emerald mx-auto max-w-3xl px-4 py-12">
-      <h1>Terms and conditions</h1>
-      <p>
-        Provisional quotations are not binding contracts. Work is confirmed only after on-site
-        verification and written booking confirmation. Complete terms will be published before
-        customer payments are accepted online.
+    <article className="site-container max-w-3xl py-14">
+      <h1 className="font-display text-4xl font-medium">Terms</h1>
+      <p className="mt-4 text-sm leading-relaxed text-brand-ink/75">
+        An instant estimate is provisional. It is one total for the restoration described and it is not a contract.
+        A request to book, a callback or an emailed estimate does not confirm an appointment. Work is confirmed only
+        when we agree it with you. Repairs are separate and are included only after that agreement.
       </p>
-    </div>
+      <p className="mt-4 text-sm leading-relaxed text-brand-ink/75">
+        Coating visits depend on suitable weather and surface conditions. Complete terms will be published before
+        online payment is offered.
+      </p>
+    </article>
   );
 }

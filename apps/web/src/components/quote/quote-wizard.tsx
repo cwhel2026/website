@@ -10,6 +10,13 @@ import { compressDrivewayPhoto, newPhotoToken, postDrivewayPhoto } from "@/lib/q
 const STORAGE_KEY = "rmd_quote_draft";
 const STEPS = ["Location", "Surface", "Measurements", "Condition", "Preparation", "Photos", "Quote", "Contact"];
 
+function publicQuoteError(message: string): string {
+  if (message.toLowerCase().includes("not configured")) {
+    return "There is no published price for this surface yet. Tarmac restoration can be estimated now. We will not invent a price, and this does not confirm a booking.";
+  }
+  return message;
+}
+
 type Service = { slug: string; name: string };
 type Section = { label: string; length_m: string; width_m: string; area_sqm: string };
 
@@ -277,7 +284,7 @@ export function QuoteWizard() {
         setError(
           err.status >= 500
             ? "We could not calculate a price right now. Your details are still saved — try again shortly."
-            : err.message,
+            : publicQuoteError(err.message),
         );
       } else {
         setError("Quotation could not be calculated. Your details are still saved.");
@@ -469,30 +476,39 @@ export function QuoteWizard() {
   }
 
   return (
-    <div className="min-h-screen bg-stone-wash pb-24">
-      <div className="site-container py-10 md:py-14">
-        <p className="section-eyebrow">Instant quotation</p>
-        <h1 className="mt-2 font-display text-3xl font-semibold text-asphalt md:text-4xl">
-          Your provisional price in minutes
-        </h1>
+    <div className="quote-journey bg-brand-paper pb-16">
+      <div className="site-container py-8 md:py-14">
+        <p className="section-eyebrow">Instant estimate</p>
+        <h1 className="mt-2 font-display text-3xl font-medium text-brand-ink md:text-4xl">Your instant estimate</h1>
+        <p className="mt-3 max-w-xl text-sm leading-relaxed text-brand-ink/70">
+          One total for tarmac restoration. Photographs can upload while you continue. A price is never held for image analysis.
+        </p>
 
-        <ol
-          className="mt-8 grid grid-cols-4 gap-2 text-[10px] sm:grid-cols-8 sm:text-xs"
-          aria-label="Progress"
-        >
-          {STEPS.map((label, i) => (
-            <li
-              key={label}
-              className={`rounded-full px-2 py-1.5 text-center leading-tight ${
-                i === step ? "bg-asphalt text-white" : i < step ? "bg-restore-muted text-restore-dark" : "bg-white text-asphalt/50"
-              }`}
-            >
-              {label}
-            </li>
-          ))}
-        </ol>
+        <div className="mt-6" aria-label="Progress">
+          <div className="flex items-baseline justify-between gap-3 text-xs">
+            <p className="font-semibold uppercase tracking-[0.16em] text-brand-ink">
+              {step + 1} of {STEPS.length}
+            </p>
+            <p className="font-semibold text-brand-ink">{STEPS[step]}</p>
+          </div>
+          <div className="mt-2 h-1 bg-brand-line" aria-hidden>
+            <div className="h-full bg-brand-gold" style={{ width: `${((step + 1) / STEPS.length) * 100}%` }} />
+          </div>
+          <ol className="mt-3 hidden grid-cols-8 gap-2 sm:grid">
+            {STEPS.map((label, i) => (
+              <li
+                key={label}
+                className={`px-1 py-1 text-center text-[11px] leading-tight ${
+                  i === step ? "bg-brand-ink text-white" : i < step ? "bg-brand-gold/40 text-brand-ink" : "text-brand-ink/40"
+                }`}
+              >
+                {label}
+              </li>
+            ))}
+          </ol>
+        </div>
 
-        <div className="mt-8 rounded-lg border border-stone-line bg-white p-6 shadow-sm md:p-10">
+        <div className="mt-6 border border-brand-line bg-white p-5 md:p-10">
           {step !== 5 && photos.some((photo) => photo.status !== "saved") && (
             <PhotoUploadStatus photos={photos} onRetry={(photoId) => void retryPhoto(photoId)} />
           )}
@@ -630,8 +646,8 @@ function StepSurface({
             key={s.value}
             type="button"
             onClick={() => patch({ surface_type: s.value })}
-            className={`rounded-lg border p-4 text-left transition ${
-              state.surface_type === s.value ? "border-restore-green bg-restore-muted/50" : "border-stone-line"
+            className={`min-h-12 border p-4 text-left transition ${
+              state.surface_type === s.value ? "border-brand-ink bg-brand-paper" : "border-brand-line"
             }`}
           >
             <span className="font-semibold">{s.label}</span>
@@ -640,11 +656,11 @@ function StepSurface({
         ))}
       </div>
       <label className="mt-6 block text-sm font-medium">
-        Service (from your active catalogue)
+        Service
         <select
           value={state.service_slug}
           onChange={(e) => patch({ service_slug: e.target.value })}
-          className="mt-1 w-full rounded-md border border-stone-line px-4 py-3"
+          className="mt-1 w-full border border-brand-line bg-white px-4 py-3"
         >
           {services.map((s) => (
             <option key={s.slug} value={s.slug}>
@@ -653,6 +669,12 @@ function StepSurface({
           ))}
         </select>
       </label>
+      {state.service_slug && state.service_slug !== "tarmac-restoration" ? (
+        <p className="mt-3 text-sm leading-relaxed text-brand-ink/75">
+          An instant price is published for tarmac restoration. If this service has no published price, the estimate
+          will say so. Continuing does not confirm a booking.
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -676,7 +698,7 @@ function StepMeasurements({
     <div>
       <h2 className="font-display text-xl font-semibold">Measurements</h2>
       <p className="mt-2 text-sm text-asphalt/70">
-        Add rectangular sections or enter total m². Total estimate:{" "}
+        Add rectangular sections or enter total m². Area entered:{" "}
         <strong>{totalSqm > 0 ? `${totalSqm.toFixed(1)} m²` : "—"}</strong>
       </p>
       <div className="mt-4 rounded-lg border border-stone-line bg-stone-wash p-4 text-sm text-asphalt/75">
@@ -829,7 +851,7 @@ function PhotoUploadStatus({ photos, onRetry }: { photos: LocalPhoto[]; onRetry:
   const pending = photos.filter((photo) => photo.status !== "saved");
   if (pending.length === 0) return null;
   return (
-    <div className="mb-6 rounded-md border border-[#e0b323]/60 px-3 py-3 text-sm text-[#1a1a1a]">
+    <div className="mb-6 rounded-md border border-brand-gold/60 px-3 py-3 text-sm text-brand-ink">
       <p>Photographs are still uploading. Your estimate does not wait for them.</p>
       <ul className="mt-2 space-y-2">
         {pending.map((photo) => (
@@ -871,23 +893,23 @@ function StepPhotos({
   const [open, setOpen] = useState(photos.length > 0);
   const replaceRef = useRef<string | null>(null);
   return (
-    <div className="text-[#1a1a1a]">
+    <div className="text-brand-ink">
       <h2 className="font-display text-xl font-semibold">Photographs</h2>
-      <p className="mt-3 text-sm leading-relaxed text-[#1a1a1a]/80">
+      <p className="mt-3 text-sm leading-relaxed text-brand-ink/80">
         If you have any cracks or areas that may need repairing, please include a close-up photograph. Minor wear
         around edges is perfectly normal.
       </p>
       <div className="mt-6 flex flex-col gap-3">
         <button
           type="button"
-          className="w-full rounded-md border border-[#1a1a1a] bg-white px-6 py-4 text-base font-semibold"
+          className="w-full rounded-md border border-brand-ink bg-white px-6 py-4 text-base font-semibold"
           onClick={() => setOpen(true)}
         >
           Upload driveway photos
         </button>
         <button
           type="button"
-          className="w-full rounded-md bg-[#e0b323] px-6 py-4 text-base font-semibold text-[#1a1a1a]"
+          className="w-full rounded-md bg-brand-gold px-6 py-4 text-base font-semibold text-brand-ink"
           onClick={onSkip}
         >
           I just want an estimate
@@ -895,9 +917,9 @@ function StepPhotos({
       </div>
       {open && (
         <div className="mt-6">
-          <p className="text-sm text-[#1a1a1a]/75">You can see your estimate while photographs upload.</p>
+          <p className="text-sm text-brand-ink/75">You can see your estimate while photographs upload.</p>
           <div className="mt-3 flex flex-col gap-3 sm:flex-row">
-            <label className="w-full rounded-md border border-[#1a1a1a] px-4 py-3 text-center text-sm font-semibold">
+            <label className="w-full rounded-md border border-brand-ink px-4 py-3 text-center text-sm font-semibold">
               Take a photo
               <input
                 type="file"
@@ -911,7 +933,7 @@ function StepPhotos({
                 }}
               />
             </label>
-            <label className="w-full rounded-md border border-[#1a1a1a] px-4 py-3 text-center text-sm font-semibold">
+            <label className="w-full rounded-md border border-brand-ink px-4 py-3 text-center text-sm font-semibold">
               Choose from gallery
               <input
                 type="file"
@@ -935,7 +957,7 @@ function StepPhotos({
                   {photo.url ? (
                     <img src={photo.url} alt="Driveway photograph" className="h-28 w-full rounded object-cover" />
                   ) : (
-                    <div className="flex h-28 items-center justify-center text-xs text-[#1a1a1a]/60">Preparing</div>
+                    <div className="flex h-28 items-center justify-center text-xs text-brand-ink/60">Preparing</div>
                   )}
                   <div
                     className="mt-2 h-1.5 overflow-hidden rounded bg-stone-line"
@@ -945,7 +967,7 @@ function StepPhotos({
                     aria-valuenow={photo.progress}
                     aria-label={photoStatusLabel(photo)}
                   >
-                    <div className="h-full bg-[#e0b323]" style={{ width: `${photo.status === "saved" ? 100 : photo.progress}%` }} />
+                    <div className="h-full bg-brand-gold" style={{ width: `${photo.status === "saved" ? 100 : photo.progress}%` }} />
                   </div>
                   <p className="mt-1 text-xs">{photoStatusLabel(photo)}</p>
                   <div className="mt-2 flex flex-wrap gap-2">
@@ -983,7 +1005,7 @@ function StepPhotos({
           </label>
           <button
             type="button"
-            className="mt-4 w-full rounded-md bg-[#e0b323] px-6 py-4 text-base font-semibold text-[#1a1a1a]"
+            className="mt-4 w-full rounded-md bg-brand-gold px-6 py-4 text-base font-semibold text-brand-ink"
             onClick={onEstimate}
           >
             See my estimate
@@ -1029,52 +1051,52 @@ function QuoteResultCard({
   onChoose: (intention: QuoteState["intention"]) => void;
 }) {
   return (
-    <div className="text-center text-[#1a1a1a]">
-      <p className="text-sm tracking-wide text-[#1a1a1a]/70">Your estimated price</p>
+    <div className="text-center text-brand-ink">
+      <p className="text-sm tracking-wide text-brand-ink/70">Your estimated price</p>
       <p className="mt-2 font-display text-4xl font-semibold">
         £{Number(result.total_gbp).toFixed(2)}
         {result.vat_applied ? (
-          <span className="text-base font-normal text-[#1a1a1a]/60"> including VAT</span>
+          <span className="text-base font-normal text-brand-ink/60"> including VAT</span>
         ) : null}
       </p>
-      <div className="mx-auto mt-6 h-1 w-16 rounded-full bg-[#e0b323]" />
+      <div className="mx-auto mt-6 h-1 w-16 rounded-full bg-brand-gold" />
       <ul className="mx-auto mt-6 max-w-md space-y-3 text-left text-sm">
         {result.included.map((item) => (
           <li key={item.title}>
             <p className="font-semibold">{item.title}</p>
-            <p className="text-[#1a1a1a]/70">{item.detail}</p>
+            <p className="text-brand-ink/70">{item.detail}</p>
           </li>
         ))}
       </ul>
       <ul className="mx-auto mt-6 max-w-md space-y-3 text-left text-sm">
         {result.visits.map((item) => (
-          <li key={item.title} className="rounded-md border border-[#e0b323]/50 bg-white px-3 py-2">
+          <li key={item.title} className="rounded-md border border-brand-gold/50 bg-white px-3 py-2">
             <p className="font-semibold">{item.title}</p>
-            <p className="text-[#1a1a1a]/70">{item.detail}</p>
+            <p className="text-brand-ink/70">{item.detail}</p>
           </li>
         ))}
       </ul>
-      <p className="mx-auto mt-6 max-w-md text-sm leading-relaxed text-[#1a1a1a]/75">{result.repairs_note}</p>
-      <p className="mx-auto mt-3 max-w-md text-sm leading-relaxed text-[#1a1a1a]/75">{result.customer_note}</p>
+      <p className="mx-auto mt-6 max-w-md text-sm leading-relaxed text-brand-ink/75">{result.repairs_note}</p>
+      <p className="mx-auto mt-3 max-w-md text-sm leading-relaxed text-brand-ink/75">{result.customer_note}</p>
       <div className="mx-auto mt-8 flex max-w-md flex-col gap-3 text-left">
         <button
           type="button"
           onClick={() => onChoose("ready_to_book")}
-          className="w-full rounded-md bg-[#e0b323] px-6 py-4 text-base font-semibold text-[#1a1a1a] hover:brightness-95"
+          className="w-full rounded-md bg-brand-gold px-6 py-4 text-base font-semibold text-brand-ink hover:brightness-95"
         >
           Book me in ASAP
         </button>
         <button
           type="button"
           onClick={() => onChoose("callback_requested")}
-          className="w-full rounded-md border border-[#1a1a1a] bg-white px-6 py-4 text-base font-semibold text-[#1a1a1a]"
+          className="w-full rounded-md border border-brand-ink bg-white px-6 py-4 text-base font-semibold text-brand-ink"
         >
           Request a callback
         </button>
         <button
           type="button"
           onClick={() => onChoose("estimate_requested")}
-          className="w-full rounded-md border border-[#1a1a1a] bg-white px-6 py-4 text-base font-semibold text-[#1a1a1a]"
+          className="w-full rounded-md border border-brand-ink bg-white px-6 py-4 text-base font-semibold text-brand-ink"
         >
           Email me my estimate
         </button>
@@ -1113,18 +1135,18 @@ function StepContact({
   if (saved) {
     return (
       <div>
-        <h2 className="font-display text-xl font-semibold text-[#1a1a1a]">What happens next</h2>
-        <p className="mt-4 text-sm leading-relaxed text-[#1a1a1a]/80">{saved.next_steps}</p>
-        <p className="mt-4 text-sm font-semibold text-[#1a1a1a]">
+        <h2 className="font-display text-xl font-semibold text-brand-ink">What happens next</h2>
+        <p className="mt-4 text-sm leading-relaxed text-brand-ink/80">{saved.next_steps}</p>
+        <p className="mt-4 text-sm font-semibold text-brand-ink">
           Reference {saved.reference} · £{Number(saved.total_gbp).toFixed(2)}
           {saved.vat_applied ? " including VAT" : ""}
         </p>
         {saved.suggested_windows.length > 0 && (
           <ul className="mt-4 space-y-2 text-sm">
             {saved.suggested_windows.map((window) => (
-              <li key={`${window.kind}-${window.starts}`} className="rounded-md border border-[#e0b323]/60 px-3 py-2">
+              <li key={`${window.kind}-${window.starts}`} className="rounded-md border border-brand-gold/60 px-3 py-2">
                 <p className="font-semibold">{window.label}</p>
-                <p className="text-[#1a1a1a]/70">
+                <p className="text-brand-ink/70">
                   {new Date(window.starts).toLocaleString("en-GB", { timeZone: "Europe/London" })}. Nothing is reserved.
                 </p>
               </li>
@@ -1132,7 +1154,7 @@ function StepContact({
           </ul>
         )}
         {saved.appointment_confirmed === false && (
-          <p className="mt-4 text-sm text-[#1a1a1a]/75">Your appointment is not confirmed yet.</p>
+          <p className="mt-4 text-sm text-brand-ink/75">Your appointment is not confirmed yet.</p>
         )}
         {saved.photo_later_path && (
           <p className="mt-4 text-sm">
@@ -1160,8 +1182,8 @@ function StepContact({
 
   return (
     <div>
-      <h2 className="font-display text-xl font-semibold text-[#1a1a1a]">{title}</h2>
-      <p className="mt-3 rounded-md bg-stone-wash px-3 py-2 text-sm text-[#1a1a1a]/80">
+      <h2 className="font-display text-xl font-semibold text-brand-ink">{title}</h2>
+      <p className="mt-3 rounded-md bg-stone-wash px-3 py-2 text-sm text-brand-ink/80">
         {[state.address_line1, state.town, state.postcode].filter(Boolean).join(", ") || state.postcode}
       </p>
       <div className="mt-6 grid gap-4">
@@ -1222,13 +1244,13 @@ function StepContact({
           />
         </label>
       </div>
-      <p className="mt-4 text-sm text-[#1a1a1a]/75">
+      <p className="mt-4 text-sm text-brand-ink/75">
         We use these details to respond to this request.{" "}
         <a href="/privacy" className="underline">
           Privacy notice
         </a>
       </p>
-      <label className="mt-3 flex items-start gap-2 text-sm text-[#1a1a1a]/80">
+      <label className="mt-3 flex items-start gap-2 text-sm text-brand-ink/80">
         <input
           type="checkbox"
           className="mt-1"
@@ -1243,7 +1265,7 @@ function StepContact({
           type="button"
           className={
             state.intention === "ready_to_book"
-              ? "mt-6 w-full rounded-md bg-[#e0b323] px-6 py-4 text-base font-semibold text-[#1a1a1a] disabled:opacity-50"
+              ? "mt-6 w-full rounded-md bg-brand-gold px-6 py-4 text-base font-semibold text-brand-ink disabled:opacity-50"
               : "btn-primary mt-6 w-full disabled:opacity-50"
           }
           disabled={!formValid || submitting}
