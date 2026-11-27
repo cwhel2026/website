@@ -56,7 +56,7 @@ async def approve(
     db: Annotated[AsyncSession, Depends(get_db)],
     user: Annotated[User, Depends(get_current_admin)],
 ) -> ApprovalRequest:
-    req = await db.get(ApprovalRequest, approval_id)
+    req = await db.get(ApprovalRequest, approval_id, with_for_update=True)
     if req is None:
         raise HTTPException(404, "Not found")
     if req.status != ApprovalStatus.PENDING:
@@ -94,7 +94,7 @@ async def reject(
     db: Annotated[AsyncSession, Depends(get_db)],
     user: Annotated[User, Depends(get_current_admin)],
 ) -> ApprovalRequest:
-    req = await db.get(ApprovalRequest, approval_id)
+    req = await db.get(ApprovalRequest, approval_id, with_for_update=True)
     if req is None:
         raise HTTPException(404, "Not found")
     if req.status != ApprovalStatus.PENDING:

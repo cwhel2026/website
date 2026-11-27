@@ -10,7 +10,9 @@ from app.models.briefings import BriefingKind, BriefingRecord
 from app.models.jobs import Appointment, Job, AppointmentStatus
 from app.models.quotation import Quotation, QuotationStatus
 from app.services.assistant_tools import (
+    tool_jobs_today,
     tool_jobs_tomorrow,
+    tool_rain_risk_appointments,
     tool_pending_approvals,
     tool_wash_pending_coat,
 )
@@ -21,6 +23,8 @@ async def generate_briefing(db: AsyncSession, kind: BriefingKind) -> BriefingRec
     payload: dict = {"kind": kind.value, "generated_at": datetime.now(UTC).isoformat()}
 
     if kind == BriefingKind.MORNING:
+        payload["today"] = await tool_jobs_today(db)
+        payload["rain_risk"] = await tool_rain_risk_appointments(db)
         payload["tomorrow"] = await tool_jobs_tomorrow(db)
         payload["wash_pending"] = await tool_wash_pending_coat(db)
         payload["approvals"] = await tool_pending_approvals(db)

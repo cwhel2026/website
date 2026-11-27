@@ -1,5 +1,6 @@
 import hmac
 import logging
+from urllib.parse import urlsplit
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Header, HTTPException
@@ -36,10 +37,32 @@ START_MESSAGE = (
     "📋 /quotes — quotation overview\n"
     "💷 /finance — business finances\n"
     "🌦 /weather — weather intelligence\n"
-    "🔐 /approvals — review pending decisions\n\n"
+    "🔐 /approvals — review pending decisions\n"
+    "📆 /schedule — coating deadlines\n\n"
     "Ask a business question or send a receipt photo (OCR must be configured)."
 
 )
+
+
+def format_business_report(heading: str, data: dict) -> str:
+    lines = [f"🟡 SurfaceCoat | {heading}", ""]
+    for key, value in data.items():
+        label = key.replace("_", " ").capitalize()
+        if isinstance(value, list):
+            lines.append(f"{label}:")
+            if not value:
+                lines.append("  None recorded")
+            for item in value:
+                if isinstance(item, dict):
+                    lines.append("• " + " | ".join(f"{k.replace('_', ' ')}: {v if v is not None else 'unknown'}" for k, v in item.items()))
+                else:
+                    lines.append(f"• {item}")
+        elif isinstance(value, dict):
+            lines.extend(f"• {k}: {v}" for k, v in value.items())
+        else:
+            lines.append(f"{label}: {value}")
+    lines.extend(["", "Read-only report. Review changes in the dashboard."])
+    return "\n".join(lines)
 
 
 class TelegramUpdate(BaseModel):
@@ -78,9 +101,23 @@ def _reply_chat_id(message: dict[str, Any] | None) -> int | None:
     return chat.get("id")
 
 
-async def _safe_send(chat_id: int, text: str) -> int | None:
+def report_review_markup(command: str, origin: str) -> dict | None:
+    routes = {"/approvals": ("Review approvals", "/dashboard/approvals"), "/schedule": ("Review jobs", "/dashboard/jobs")}
+    if command not in routes:
+        return None
     try:
-        result = await send_message(chat_id=chat_id, text=text[:4096])
+        url = urlsplit(origin)
+        if url.scheme != "https" or not url.hostname or url.username or url.password or url.path not in ("", "/") or url.query or url.fragment:
+            return None
+    except ValueError:
+        return None
+    label, path = routes[command]
+    return {"inline_keyboard": [[{"text": label, "url": origin.rstrip("/") + path}]]}
+
+
+async def _safe_send(chat_id: int, text: str, reply_markup: dict | None = None) -> int | None:
+    try:
+        result = await send_message(chat_id=chat_id, text=text[:4096], **({"reply_markup": reply_markup} if reply_markup else {}))
         return result.get("message_id")
     except TelegramApiError as exc:
         logger.warning("Telegram outbound failed for chat %s: %s", chat_id, exc)
@@ -300,13 +337,32 @@ async def telegram_webhook(
         try:
             from app.services.finance.telegram_finance import answer_finance_question
 
-            command_questions = {"/today": "What jobs are scheduled today?", "/diary": "What upcoming appointments are in my diary?", "/quotes": "Summarise my current quotations and booking requests.", "/finance": "Summarise my business finances.", "/weather": "What is the weather outlook for scheduled jobs?", "/approvals": "List pending approvals for review only. Do not approve or execute anything."}
-            question = command_questions.get(text.lower(), text)
-            finance_reply = await answer_finance_question(db, question)
-            if finance_reply:
-                reply, reply_meta = finance_reply, {}
+            from app.services.assistant_tools import (
+                tool_jobs_today, tool_jobs_next_week, tool_quotations_awaiting,
+                tool_pending_approvals, tool_rain_risk_appointments,
+                tool_analytics_snapshot, tool_schedule_proposals,
+            )
+            commands = {
+                "/today": ("TODAY'S CONFIRMED JOBS", tool_jobs_today),
+                "/diary": ("NEXT SEVEN DAYS", tool_jobs_next_week),
+                "/quotes": ("QUOTATIONS AWAITING APPROVAL", tool_quotations_awaiting),
+                "/finance": ("30-DAY BUSINESS FINANCES", tool_analytics_snapshot),
+                "/weather": ("KNOWN COATING WEATHER RISKS", tool_rain_risk_appointments),
+                "/approvals": ("PENDING APPROVALS", tool_pending_approvals),
+                "/schedule": ("COATING PROPOSALS FOR REVIEW", tool_schedule_proposals),
+            }
+            command = commands.get(text.lower())
+            if command:
+                heading, handler = command
+                data = await handler(db)
+                reply = format_business_report(heading, data)
+                reply_meta = {"database_report": True}
             else:
-                reply, reply_meta = await answer_question(db, question)
+                finance_reply = await answer_finance_question(db, text)
+                if finance_reply:
+                    reply, reply_meta = finance_reply, {}
+                else:
+                    reply, reply_meta = await answer_question(db, text)
             outbound_text = reply[:4096]
         except Exception as exc:
             logger.exception("Assistant failed for Telegram message")
@@ -316,7 +372,8 @@ async def telegram_webhook(
             )
             reply_meta = {"error": "assistant_unavailable"}
 
-    telegram_message_id = await _safe_send(chat_id, outbound_text)
+    markup = report_review_markup(text.lower(), cfg.public_origin)
+    telegram_message_id = await _safe_send(chat_id, outbound_text, markup)
     if telegram_message_id is None:
         await enqueue_notification(
             db,

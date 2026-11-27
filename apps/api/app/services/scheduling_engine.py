@@ -152,6 +152,8 @@ async def propose_two_stage_slots(
     )
     travel = estimate_drive_minutes(distance) + settings.travel_buffer_minutes
     forecast, _source, _live = await get_hourly_forecast(db, lat, lon, hours=168, for_booking=True)
+    if not _live:
+        raise RuntimeError("Live forecast required for scheduling proposals")
 
     prep_slots: list[SlotProposal] = []
     coat_slots: list[SlotProposal] = []

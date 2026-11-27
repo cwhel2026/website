@@ -73,3 +73,14 @@ async def test_non_booking_allows_simulated_cache(monkeypatch):
     assert source == "simulation"
     assert is_live is False
     assert len(rows) == 24
+
+@pytest.mark.asyncio
+async def test_schedule_proposals_reject_simulated_forecast(monkeypatch):
+    from types import SimpleNamespace
+    from datetime import time
+    from app.services import scheduling_engine as engine
+    settings = SimpleNamespace(min_notice_hours=24, work_day_start=time(8), work_day_end=time(17, 30), earliest_work_date=None, base_latitude=53.59, base_longitude=-2.84, travel_buffer_minutes=10)
+    monkeypatch.setattr(engine, "get_scheduling_settings", AsyncMock(return_value=settings))
+    monkeypatch.setattr(engine, "get_hourly_forecast", AsyncMock(return_value=([], "simulation", False)))
+    with pytest.raises(RuntimeError, match="Live forecast required"):
+        await engine.propose_two_stage_slots(object(), lat=53.59, lon=-2.84, product_profile=None)

@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.approvals import ApprovalRequest, ApprovalStatus
-from app.models.jobs import Appointment, AppointmentType, Job, JobStatus
+from app.models.jobs import Appointment, AppointmentStatus, AppointmentType, Job, JobStatus
 from app.models.quotation import Quotation
 from app.services.analytics_service import build_analytics_snapshot
 from app.services.marketing.budget_controls import weekly_spend_summary
@@ -26,7 +26,7 @@ async def _appointments_between(db: AsyncSession, start: datetime, end: datetime
     result = await db.execute(
         select(Appointment, Job)
         .join(Job)
-        .where(Appointment.scheduled_start >= start, Appointment.scheduled_start < end)
+        .where(Appointment.scheduled_start >= start, Appointment.scheduled_start < end, Appointment.status == AppointmentStatus.CONFIRMED)
         .order_by(Appointment.scheduled_start)
     )
     items = []
@@ -146,16 +146,16 @@ async def tool_marketing_capacity(db: AsyncSession) -> dict[str, Any]:
 
 async def tool_jobs_next_week(db: AsyncSession) -> dict[str, Any]:
     start, _ = utc_range_for_uk_day(uk_today())
-    end = start + timedelta(days=7)
+    end, _ = utc_range_for_uk_day(uk_today() + timedelta(days=7))
     result = await db.execute(
         select(Appointment, Job)
         .join(Job)
-        .where(Appointment.scheduled_start >= start, Appointment.scheduled_start < end)
+        .where(Appointment.scheduled_start >= start, Appointment.scheduled_start < end, Appointment.status == AppointmentStatus.CONFIRMED)
         .order_by(Appointment.scheduled_start)
     )
     by_day: dict[str, int] = {}
     for appt, _ in result.all():
-        day = appt.scheduled_start.date().isoformat()
+        day = appt.scheduled_start.astimezone(uk_now().tzinfo).date().isoformat()
         by_day[day] = by_day.get(day, 0) + 1
     return {"days": by_day, "total": sum(by_day.values())}
 
@@ -196,7 +196,7 @@ async def tool_pending_approvals(db: AsyncSession) -> dict[str, Any]:
 async def tool_quotations_awaiting(db: AsyncSession) -> dict[str, Any]:
     result = await db.execute(
         select(Quotation)
-        .where(Quotation.requires_approval.is_(True))
+        .where(Quotation.requires_approval.is_(True), Quotation.is_test.is_(False))
         .order_by(Quotation.created_at.desc())
         .limit(20)
     )
@@ -218,6 +218,7 @@ async def tool_rain_risk_appointments(db: AsyncSession) -> dict[str, Any]:
             Appointment.scheduled_start >= start,
             Appointment.scheduled_start < end,
             Appointment.appointment_type == AppointmentType.COATING,
+            Appointment.status == AppointmentStatus.CONFIRMED,
         )
     )
     at_risk = []
@@ -236,10 +237,44 @@ async def tool_new_enquiries_count(db: AsyncSession) -> dict[str, Any]:
     result = await db.execute(
         select(func.count())
         .select_from(Enquiry)
-        .where(Enquiry.created_at >= since, Enquiry.stage == PipelineStage.NEW_ENQUIRY)
+        .where(Enquiry.created_at >= since, Enquiry.stage == PipelineStage.NEW_ENQUIRY, Enquiry.is_test.is_(False))
     )
     count = result.scalar() or 0
     return {"last_7_days_new_enquiries": count}
+
+
+async def tool_schedule_proposals(db: AsyncSession) -> dict[str, Any]:
+    from app.models.crm import CustomerProperty
+    from app.models.weather import ProductProfile
+    from app.services.scheduling_engine import propose_two_stage_slots
+
+    result = await db.execute(
+        select(Job, CustomerProperty)
+        .outerjoin(CustomerProperty, (CustomerProperty.id == Job.property_id) & (CustomerProperty.customer_id == Job.customer_id))
+        .options(selectinload(Job.appointments))
+        .where(Job.status.in_([JobStatus.RESTORATION_PENDING, JobStatus.PREPARATION_COMPLETED]))
+        .order_by(Job.seven_day_target_date.asc().nulls_last())
+        .limit(5)
+    )
+    profile = (await db.execute(select(ProductProfile).where(ProductProfile.is_active.is_(True)).limit(1))).scalar_one_or_none()
+    items = []
+    for job, prop in result.all():
+        item = {"reference": job.reference, "deadline": job.seven_day_target_date.isoformat() if job.seven_day_target_date else None}
+        if any(a.appointment_type == AppointmentType.COATING and a.status in (AppointmentStatus.CONFIRMED, AppointmentStatus.PROVISIONAL, AppointmentStatus.IN_PROGRESS) for a in job.appointments):
+            item["proposal"] = "Coating already scheduled"
+        elif not profile or prop is None or prop.latitude is None or prop.longitude is None:
+            item["proposal"] = "Missing product profile or property coordinates"
+        else:
+            try:
+                _, slots = await propose_two_stage_slots(db, job=job, lat=float(prop.latitude), lon=float(prop.longitude), product_profile=profile, max_prep_slots=1)
+                item["proposal"] = slots[0].start.astimezone(uk_now().tzinfo).isoformat() if slots else "No safe window found"
+                if slots:
+                    item["estimated_travel_minutes"] = slots[0].travel_minutes
+                    item["weather_score"] = slots[0].weather_score
+            except (ValueError, RuntimeError):
+                item["proposal"] = "Scheduling or forecast unavailable"
+        items.append(item)
+    return {"proposals": items, "note": "Up to five priority jobs. Suggestions are independent, not reserved; recheck conflicts and live weather before confirming."}
 
 
 TOOL_HANDLERS = {
