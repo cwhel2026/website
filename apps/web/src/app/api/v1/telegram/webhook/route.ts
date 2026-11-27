@@ -1,3 +1,4 @@
+import { timingSafeEqual } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 
 export const runtime = "nodejs";
@@ -27,9 +28,10 @@ export async function POST(request: NextRequest) {
   }
 
   const expectedSecret = expectedWebhookSecret();
-  if (expectedSecret) {
+  if (!expectedSecret) return NextResponse.json({ status: "secret_not_configured" }, { status: 503 });
+  {
     const got = request.headers.get("X-Telegram-Bot-Api-Secret-Token") ?? "";
-    if (got !== expectedSecret) {
+    if (Buffer.byteLength(got) !== Buffer.byteLength(expectedSecret) || !timingSafeEqual(Buffer.from(got), Buffer.from(expectedSecret))) {
       return NextResponse.json({ status: "invalid_secret" }, { status: 401 });
     }
   }
@@ -41,6 +43,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ status: "bad_json" }, { status: 400 });
   }
 
+  if (!update || !Number.isSafeInteger(update.update_id)) return NextResponse.json({ status: "bad_update" }, { status: 400 });
   if (markUpdateSeen(update.update_id)) {
     return NextResponse.json({ status: "duplicate" });
   }
@@ -59,7 +62,7 @@ export async function POST(request: NextRequest) {
   }
 
   const admins = telegramAdminIds();
-  const authorised = userId != null && admins.length > 0 && admins.includes(userId);
+  const authorised = userId != null && admins.length > 0 && admins.includes(userId) && chatId === userId;
 
   if (!authorised) {
     const hint =
@@ -124,7 +127,7 @@ export async function POST(request: NextRequest) {
   }
 
   let reply: string;
-  if (text === "/start" || text.startsWith("/start ")) {
+  if (text === "/start" || text === "/help" || text.startsWith("/start ")) {
     reply =
       TELEGRAM_START_MESSAGE +
       "\n\nSend a receipt photo here when the API is connected.";
@@ -144,7 +147,7 @@ export async function POST(request: NextRequest) {
     }
     reply = "Could not reach the business API — try again shortly.";
   } else {
-    reply = await assistantLiteReply(text);
+    reply = /^(\/today|\/diary|\/quotes|\/finance|\/weather|\/approvals)(?:\s|$)/i.test(text) ? "Business data unavailable: connect the business API first." : await assistantLiteReply(text);
   }
 
   const sent = await telegramSendMessage(chatId, reply);
