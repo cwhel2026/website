@@ -28,15 +28,19 @@ async def build_analytics_snapshot(db: AsyncSession, days: int = 30) -> Analytic
     since = datetime.now(UTC) - timedelta(days=days)
 
     enquiries = await db.scalar(
-        select(func.count()).select_from(Enquiry).where(Enquiry.created_at >= since)
+        select(func.count()).select_from(Enquiry).where(Enquiry.created_at >= since, Enquiry.is_test.is_(False))
     )
     quotations = await db.scalar(
-        select(func.count()).select_from(Quotation).where(Quotation.created_at >= since)
+        select(func.count()).select_from(Quotation).where(Quotation.created_at >= since, Quotation.is_test.is_(False))
     )
     accepted = await db.scalar(
         select(func.count())
         .select_from(Quotation)
-        .where(Quotation.created_at >= since, Quotation.status == QuotationStatus.ACCEPTED)
+        .where(
+            Quotation.created_at >= since,
+            Quotation.status == QuotationStatus.ACCEPTED,
+            Quotation.is_test.is_(False),
+        )
     )
     invoices = await db.scalar(
         select(func.count())
@@ -48,11 +52,11 @@ async def build_analytics_snapshot(db: AsyncSession, days: int = 30) -> Analytic
     )
     quoted_sum = await db.scalar(
         select(func.coalesce(func.sum(Quotation.total_inc_vat_gbp), 0)).where(
-            Quotation.created_at >= since
+            Quotation.created_at >= since, Quotation.is_test.is_(False)
         )
     )
     customers = await db.scalar(
-        select(func.count()).select_from(Customer).where(Customer.created_at >= since)
+        select(func.count()).select_from(Customer).where(Customer.created_at >= since, Customer.is_test.is_(False))
     )
 
     enq = enquiries or 0

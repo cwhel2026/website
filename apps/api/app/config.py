@@ -112,9 +112,30 @@ class Settings(BaseSettings):
 
     @property
     def telegram_admin_id_list(self) -> list[int]:
-        if not self.telegram_admin_ids.strip():
-            return []
-        return [int(x.strip()) for x in self.telegram_admin_ids.split(",") if x.strip().isdigit()]
+        ids: list[int] = []
+        for raw in self.telegram_admin_ids.split(","):
+            text = raw.strip()
+            if not text:
+                continue
+            try:
+                ids.append(int(text))
+            except ValueError:
+                continue
+        return ids
+
+    @property
+    def telegram_alert_chat_ids(self) -> list[int]:
+        ids: list[int] = []
+        if self.telegram_owner_chat_id:
+            ids.append(int(self.telegram_owner_chat_id))
+        for chat_id in self.telegram_admin_id_list:
+            if chat_id not in ids:
+                ids.append(chat_id)
+        return ids
+
+    @property
+    def public_origin(self) -> str:
+        return (self.public_dashboard_base_url or self.public_api_base_url or "").rstrip("/")
 
     @property
     def cors_origin_list(self) -> list[str]:

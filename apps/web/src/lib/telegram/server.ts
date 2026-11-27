@@ -14,7 +14,7 @@ export function telegramAdminIds(): number[] {
   return raw
     .split(",")
     .map((s) => s.trim())
-    .filter((s) => /^\d+$/.test(s))
+    .filter((s) => /^-?\d+$/.test(s))
     .map((s) => Number(s));
 }
 

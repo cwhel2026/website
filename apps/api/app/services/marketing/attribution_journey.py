@@ -26,12 +26,16 @@ async def marketing_funnel_attribution(db: AsyncSession, *, days: int = 90) -> d
         .where(AttributionEvent.landed_at >= since, AttributionEvent.enquiry_id.isnot(None))
     )
     quotes = await db.scalar(
-        select(func.count()).select_from(Quotation).where(Quotation.created_at >= since)
+        select(func.count()).select_from(Quotation).where(Quotation.created_at >= since, Quotation.is_test.is_(False))
     )
     accepted = await db.scalar(
         select(func.count())
         .select_from(Quotation)
-        .where(Quotation.created_at >= since, Quotation.status == QuotationStatus.ACCEPTED)
+        .where(
+            Quotation.created_at >= since,
+            Quotation.status == QuotationStatus.ACCEPTED,
+            Quotation.is_test.is_(False),
+        )
     )
     booked_jobs = await db.scalar(
         select(func.count())

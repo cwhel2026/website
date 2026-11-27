@@ -54,19 +54,20 @@ test("complete provisional tarmac quote on mobile", async ({ page }) => {
   await page.getByLabel("Property address").fill("1 Test Lane");
   await page.getByRole("button", { name: "Book me in ASAP" }).click();
 
-  const confirmation = page.getByRole("heading", { name: "What happens next" });
+  const confirmation = page.getByRole("heading", { name: "Thank you for choosing SurfaceCoat" });
   const problem = page.locator("p.text-red-700");
   await expect(confirmation.or(problem)).toBeVisible({ timeout: 30_000 });
   if (await problem.isVisible()) {
     throw new Error(await problem.innerText());
   }
-  await expect(page.getByText(/not a confirmed booking/i)).toBeVisible();
+  await expect(page.getByText(/We've received your booking request/i)).toBeVisible();
+  await expect(page.getByText(/This is a booking request/i)).toBeVisible();
   await expect(page.getByText(/We have emailed/i)).toHaveCount(0);
-  await expect(page.getByText(/Your appointment is not confirmed yet/i)).toBeVisible();
+  await expect(page.getByRole("link", { name: "Return to homepage" })).toBeVisible();
 
   const stored = await page.evaluate(() => sessionStorage.getItem("rmd_quote_draft"));
   expect(stored).toBeNull();
-  await expect(page.getByRole("link", { name: "Add or update photographs" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Add photographs later" })).toBeVisible();
 });
 
 test("upload a driveway photograph then still receive an estimate", async ({ page }) => {
@@ -104,14 +105,13 @@ test("upload a driveway photograph then still receive an estimate", async ({ pag
   await page.getByLabel("Property address").fill("2 Test Lane");
   await page.getByRole("button", { name: "Email my estimate" }).click();
 
-  const confirmation = page.getByRole("heading", { name: "What happens next" });
+  const confirmation = page.getByRole("heading", { name: "Thank you for choosing SurfaceCoat" });
   const problem = page.locator("p.text-red-700");
   await expect(confirmation.or(problem)).toBeVisible({ timeout: 30_000 });
   if (await problem.isVisible()) {
     throw new Error(await problem.innerText());
   }
-  await expect(page.getByText(/do not change the price/i)).toBeVisible();
-  await expect(page.getByText(/not a confirmed booking/i)).toBeVisible();
+  await expect(page.getByText(/This is a booking request/i)).toBeVisible();
 });
 
 test("the estimate appears on a slow connection while a photograph is still uploading", async ({ page }) => {
@@ -229,7 +229,7 @@ test("a callback request keeps the estimate and does not confirm a visit", async
   await page.getByLabel("Best time to call").fill("Weekday mornings");
   await page.getByLabel("Property address").fill("2 Test Lane");
   await page.getByRole("button", { name: "Request my callback" }).click();
-  await expect(page.getByRole("heading", { name: "What happens next" })).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByText(/Your visit is not booked/i)).toBeVisible();
-  await expect(page.getByText(/Your appointment is not confirmed yet/i)).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Thank you for choosing SurfaceCoat" })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText(/callback request/i)).toBeVisible();
+  await expect(page.getByText(/This is a booking request/i)).toBeVisible();
 });

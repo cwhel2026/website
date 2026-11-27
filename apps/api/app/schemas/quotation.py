@@ -132,6 +132,8 @@ class PublicQuotationOut(ORMModel):
     email_status: str = "not_requested"
     telegram_notified: bool = False
     next_steps: str = ""
+    next_step_items: list[str] = []
+    confirmation_heading: str = "Thank you for choosing SurfaceCoat"
     suggested_windows: list[SuggestedWindowOut] = []
     photos_attached: bool = False
     photo_later_path: str = ""
@@ -162,3 +164,4 @@ class QuotationOut(ORMModel):
     meets_minimum_margin: bool
     requires_approval: bool
     territory_id: UUID | None
+    is_test: bool = False

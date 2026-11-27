@@ -1,4 +1,4 @@
-from app.models.crm import Customer, CustomerProperty, Enquiry
+from app.models.crm import Customer, CustomerProperty, Enquiry, OwnerFollowUp
 from app.models.pricing import PricingProfile, PricingRule, PricingRuleType
 from app.models.quotation import (
     Quotation,
@@ -33,6 +33,7 @@ __all__ = [
     "Customer",
     "CustomerProperty",
     "Enquiry",
+    "OwnerFollowUp",
     "Quotation",
     "QuotationSection",
     "QuotationCalculation",

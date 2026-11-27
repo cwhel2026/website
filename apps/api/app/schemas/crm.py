@@ -32,6 +32,7 @@ class CustomerOut(ORMModel):
     full_name: str
     source: str | None
     campaign: str | None
+    is_test: bool = False
     created_at: datetime
 
 
@@ -58,6 +59,8 @@ class EnquiryOut(ORMModel):
     callback_status: str = "not_applicable"
     callback_outcome: str | None = None
     email_delivery: str = "not_requested"
+    telegram_notified: bool = False
+    is_test: bool = False
     utm_source: str | None = None
     utm_campaign: str | None = None
 

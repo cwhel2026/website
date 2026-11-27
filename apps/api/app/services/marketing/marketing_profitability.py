@@ -21,7 +21,7 @@ async def marketing_profitability_snapshot(db: AsyncSession, *, days: int = 30) 
         select(func.count()).select_from(AttributionEvent).where(AttributionEvent.landed_at >= since)
     )
     quotes = await db.scalar(
-        select(func.count()).select_from(Quotation).where(Quotation.created_at >= since)
+        select(func.count()).select_from(Quotation).where(Quotation.created_at >= since, Quotation.is_test.is_(False))
     )
     accepted = await db.scalar(
         select(func.count())
@@ -29,12 +29,14 @@ async def marketing_profitability_snapshot(db: AsyncSession, *, days: int = 30) 
         .where(
             Quotation.created_at >= since,
             Quotation.status == QuotationStatus.ACCEPTED,
+            Quotation.is_test.is_(False),
         )
     )
     quoted_value = await db.scalar(
         select(func.coalesce(func.sum(Quotation.total_inc_vat_gbp), 0)).where(
             Quotation.created_at >= since,
             Quotation.status == QuotationStatus.ACCEPTED,
+            Quotation.is_test.is_(False),
         )
     )
     spend_d = Decimal(str(spend or 0))

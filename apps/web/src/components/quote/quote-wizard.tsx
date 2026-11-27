@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { ApiError } from "@/lib/api";
 import { apiDelete, apiGet, apiPost } from "@/lib/api";
@@ -81,6 +82,8 @@ type SavedQuotation = {
   email_sent: boolean;
   email_status: string;
   next_steps: string;
+  next_step_items?: string[];
+  confirmation_heading?: string;
   suggested_windows: SuggestedWindow[];
   photo_later_path?: string;
   photos_attached?: boolean;
@@ -562,10 +565,16 @@ export function QuoteWizard() {
           )}
 
           <div className="mt-10 flex flex-wrap justify-between gap-3 border-t border-stone-line pt-6">
-            <button type="button" onClick={back} disabled={step === 0} className="btn-secondary disabled:opacity-40">
-              Back
-            </button>
-            {step < 7 && step !== 5 && !(step === 6 && provisional) && (
+            {saved ? (
+              <Link href="/" className="btn-secondary">
+                Return to homepage
+              </Link>
+            ) : (
+              <button type="button" onClick={back} disabled={step === 0} className="btn-secondary disabled:opacity-40">
+                Back
+              </button>
+            )}
+            {step < 7 && step !== 5 && !(step === 6 && provisional) && !saved && (
               <button
                 type="button"
                 onClick={next}
@@ -1133,43 +1142,59 @@ function StepContact({
     (state.intention !== "callback_requested" || state.callback_preferred_time.trim().length >= 2);
 
   if (saved) {
+    const steps =
+      saved.next_step_items && saved.next_step_items.length > 0
+        ? saved.next_step_items
+        : [
+            "We review your details and photographs.",
+            "We contact you to agree a visit.",
+            "Nothing is booked until we confirm it with you.",
+          ];
     return (
-      <div>
-        <h2 className="font-display text-xl font-semibold text-brand-ink">What happens next</h2>
-        <p className="mt-4 text-sm leading-relaxed text-brand-ink/80">{saved.next_steps}</p>
-        <p className="mt-4 text-sm font-semibold text-brand-ink">
-          Reference {saved.reference} · £{Number(saved.total_gbp).toFixed(2)}
-          {saved.vat_applied ? " including VAT" : ""}
+      <div className="border border-brand-line bg-brand-paper p-5 sm:p-8">
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-ink/70">SurfaceCoat</p>
+        <h2 className="mt-3 font-display text-3xl font-medium leading-tight text-brand-ink">
+          {saved.confirmation_heading || "Thank you for choosing SurfaceCoat"}
+        </h2>
+        <p className="mt-4 text-base leading-relaxed text-brand-ink/80">{saved.next_steps}</p>
+        <dl className="mt-6 grid gap-3 border-y border-brand-line py-4 sm:grid-cols-2">
+          <div>
+            <dt className="text-xs font-semibold uppercase tracking-[0.14em] text-brand-ink/60">Estimated price</dt>
+            <dd className="mt-1 font-display text-2xl text-brand-ink">£{Number(saved.total_gbp).toFixed(2)}</dd>
+          </div>
+          <div>
+            <dt className="text-xs font-semibold uppercase tracking-[0.14em] text-brand-ink/60">Quotation reference</dt>
+            <dd className="mt-1 font-semibold text-brand-ink">{saved.reference}</dd>
+          </div>
+        </dl>
+        <h3 className="mt-6 text-sm font-semibold uppercase tracking-[0.14em] text-brand-ink">What happens next</h3>
+        <ol className="mt-3 space-y-2">
+          {steps.map((item, index) => (
+            <li key={item} className="flex gap-3 text-sm leading-relaxed text-brand-ink/80">
+              <span className="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center bg-brand-gold text-xs font-semibold text-brand-ink">
+                {index + 1}
+              </span>
+              {item}
+            </li>
+          ))}
+        </ol>
+        <p className="mt-6 text-sm text-brand-ink/75">
+          This is a booking request. Your visit is not booked until we agree it with you.
         </p>
-        {saved.suggested_windows.length > 0 && (
-          <ul className="mt-4 space-y-2 text-sm">
-            {saved.suggested_windows.map((window) => (
-              <li key={`${window.kind}-${window.starts}`} className="rounded-md border border-brand-gold/60 px-3 py-2">
-                <p className="font-semibold">{window.label}</p>
-                <p className="text-brand-ink/70">
-                  {new Date(window.starts).toLocaleString("en-GB", { timeZone: "Europe/London" })}. Nothing is reserved.
-                </p>
-              </li>
-            ))}
-          </ul>
-        )}
-        {saved.appointment_confirmed === false && (
-          <p className="mt-4 text-sm text-brand-ink/75">Your appointment is not confirmed yet.</p>
-        )}
-        {saved.photo_later_path && (
+        {saved.photo_later_path ? (
           <p className="mt-4 text-sm">
-            <a href={saved.photo_later_path} className="underline">
-              Add or update photographs
+            <a href={saved.photo_later_path} className="font-semibold text-brand-ink underline decoration-brand-gold underline-offset-4">
+              Add photographs later
             </a>
           </p>
-        )}
+        ) : null}
       </div>
     );
   }
 
   const title =
     state.intention === "ready_to_book"
-      ? "Book the earliest visit"
+      ? "Send a booking request"
       : state.intention === "callback_requested"
         ? "Request a callback"
         : "Email me my estimate";

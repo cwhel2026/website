@@ -2,16 +2,12 @@
 
 import io
 import os
-from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 import pytest
 import sqlalchemy as sa
 from PIL import Image
 from starlette.testclient import TestClient
-
-from app.models.jobs import AppointmentType
-from app.services.scheduling_engine import SlotProposal
 
 requires_postgres = pytest.mark.skipif(
     not os.environ.get("RUN_INTEGRATION_TESTS"),
@@ -51,18 +47,6 @@ def test_photos_attach_without_changing_the_estimate(monkeypatch, tmp_path):
     async def _geo(_postcode: str):
         return _Point()
 
-    async def _windows(*_args, **_kwargs):
-        start = datetime.now(UTC) + timedelta(days=3)
-        prep = SlotProposal(
-            start=start,
-            end=start + timedelta(hours=2),
-            appointment_type=AppointmentType.PREPARATION,
-            travel_minutes=25,
-            weather_score=80,
-            weather_safe=True,
-        )
-        return [prep], []
-
     async def _vision(_data: bytes) -> dict:
         return {
             "status": "assessed",
@@ -74,7 +58,6 @@ def test_photos_attach_without_changing_the_estimate(monkeypatch, tmp_path):
 
     monkeypatch.setattr("app.services.quotation_workflow.travel_km_from_base", _fixed_travel)
     monkeypatch.setattr("app.services.quotation_persist.geocode_postcode", _geo)
-    monkeypatch.setattr("app.services.quote_conversion.propose_two_stage_slots", _windows)
     queued: list[str] = []
 
     def _queue(set_id) -> None:
@@ -145,7 +128,7 @@ def test_photos_attach_without_changing_the_estimate(monkeypatch, tmp_path):
         assert Decimal(str(body["total_gbp"])) == Decimal(str(total))
         assert body["photos_attached"] is True
         assert body["photo_later_path"] == f"/quote/photos/{token}"
-        assert "do not change the price" in body["next_steps"]
+        assert "booking request" in body["next_steps"].lower()
         assert body["appointment_confirmed"] is False
         assert "breakdown" not in body
 

@@ -1,4 +1,5 @@
 import json
+import logging
 from typing import Annotated
 from uuid import UUID
 
@@ -22,10 +23,11 @@ from app.schemas.quotation import (
     QuotationSectionOut,
     QuotationOut,
     QuotationSubmitRequest,
-    SuggestedWindowOut,
 )
 from app.services.quotation_persist import load_active_service, persist_submitted_quotation
 from app.services.quote_conversion import (
+    CUSTOMER_HEADING,
+    confirmation_steps,
     customer_next_steps,
     follow_up_customer_request,
     validate_conversion_request,
@@ -37,6 +39,8 @@ from app.services.quotation_workflow import (
     priced_at_now,
     price_quotation_inputs,
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/quotations", tags=["quotations"])
 
@@ -115,22 +119,22 @@ async def submit_quotation(
         customer_washed_already=body.customer_washed_already,
         requires_coating=bool(service.requires_coating),
     )
-    windows: list[dict] = []
     if enquiry is not None:
         try:
-            windows = await follow_up_customer_request(
+            await follow_up_customer_request(
                 db,
                 quotation_id=saved.id,
                 enquiry=enquiry,
                 body=body,
                 included=[item["title"] for item in package["included"]],
                 two_stage=len(package["visits"]) > 1,
+                photo_token=photo_token,
             )
+            enquiry = await db.get(Enquiry, enquiry.id)
         except Exception:
-            enquiry_id = enquiry.id
+            logger.exception("Follow-up after quotation %s failed; enquiry is still saved", saved.reference)
             await db.rollback()
-            enquiry = await db.get(Enquiry, enquiry_id)
-            windows = []
+            enquiry = await db.get(Enquiry, enquiry.id)
     email_status = enquiry.email_delivery if enquiry is not None else "not_requested"
     photo_set = await db.scalar(select(QuotePhotoSet).where(QuotePhotoSet.token == photo_token))
     photos_attached = False
@@ -161,16 +165,18 @@ async def submit_quotation(
         email_sent=email_status == "sent",
         email_status=email_status,
         telegram_notified=bool(enquiry.telegram_notified) if enquiry is not None else False,
+        confirmation_heading=CUSTOMER_HEADING,
         next_steps=customer_next_steps(
             enquiry,
-            windows,
+            [],
             email=body.email,
             photos_attached=photos_attached,
             repair_review=repair_review,
         )
         if enquiry is not None
         else "",
-        suggested_windows=[SuggestedWindowOut.model_validate(window) for window in windows],
+        next_step_items=confirmation_steps(enquiry) if enquiry is not None else [],
+        suggested_windows=[],
         photos_attached=photos_attached,
         photo_later_path=f"/quote/photos/{photo_token}",
     )

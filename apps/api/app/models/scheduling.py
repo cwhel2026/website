@@ -30,6 +30,8 @@ class SchedulingSettings(Base):
     seven_day_coating_target_days: Mapped[int] = mapped_column(Integer, default=7)
     work_day_start: Mapped[time] = mapped_column(Time, default=time(8, 0))
     work_day_end: Mapped[time] = mapped_column(Time, default=time(17, 30))
+    min_notice_hours: Mapped[int] = mapped_column(Integer, default=24, server_default="24")
+    earliest_work_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )

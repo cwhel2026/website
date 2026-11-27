@@ -5,26 +5,22 @@ from __future__ import annotations
 import asyncio
 import logging
 import smtplib
-from datetime import datetime
+from datetime import UTC, datetime
 from email.message import EmailMessage
 from uuid import UUID
-from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
-from app.models.crm import CustomerProperty, Enquiry, PipelineStage
+from app.models.crm import Customer, CustomerProperty, Enquiry, OwnerFollowUp, PipelineStage
 from app.models.notifications import NotificationPriority
-from app.models.quotation import Quotation
-from app.models.weather import ProductProfile
+from app.models.quotation import Quotation, QuotationSection
+from app.models.quotation_photo import QuotePhoto, QuotePhotoSet
 from app.services.notifications.outbox import deliver_telegram_outbox_item, enqueue_notification
-from app.services.scheduling_engine import propose_two_stage_slots
 
 logger = logging.getLogger(__name__)
-
-LONDON = ZoneInfo("Europe/London")
 
 READY_TO_BOOK = "ready_to_book"
 CALLBACK_REQUESTED = "callback_requested"
@@ -32,10 +28,30 @@ ESTIMATE_REQUESTED = "estimate_requested"
 INTENTIONS = {READY_TO_BOOK, CALLBACK_REQUESTED, ESTIMATE_REQUESTED}
 
 INTENTION_LABELS = {
-    READY_TO_BOOK: "Ready to book",
+    READY_TO_BOOK: "Booking request",
     CALLBACK_REQUESTED: "Callback requested",
     ESTIMATE_REQUESTED: "Estimate requested",
 }
+
+FOLLOW_UP_TITLES = {
+    READY_TO_BOOK: "Contact customer to agree a restoration visit",
+    CALLBACK_REQUESTED: "Return the customer's callback request",
+    ESTIMATE_REQUESTED: "Follow up the saved estimate",
+}
+
+CUSTOMER_HEADING = "Thank you for choosing SurfaceCoat"
+
+BOOKING_SUPPORTING = (
+    "We've received your booking request and will be in touch shortly to arrange your restoration."
+)
+CALLBACK_SUPPORTING = "We've received your callback request and will be in touch shortly."
+ESTIMATE_SUPPORTING = "We've received your estimate request and saved your details."
+
+BOOKING_STEPS = [
+    "We review your details and photographs.",
+    "We contact you to agree a visit.",
+    "Nothing is booked until we confirm it with you.",
+]
 
 
 def apply_customer_intention(enquiry: Enquiry, body) -> None:
@@ -65,68 +81,39 @@ def apply_customer_intention(enquiry: Enquiry, body) -> None:
 
 def customer_next_steps(
     enquiry: Enquiry,
-    windows: list[dict],
+    windows: list[dict] | None = None,
     *,
     email: str,
     photos_attached: bool = False,
     repair_review: bool = False,
 ) -> str:
+    del windows, photos_attached, repair_review
     if enquiry.intention == READY_TO_BOOK:
-        text = (
-            "We have your request for the earliest visit. "
-            "This is not a confirmed booking. "
-            "We will check the diary, travel and weather, then contact you to agree a time."
-        )
-        if windows:
-            when = _format_local(windows[0]["starts"])
-            text += f" One possible time to check is {when}. Nothing is reserved until we confirm it with you."
-    elif enquiry.intention == CALLBACK_REQUESTED:
+        return BOOKING_SUPPORTING
+    if enquiry.intention == CALLBACK_REQUESTED:
         when = enquiry.callback_preferred_time or "a time that suits you"
-        text = (
-            f"We will call you around {when}. "
-            "Your visit is not booked. "
-            "We will agree any appointment with you on the call."
-        )
-    elif enquiry.email_delivery == "sent":
-        text = (
-            f"We have emailed your estimate to {email}. "
-            "We have also saved it. This is not a confirmed booking."
-        )
-    elif enquiry.email_delivery == "failed":
-        text = (
-            "We have saved your estimate. "
-            "The email could not be sent. "
-            "We still have your details and this is not a confirmed booking."
-        )
-    else:
-        text = (
-            "We have saved your estimate. "
-            "We could not email it because email sending is not connected. "
-            "We still have your details. This is not a confirmed booking."
-        )
-    return text + _photo_follow_up(enquiry, photos_attached=photos_attached, repair_review=repair_review)
+        return f"{CALLBACK_SUPPORTING} We will call around {when}."
+    if enquiry.email_delivery == "sent":
+        return f"{ESTIMATE_SUPPORTING} We have emailed it to {email}."
+    if enquiry.email_delivery == "failed":
+        return f"{ESTIMATE_SUPPORTING} The email could not be sent. We still have your details."
+    return f"{ESTIMATE_SUPPORTING} We could not email it because email sending is not connected."
 
 
-def _photo_follow_up(enquiry: Enquiry, *, photos_attached: bool, repair_review: bool) -> str:
-    extra = ""
-    if photos_attached:
-        extra += " Your photographs are saved with this estimate and do not change the price."
-    elif enquiry.intention == READY_TO_BOOK:
-        extra += (
-            " You can add a photograph later. We may need one before the visit is confirmed. "
-            "We will not arrange an inspection visit for a straightforward restoration."
-        )
-    if repair_review:
-        extra += (
-            " Any repair is priced only after we review the photographs and agree it with you. "
-            "The estimate above is unchanged."
-        )
-    return extra
-
-
-def _format_local(value: datetime) -> str:
-    local = value.astimezone(LONDON) if value.tzinfo else value.replace(tzinfo=LONDON)
-    return local.strftime("%A %d %B at %H:%M")
+def confirmation_steps(enquiry: Enquiry) -> list[str]:
+    if enquiry.intention == CALLBACK_REQUESTED:
+        return [
+            "We call you at the time you asked for.",
+            "We agree any visit with you on that call.",
+            "You can add photographs now or later.",
+        ]
+    if enquiry.intention == ESTIMATE_REQUESTED:
+        return [
+            "Your estimate is saved against this reference.",
+            "We will contact you if we need anything further.",
+            "You can add photographs now or later.",
+        ]
+    return BOOKING_STEPS
 
 
 def smtp_configured() -> bool:
@@ -153,7 +140,6 @@ async def send_estimate_email(
     postcode: str,
     included: list[str],
 ) -> str:
-    """Send the estimate only when SMTP is configured. Never reports success otherwise."""
     if not smtp_configured():
         return "not_sent_smtp_unconfigured"
     settings = get_settings()
@@ -179,89 +165,150 @@ async def send_estimate_email(
     return "sent"
 
 
-async def notify_owner(db: AsyncSession, enquiry: Enquiry, *, reference: str, summary: str) -> bool:
-    settings = get_settings()
-    if not settings.telegram_bot_token or not settings.telegram_admin_id_list:
-        return False
+def _origin() -> str:
+    origin = get_settings().public_origin
+    if origin:
+        return origin
+    return "https://website-production-c21e95cd.up.railway.app"
+
+
+def _owner_links(photo_token: str | None) -> str:
+    base = _origin()
+    lines = [
+        f"Review quotation: {base}/dashboard/quotations",
+        f"Review availability: {base}/dashboard/calendar",
+        f"Customer record: {base}/dashboard/customers",
+    ]
+    if photo_token:
+        lines.append(f"Photographs: {base}/quote/photos/{photo_token}")
+    return "\n".join(lines)
+
+
+async def _photo_status(db: AsyncSession, quotation_id: UUID) -> tuple[bool, int]:
+    photo_set = (
+        await db.execute(select(QuotePhotoSet).where(QuotePhotoSet.quotation_id == quotation_id))
+    ).scalar_one_or_none()
+    if photo_set is None:
+        return False, 0
+    count = await db.scalar(select(func.count()).select_from(QuotePhoto).where(QuotePhoto.set_id == photo_set.id))
+    return bool(count), int(count or 0)
+
+
+async def build_owner_alert(
+    db: AsyncSession,
+    *,
+    enquiry: Enquiry,
+    quotation: Quotation | None,
+    customer: Customer | None,
+    prop: CustomerProperty | None,
+    photo_token: str | None,
+) -> str:
+    reference = quotation.reference if quotation else "unreferenced"
+    name = customer.full_name if customer else "Unknown"
+    email = customer.email if customer else ""
+    phone = enquiry.callback_phone or (customer.phone if customer else "") or "not given"
+    address_parts = []
+    if prop:
+        address_parts = [prop.address_line1, prop.address_line2, prop.town, prop.postcode]
+    address = ", ".join(part for part in address_parts if part) or "Address not stored"
+    surface = (enquiry.surface_type.value if enquiry.surface_type else None) or (
+        quotation.surface_type.value if quotation and quotation.surface_type else "unknown"
+    )
+    area = f"{quotation.total_area_sqm} m²" if quotation else "unknown"
+    total = f"£{quotation.total_inc_vat_gbp}" if quotation else "unknown"
+    sections = []
+    if quotation:
+        rows = (
+            await db.execute(select(QuotationSection).where(QuotationSection.quotation_id == quotation.id))
+        ).scalars().all()
+        for row in rows:
+            if row.length_m is not None and row.width_m is not None:
+                sections.append(f"{row.label}: {row.length_m}m × {row.width_m}m ({row.area_sqm} m²)")
+            else:
+                sections.append(f"{row.label}: {row.area_sqm} m²")
+    measures = "; ".join(sections) or area
+    photos_attached, photo_count = await _photo_status(db, quotation.id) if quotation else (False, 0)
+    photo_line = f"{photo_count} attached" if photos_attached else "none yet — customer can add later"
+    test_line = "TEST RECORD — exclude from revenue and marketing.\n" if enquiry.is_test else ""
+    callback_line = ""
+    if enquiry.intention == CALLBACK_REQUESTED and enquiry.callback_preferred_time:
+        callback_line = f"Preferred call time: {enquiry.callback_preferred_time}\n"
+    return (
+        f"{test_line}"
+        f"Action: {INTENTION_LABELS.get(enquiry.intention or '', 'New quotation')}\n"
+        f"Reference: {reference}\n"
+        f"Customer: {name}\n"
+        f"Phone: {phone}\n"
+        f"Email: {email}\n"
+        f"Property: {address}\n"
+        f"Surface: {surface}\n"
+        f"Measurements: {measures}\n"
+        f"Estimated value: {total}\n"
+        f"Photographs: {photo_line}\n"
+        f"{callback_line}"
+        "This is a booking request. No appointment is reserved.\n"
+        "Review availability in the diary before offering a visit.\n\n"
+        f"{_owner_links(photo_token)}"
+    )
+
+
+async def notify_owner(
+    db: AsyncSession,
+    enquiry: Enquiry,
+    *,
+    reference: str,
+    summary: str,
+) -> bool:
+    """Always persist an outbox row. Attempt delivery now. Leave pending if the worker is down."""
     label = INTENTION_LABELS.get(enquiry.intention or "", "New quotation")
     priority = NotificationPriority.URGENT if enquiry.intention == READY_TO_BOOK else NotificationPriority.HIGH
     item = await enqueue_notification(
         db,
         channel="telegram",
-        title=f"SurfaceCoat · {label}",
-        body=f"{reference}\n{summary}",
+        title=f"SurfaceCoat · {label} · {reference}",
+        body=summary,
         category="quotation",
         priority=priority,
         dedupe_key=f"quote-conversion:{enquiry.id}:{enquiry.intention}",
+        payload={"enquiry_id": str(enquiry.id), "reference": reference, "intention": enquiry.intention},
     )
+    enquiry.telegram_outbox_id = item.id
+    await db.flush()
     try:
-        return await deliver_telegram_outbox_item(db, item)
+        delivered = await deliver_telegram_outbox_item(db, item)
     except Exception:
         logger.exception("Telegram notification failed for %s", reference)
-        return False
+        delivered = False
+    enquiry.telegram_notified = bool(delivered)
+    return delivered
 
 
-async def _search_open_windows(
-    latitude: float,
-    longitude: float,
-) -> tuple[list, list]:
-    """Diary search on its own session so a slow weather call cannot spoil the customer save."""
-    from app.database import SessionLocal
-
-    async with SessionLocal() as search_db:
-        profile = (
-            await search_db.execute(select(ProductProfile).where(ProductProfile.is_active.is_(True)).limit(1))
-        ).scalar_one_or_none()
-        if profile is None:
-            return [], []
-        return await propose_two_stage_slots(
-            search_db,
-            lat=latitude,
-            lon=longitude,
-            product_profile=profile,
-            max_prep_slots=1,
-        )
-
-
-async def suggest_unconfirmed_windows(
+async def ensure_follow_up(
     db: AsyncSession,
     *,
-    latitude: float | None,
-    longitude: float | None,
-    two_stage: bool,
-) -> list[dict]:
-    """Read the diary and weather. Does not insert a job or appointment.
-
-    ``db`` is unused so a failed search cannot roll back the enquiry that was just saved.
-    The search gives up after a few seconds and the customer still receives a confirmation.
-    """
-    del db
-    if latitude is None or longitude is None:
-        return []
-    task = asyncio.create_task(_search_open_windows(float(latitude), float(longitude)))
-    done, _pending = await asyncio.wait({task}, timeout=4)
-    if not done:
-        task.cancel()
-        logger.info("Unconfirmed window search timed out")
-        return []
-    try:
-        prep, coat = task.result()
-    except Exception:
-        logger.info("Unconfirmed window search unavailable")
-        return []
-    windows: list[dict] = []
-    if prep:
-        windows.append(
-            {"label": "Possible cleaning visit", "starts": prep[0].start, "kind": "preparation"}
+    enquiry: Enquiry,
+    quotation_id: UUID | None,
+) -> OwnerFollowUp:
+    kind = enquiry.intention or ESTIMATE_REQUESTED
+    existing = (
+        await db.execute(
+            select(OwnerFollowUp).where(OwnerFollowUp.enquiry_id == enquiry.id, OwnerFollowUp.kind == kind)
         )
-    if two_stage and coat:
-        windows.append(
-            {"label": "Possible coating visit", "starts": coat[0].start, "kind": "coating"}
-        )
-    elif not two_stage and prep:
-        windows[0]["label"] = "Possible restoration visit"
-        windows[0]["kind"] = "single_visit"
-    return windows
+    ).scalar_one_or_none()
+    if existing:
+        return existing
+    row = OwnerFollowUp(
+        enquiry_id=enquiry.id,
+        quotation_id=quotation_id,
+        customer_id=enquiry.customer_id,
+        kind=kind,
+        title=FOLLOW_UP_TITLES.get(kind, "Follow up quotation"),
+        status="open",
+        due_at=datetime.now(UTC),
+    )
+    db.add(row)
+    await db.flush()
+    return row
 
 
 async def follow_up_customer_request(
@@ -272,19 +319,15 @@ async def follow_up_customer_request(
     body,
     included: list[str],
     two_stage: bool,
+    photo_token: str | None = None,
 ) -> list[dict]:
+    del two_stage
     quotation = await db.get(Quotation, quotation_id)
+    customer = await db.get(Customer, enquiry.customer_id)
     prop = None
     if quotation and quotation.property_id:
         prop = await db.get(CustomerProperty, quotation.property_id)
-    windows: list[dict] = []
-    if enquiry.intention == READY_TO_BOOK:
-        windows = await suggest_unconfirmed_windows(
-            db,
-            latitude=float(prop.latitude) if prop and prop.latitude is not None else None,
-            longitude=float(prop.longitude) if prop and prop.longitude is not None else None,
-            two_stage=two_stage,
-        )
+    await ensure_follow_up(db, enquiry=enquiry, quotation_id=quotation_id)
     if enquiry.intention == ESTIMATE_REQUESTED and enquiry.email_delivery in {
         "not_requested",
         "not_sent_smtp_unconfigured",
@@ -298,18 +341,65 @@ async def follow_up_customer_request(
             postcode=body.postcode,
             included=included,
         )
-    if not enquiry.telegram_notified:
-        phone = getattr(body, "phone", None) or ""
-        summary = f"{body.full_name} · {body.postcode} · {phone}".strip()
-        enquiry.telegram_notified = await notify_owner(
+    summary = await build_owner_alert(
+        db,
+        enquiry=enquiry,
+        quotation=quotation,
+        customer=customer,
+        prop=prop,
+        photo_token=photo_token,
+    )
+    await notify_owner(
+        db,
+        enquiry,
+        reference=quotation.reference if quotation else "",
+        summary=summary,
+    )
+    await db.commit()
+    await db.refresh(enquiry)
+    return []
+
+
+async def recover_outstanding_quote_alerts(db: AsyncSession) -> int:
+    """Re-queue booking alerts that were saved without a delivered Telegram message."""
+    rows = (
+        await db.execute(
+            select(Enquiry).where(
+                Enquiry.intention.in_(list(INTENTIONS)),
+                Enquiry.telegram_notified.is_(False),
+            )
+        )
+    ).scalars().all()
+    recovered = 0
+    for enquiry in rows:
+        quotation = None
+        if enquiry.quotation_id:
+            quotation = await db.get(Quotation, enquiry.quotation_id)
+        customer = await db.get(Customer, enquiry.customer_id)
+        prop = await db.get(CustomerProperty, enquiry.property_id) if enquiry.property_id else None
+        photo_set = None
+        if quotation:
+            photo_set = (
+                await db.execute(select(QuotePhotoSet).where(QuotePhotoSet.quotation_id == quotation.id))
+            ).scalar_one_or_none()
+        await ensure_follow_up(db, enquiry=enquiry, quotation_id=quotation.id if quotation else None)
+        summary = await build_owner_alert(
+            db,
+            enquiry=enquiry,
+            quotation=quotation,
+            customer=customer,
+            prop=prop,
+            photo_token=photo_set.token if photo_set else None,
+        )
+        await notify_owner(
             db,
             enquiry,
             reference=quotation.reference if quotation else "",
             summary=summary,
         )
+        recovered += 1
     await db.commit()
-    await db.refresh(enquiry)
-    return windows
+    return recovered
 
 
 def validate_conversion_request(body) -> None:
