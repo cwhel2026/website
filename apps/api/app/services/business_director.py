@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.approvals import ApprovalRequest, ApprovalStatus
 from app.models.jobs import Job, JobStatus
+from app.models.crm import Enquiry, OwnerFollowUp
 from app.models.finance import Invoice, InvoiceStatus
 from app.models.agents import AgentProfile
 from app.models.orchestration import AgentTask, TaskStatus
@@ -57,6 +58,14 @@ async def run_business_director_scan(db: AsyncSession) -> list[AgentTask]:
                 priority=90,
             )
         )
+
+    followups = await db.scalar(
+        select(func.count()).select_from(OwnerFollowUp)
+        .join(Enquiry, Enquiry.id == OwnerFollowUp.enquiry_id)
+        .where(OwnerFollowUp.status == "open", OwnerFollowUp.due_at <= datetime.now(UTC), Enquiry.is_test.is_(False))
+    )
+    if followups:
+        created.append(AgentTask(agent_slug="personal_assistant", action_key="review_due_followups", title=f"Review {followups} due customer follow-up(s)", payload_json=json.dumps({"count": followups}), priority=85))
 
     alerts = await low_stock_alerts(db)
     for alert in alerts[:3]:
