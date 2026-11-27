@@ -91,7 +91,7 @@ Nothing below is marked as working in production. Production still runs `main` (
 
 | ID | Issue | Priority | Status | Verification |
 |----|-------|----------|--------|--------------|
-| Q1 | Instant quote shows **Internal Server Error** on Calculate estimate (iPhone, production) | **P0 CRITICAL** | **Root cause found · fix in branch** | Reproduced: `POST /api/v1/quotations/provisional` → HTTP 500 (production). Local traceback: `sqlalchemy.exc.MissingGreenlet` when `pricing_engine.calculate_quotation` lazy-loads `PricingProfile.rules` in async SQLAlchemy. **Not** caused by FreeAgent/Meta integrations. |
+| Q1 | Instant quote shows **Internal Server Error** on Calculate estimate (iPhone, production) | **P0 CRITICAL** | **Fix merged (main) · Awaiting deploy / owner mobile verify** | Reproduced: `POST /api/v1/quotations/provisional` → HTTP 500 (production pre-deploy). Root cause: `MissingGreenlet` on `PricingProfile.rules`. Fixed in PR #57. **Do not mark operational** until production returns 200 and iPhone full journey verified. |
 | Q2 | Marketing slug vs catalogue slug (Service not found) | P0 | Verified (CI) · Awaiting deploy | Fixed on `main` via service alias map (`tarmac-restoration` → `tarmac-driveway-restoration`). |
 
 ### Phase 2 workstream (in progress)
