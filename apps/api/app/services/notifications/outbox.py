@@ -76,10 +76,14 @@ def _chat_ids() -> list[int]:
 
 
 async def deliver_telegram_outbox_item(db: AsyncSession, item: NotificationOutbox) -> bool:
+    # Refresh under a row lock: immediate sends and background workers share this gate.
+    await db.refresh(item, with_for_update=True)
     if item.status == OutboxStatus.DELIVERED:
         return True
+    if item.status == OutboxStatus.CANCELLED:
+        return False
     settings = get_settings()
-    chats = _chat_ids()
+    chats = list(dict.fromkeys(_chat_ids()))
     if not settings.telegram_bot_token or not chats:
         item.last_error = "Telegram not configured (TELEGRAM_BOT_TOKEN or admin/owner chat id missing)"
         item.status = OutboxStatus.PENDING
@@ -95,22 +99,25 @@ async def deliver_telegram_outbox_item(db: AsyncSession, item: NotificationOutbo
     text = f"{item.title}\n\n{item.body}" if item.title else item.body
     errors: list[str] = []
     last_result: dict | None = None
-    delivered_chats: list[int] = []
+    payload = json.loads(item.payload_json or "{}")
+    delivered_chats = list(payload.get("telegram_chat_ids", []))
     for chat_id in chats:
+        if chat_id in delivered_chats:
+            continue
         try:
             last_result = await send_message(chat_id=chat_id, text=text)
             delivered_chats.append(chat_id)
         except TelegramApiError as exc:
-            errors.append(f"{chat_id}: {exc}")
+            errors.append(f"{chat_id}: Telegram delivery failed (status={exc.status_code})")
 
-    if delivered_chats:
+    payload["telegram_chat_ids"] = delivered_chats
+    if last_result:
+        payload["telegram_message_id"] = last_result.get("message_id")
+    item.payload_json = json.dumps(payload)
+    if all(chat_id in delivered_chats for chat_id in chats):
         item.status = OutboxStatus.DELIVERED
         item.delivered_at = datetime.now(UTC)
         item.last_error = None
-        payload = json.loads(item.payload_json or "{}")
-        payload["telegram_message_id"] = last_result.get("message_id") if last_result else None
-        payload["telegram_chat_ids"] = delivered_chats
-        item.payload_json = json.dumps(payload)
         db.add(item)
         if item.dedupe_key and item.dedupe_key.startswith("fin-report:"):
             from app.services.finance.financial_reports import mark_finance_report_delivered
