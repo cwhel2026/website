@@ -22,16 +22,17 @@ async def fetch_account_insights(*, days: int = 7) -> dict:
     params = {
         "fields": "spend,impressions,clicks,actions",
         "date_preset": "last_7d" if days == 7 else "last_30d",
-        "access_token": token,
     }
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
-            resp = await client.get(url, params=params)
+            resp = await client.get(url, params=params, headers={"Authorization": f"Bearer {token}"})
             resp.raise_for_status()
             data = resp.json()
-    except httpx.HTTPError as exc:
-        return {"ok": False, "live_read_verified": False, "message": str(exc)[:300]}
-    rows = data.get("data") or []
+    except (httpx.HTTPError, ValueError):
+        return {"ok": False, "live_read_verified": False, "message": "Meta insights request failed"}
+    if not isinstance(data, dict) or not isinstance(data.get("data"), list):
+        return {"ok": False, "live_read_verified": False, "message": "Invalid Meta response"}
+    rows = data["data"]
     spend = sum(float(r.get("spend", 0)) for r in rows)
     return {
         "ok": True,
