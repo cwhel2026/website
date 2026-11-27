@@ -35,7 +35,8 @@ START_MESSAGE = (
     "🗓 /diary — upcoming appointments\n"
     "📋 /quotes — quotation overview\n"
     "💷 /finance — business finances\n"
-    "🌦 /weather — weather intelligence\n\n"
+    "🌦 /weather — weather intelligence\n"
+    "🔐 /approvals — review pending decisions\n\n"
     "Ask a business question or send a receipt photo (OCR must be configured)."
 
 )
@@ -299,7 +300,7 @@ async def telegram_webhook(
         try:
             from app.services.finance.telegram_finance import answer_finance_question
 
-            command_questions = {"/today": "What jobs are scheduled today?", "/diary": "What upcoming appointments are in my diary?", "/quotes": "Summarise my current quotations and booking requests.", "/finance": "Summarise my business finances.", "/weather": "What is the weather outlook for scheduled jobs?"}
+            command_questions = {"/today": "What jobs are scheduled today?", "/diary": "What upcoming appointments are in my diary?", "/quotes": "Summarise my current quotations and booking requests.", "/finance": "Summarise my business finances.", "/weather": "What is the weather outlook for scheduled jobs?", "/approvals": "List pending approvals for review only. Do not approve or execute anything."}
             question = command_questions.get(text.lower(), text)
             finance_reply = await answer_finance_question(db, question)
             if finance_reply:
