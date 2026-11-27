@@ -53,9 +53,13 @@ async def retry_outbox(
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[User, Depends(get_current_admin)],
 ) -> dict[str, Any]:
-    item = await db.get(NotificationOutbox, item_id)
+    item = await db.get(NotificationOutbox, item_id, with_for_update=True)
     if item is None:
         raise HTTPException(status_code=404, detail="Notification not found")
+    if item.channel != "telegram" or item.status == OutboxStatus.CANCELLED:
+        raise HTTPException(status_code=409, detail="Notification cannot be retried")
+    if item.status == OutboxStatus.DELIVERED:
+        return {"id": str(item.id), "delivered": True, "status": item.status.value, "last_error": item.last_error}
     item.status = OutboxStatus.PENDING
     delivered = await deliver_telegram_outbox_item(db, item)
     await db.commit()

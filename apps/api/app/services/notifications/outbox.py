@@ -54,9 +54,9 @@ async def enqueue_notification(
         max_attempts=max_attempts,
         status=OutboxStatus.PENDING,
     )
-    db.add(item)
     try:
         async with db.begin_nested():
+            db.add(item)
             await db.flush()
         return item
     except IntegrityError:

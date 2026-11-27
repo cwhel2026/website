@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import io
 import os
+import tempfile
 from pathlib import Path
 
 from PIL import Image, ImageOps
@@ -35,6 +36,8 @@ def prepare_image(raw: bytes) -> bytes:
         raise ValueError("Upload a photograph")
     try:
         image = Image.open(io.BytesIO(raw))
+        if image.width * image.height > 40_000_000:
+            raise ValueError("Photograph dimensions are too large")
         image.load()
     except Exception as exc:
         raise ValueError("Upload a photograph") from exc
@@ -63,11 +66,14 @@ def save_photo_bytes(data: bytes) -> tuple[str, str]:
     if not dest.is_relative_to(root):
         raise ValueError("invalid path")
     dest.parent.mkdir(parents=True, exist_ok=True)
-    temporary = dest.with_suffix(".part")
-    temporary.write_bytes(data)
-    os.chmod(temporary, 0o600)
-    os.replace(temporary, dest)
-    os.chmod(dest, 0o600)
+    fd, name = tempfile.mkstemp(prefix=".photo-", dir=dest.parent)
+    temporary = Path(name)
+    try:
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(data)
+        os.replace(temporary, dest)
+    finally:
+        temporary.unlink(missing_ok=True)
     return key, digest
 
 
