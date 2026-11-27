@@ -19,9 +19,10 @@ async def create_review_for_transaction(
     db: AsyncSession,
     txn: BankTransaction,
     *,
-    allow_auto_apply: bool = True,
+    allow_auto_apply: bool = False,
 ) -> BookkeepingReviewItem | None:
-    if txn.is_reconciled or txn.review_item_id:
+    await db.refresh(txn, with_for_update=True)
+    if txn.is_reconciled or txn.review_item_id or txn.matched_expense_id or txn.is_duplicate:
         return None
 
     suggestion = suggest_for_description(txn.description, txn.amount_gbp)
@@ -42,6 +43,8 @@ async def create_review_for_transaction(
         and suggestion.confidence >= AUTO_APPLY_CONFIDENCE
         and not suggestion.is_personal
         and not dup
+        and not suggestion.receipt_required
+        and not txn.freeagent_explanation_url
         and txn.amount_gbp < 0
     ):
         status = ReviewItemStatus.AUTO_APPLIED
@@ -80,7 +83,7 @@ async def _apply_expense_from_suggestion(
         category=suggestion.category,
         amount_gbp=amount,
         expense_date=txn.transacted_at,
-        source=SyncSource.FREEAGENT,
+        source=txn.source,
         receipt_id=None,
     )
     db.add(exp)
@@ -114,15 +117,21 @@ async def categorize_uncategorized_transactions(db: AsyncSession, limit: int = 2
 async def approve_review_item(
     db: AsyncSession, item_id, actor: str, category: ExpenseCategory | None = None
 ) -> BookkeepingReviewItem:
-    item = await db.get(BookkeepingReviewItem, item_id)
+    item = await db.get(BookkeepingReviewItem, item_id, with_for_update=True)
     if item is None:
         raise ValueError("Review item not found")
     if item.status in (ReviewItemStatus.APPROVED, ReviewItemStatus.AUTO_APPLIED):
         return item
 
+    if item.status != ReviewItemStatus.PENDING:
+        raise ValueError("Only pending reviews can be approved")
+    if item.is_personal_expenditure or item.possible_duplicate:
+        raise ValueError("Resolve personal or duplicate classification before approving an expense")
     cat = category or item.suggested_category or ExpenseCategory.OTHER
     if item.bank_transaction_id:
-        txn = await db.get(BankTransaction, item.bank_transaction_id)
+        txn = await db.get(BankTransaction, item.bank_transaction_id, with_for_update=True)
+        if txn and (txn.is_duplicate or txn.is_reconciled or txn.freeagent_explanation_url):
+            raise ValueError("Transaction requires reconciliation, not a new expense")
         if txn and txn.amount_gbp < 0 and not txn.matched_expense_id:
             await _apply_expense_from_suggestion(
                 db,
@@ -145,9 +154,13 @@ async def approve_review_item(
 
 
 async def reject_review_item(db: AsyncSession, item_id, actor: str) -> BookkeepingReviewItem:
-    item = await db.get(BookkeepingReviewItem, item_id)
+    item = await db.get(BookkeepingReviewItem, item_id, with_for_update=True)
     if item is None:
         raise ValueError("Review item not found")
+    if item.status == ReviewItemStatus.REJECTED:
+        return item
+    if item.status != ReviewItemStatus.PENDING:
+        raise ValueError("Only pending reviews can be rejected")
     item.status = ReviewItemStatus.REJECTED
     item.resolved_at = datetime.now(UTC)
     item.resolved_by = actor
