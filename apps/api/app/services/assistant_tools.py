@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.approvals import ApprovalRequest, ApprovalStatus
-from app.models.jobs import Appointment, AppointmentType, Job, JobStatus
+from app.models.jobs import Appointment, AppointmentStatus, AppointmentType, Job, JobStatus
 from app.models.quotation import Quotation
 from app.services.analytics_service import build_analytics_snapshot
 from app.services.marketing.budget_controls import weekly_spend_summary
@@ -26,7 +26,7 @@ async def _appointments_between(db: AsyncSession, start: datetime, end: datetime
     result = await db.execute(
         select(Appointment, Job)
         .join(Job)
-        .where(Appointment.scheduled_start >= start, Appointment.scheduled_start < end)
+        .where(Appointment.scheduled_start >= start, Appointment.scheduled_start < end, Appointment.status == AppointmentStatus.CONFIRMED)
         .order_by(Appointment.scheduled_start)
     )
     items = []
@@ -146,16 +146,16 @@ async def tool_marketing_capacity(db: AsyncSession) -> dict[str, Any]:
 
 async def tool_jobs_next_week(db: AsyncSession) -> dict[str, Any]:
     start, _ = utc_range_for_uk_day(uk_today())
-    end = start + timedelta(days=7)
+    end, _ = utc_range_for_uk_day(uk_today() + timedelta(days=7))
     result = await db.execute(
         select(Appointment, Job)
         .join(Job)
-        .where(Appointment.scheduled_start >= start, Appointment.scheduled_start < end)
+        .where(Appointment.scheduled_start >= start, Appointment.scheduled_start < end, Appointment.status == AppointmentStatus.CONFIRMED)
         .order_by(Appointment.scheduled_start)
     )
     by_day: dict[str, int] = {}
     for appt, _ in result.all():
-        day = appt.scheduled_start.date().isoformat()
+        day = appt.scheduled_start.astimezone(uk_now().tzinfo).date().isoformat()
         by_day[day] = by_day.get(day, 0) + 1
     return {"days": by_day, "total": sum(by_day.values())}
 
@@ -196,7 +196,7 @@ async def tool_pending_approvals(db: AsyncSession) -> dict[str, Any]:
 async def tool_quotations_awaiting(db: AsyncSession) -> dict[str, Any]:
     result = await db.execute(
         select(Quotation)
-        .where(Quotation.requires_approval.is_(True))
+        .where(Quotation.requires_approval.is_(True), Quotation.is_test.is_(False))
         .order_by(Quotation.created_at.desc())
         .limit(20)
     )
@@ -218,6 +218,7 @@ async def tool_rain_risk_appointments(db: AsyncSession) -> dict[str, Any]:
             Appointment.scheduled_start >= start,
             Appointment.scheduled_start < end,
             Appointment.appointment_type == AppointmentType.COATING,
+            Appointment.status == AppointmentStatus.CONFIRMED,
         )
     )
     at_risk = []
@@ -236,7 +237,7 @@ async def tool_new_enquiries_count(db: AsyncSession) -> dict[str, Any]:
     result = await db.execute(
         select(func.count())
         .select_from(Enquiry)
-        .where(Enquiry.created_at >= since, Enquiry.stage == PipelineStage.NEW_ENQUIRY)
+        .where(Enquiry.created_at >= since, Enquiry.stage == PipelineStage.NEW_ENQUIRY, Enquiry.is_test.is_(False))
     )
     count = result.scalar() or 0
     return {"last_7_days_new_enquiries": count}
