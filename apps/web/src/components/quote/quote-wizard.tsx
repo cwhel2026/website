@@ -71,7 +71,7 @@ function defaultState(postcode = ""): QuoteState {
     town: "",
     covered: null,
     territoryName: "",
-    service_slug: "tarmac-restoration",
+    service_slug: "tarmac-driveway-restoration",
     surface_type: "tarmac",
     surface_condition: "fair",
     sections: [{ label: "Main driveway", length_m: "", width_m: "", area_sqm: "" }],
@@ -135,12 +135,29 @@ export function QuoteWizard() {
     apiGet<Service[]>("/api/v1/services")
       .then(setServices)
       .catch(() => setServices([]));
+    const fromUrl = searchParams.get("service");
+    if (fromUrl) patch({ service_slug: fromUrl });
     void trackFunnel("quote_start", 0);
-  }, []);
+  }, [searchParams]);
 
   useEffect(() => {
     sessionStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   }, [state]);
+
+  /** Session drafts may keep old marketing slugs (e.g. tarmac-restoration); align with the live catalogue. */
+  useEffect(() => {
+    if (services.length === 0) return;
+    const slugs = new Set(services.map((s) => s.slug));
+    if (slugs.has(state.service_slug)) return;
+    const tarmac =
+      services.find((s) => s.slug.includes("tarmac-driveway")) ??
+      services.find((s) => s.slug.includes("tarmac"));
+    const match =
+      state.surface_type === "tarmac"
+        ? tarmac
+        : services.find((s) => s.slug.includes(state.surface_type.replace("_", "-")));
+    patch({ service_slug: match?.slug ?? services[0].slug });
+  }, [services, state.service_slug, state.surface_type]);
 
   useEffect(() => {
     setProvisional(null);

@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models.service import Service
 from app.schemas.service import ServiceOut
+from app.services.service_aliases import resolve_service_slug
 
 router = APIRouter(prefix="/services", tags=["services"])
 
@@ -21,7 +22,7 @@ async def list_services(db: Annotated[AsyncSession, Depends(get_db)]) -> list[Se
 
 @router.get("/{slug}", response_model=ServiceOut)
 async def get_service(slug: str, db: Annotated[AsyncSession, Depends(get_db)]) -> Service:
-    result = await db.execute(select(Service).where(Service.slug == slug))
+    result = await db.execute(select(Service).where(Service.slug == resolve_service_slug(slug)))
     service = result.scalar_one_or_none()
     if service is None:
         raise HTTPException(status_code=404, detail="Service not found")

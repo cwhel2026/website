@@ -22,6 +22,7 @@ from app.models.service import Service
 from app.routers.crm import upsert_customer
 from app.schemas.quotation import InstantQuotationRequest, QuotationOut, QuotationSectionIn
 from app.services.approval_service import ensure_quotation_approval
+from app.services.service_aliases import resolve_service_slug
 from app.services.quotation_workflow import (
     PROVISIONAL_DISCLAIMER,
     price_quotation_inputs,
@@ -36,8 +37,9 @@ def _reference() -> str:
 
 
 async def load_active_service(db: AsyncSession, slug: str) -> Service:
+    canonical = resolve_service_slug(slug)
     result = await db.execute(
-        select(Service).where(Service.slug == slug, Service.is_active.is_(True))
+        select(Service).where(Service.slug == canonical, Service.is_active.is_(True))
     )
     service = result.scalar_one_or_none()
     if service is None:
