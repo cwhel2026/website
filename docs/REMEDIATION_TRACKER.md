@@ -91,7 +91,7 @@ Nothing below is marked as working in production. Production still runs `main` (
 
 | ID | Issue | Priority | Status | Verification |
 |----|-------|----------|--------|--------------|
-| Q1 | Instant quote shows **Internal Server Error** on Calculate estimate (iPhone, production) | **P0 CRITICAL** | **Fix merged (main) · Awaiting deploy / owner mobile verify** | Reproduced: `POST /api/v1/quotations/provisional` → HTTP 500 (production pre-deploy). Root cause: `MissingGreenlet` on `PricingProfile.rules`. Fixed in PR #57. **Do not mark operational** until production returns 200 and iPhone full journey verified. |
+| Q1 | Instant quote shows **Internal Server Error** on Calculate estimate (iPhone, production) | **P0 CRITICAL** | **Fix deployed to production API · owner mobile verify pending** | Root cause: `MissingGreenlet` on `PricingProfile.rules` (PR #57). Post-deploy: `POST …/quotations/provisional` with PR1 2AA → **200** + `total_inc_vat_gbp` (~1177.15 for 40 m² test). **Not marked operational** until full iPhone wizard (Calculate + submit) confirmed. |
 | Q2 | Marketing slug vs catalogue slug (Service not found) | P0 | Verified (CI) · Awaiting deploy | Fixed on `main` via service alias map (`tarmac-restoration` → `tarmac-driveway-restoration`). |
 
 ### Phase 2 workstream (in progress)
