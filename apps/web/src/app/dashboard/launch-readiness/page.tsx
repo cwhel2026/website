@@ -12,6 +12,15 @@ export default function LaunchCentre() {
   const workers = useApi<{overall:string;broker_reachable:boolean|null;never_run:string[]}>("/api/v1/ops/workers");
   const finance = useApi<{freeagent?:{state:string;message:string}}>("/api/v1/finance/status");
   const telegram = useApi<{status:string;delivered_at:string|null;title:string}[]>("/api/v1/notifications/outbox");
+  const [probes,setProbes] = useState<{provider:string;state:string;checked_at:string}[]>([]);
+  const [probeBusy,setProbeBusy] = useState(false);
+  const [probeError,setProbeError] = useState("");
+  async function testProviders() {
+    setProbeBusy(true);setProbes([]);setProbeError("");
+    try { const result = await apiPost<{checks:typeof probes}>("/api/v1/marketing/integrations/test/provider-health",{});setProbes(result.checks); }
+    catch {setProbeError("Provider checks unavailable.");}
+    finally {setProbeBusy(false);}
+  }
   const [message,setMessage] = useState("");
   const [busy,setBusy] = useState(false);
   const evidence: Evidence[] = [
@@ -33,6 +42,7 @@ export default function LaunchCentre() {
     <header><p className="text-xs font-semibold uppercase tracking-widest text-[#eab308]">SurfaceCoat · operations</p><h1 className="text-3xl font-semibold">Launch centre</h1><p className="mt-2 text-sm text-white/70">Evidence and setup steps. Configuration is not proof of a working integration.</p></header>
     <button className="min-h-11 rounded-lg border border-white/20 px-4" onClick={()=>{marketing.reload();schema.reload();workers.reload();finance.reload();telegram.reload();}}>Refresh evidence</button>
     <section className="grid gap-3 sm:grid-cols-2">{evidence.map(e=><article key={e.label} className="rounded-2xl border border-white/10 bg-[#242424] p-4"><h2 className="font-semibold">{e.label}</h2><p className="mt-2 text-sm font-medium text-[#eab308]">{e.state}</p><p className="mt-2 text-sm text-white/70">{e.detail}</p><Link href={e.href} className="mt-3 inline-flex min-h-11 items-center text-sm underline">Open setup</Link></article>)}</section>
+    <section className="rounded-2xl border border-white/10 p-4"><h2 className="font-semibold">Live provider tests</h2><p className="mt-2 text-sm text-white/70">Read-only checks; no messages, ads or AI generation. A successful read does not verify write permissions.</p><button disabled={probeBusy} onClick={()=>void testProviders()} className="mt-3 min-h-11 rounded-lg bg-[#eab308] px-4 font-semibold text-black disabled:opacity-50">{probeBusy ? "Testing…" : "Test providers"}</button><p role="status">{probeError}</p><ul className="mt-2 space-y-2">{probes.map(p=><li key={p.provider} className="rounded-lg border border-white/10 p-3 text-sm"><p>{p.provider} · {p.state.replaceAll("_"," ")}</p><p className="text-xs text-white/70">{new Date(p.checked_at).toLocaleString("en-GB")}</p></li>)}</ul></section>
     <section className="rounded-2xl border border-white/10 p-4"><h2 className="font-semibold">External launch checklist</h2>{marketing.error || !marketing.data ? <p className="mt-2 text-sm">Checklist unavailable or loading.</p> : <ul className="mt-2 divide-y divide-white/10">{marketing.data.items.map(i=><li key={i.key} className="flex flex-wrap justify-between gap-2 py-3 text-sm"><span>{i.label}</span><span className="text-white/70">{i.status.replaceAll("_"," ")}</span></li>)}</ul>}<Link href="/dashboard/marketing/integrations" className="inline-flex min-h-11 items-center underline">Integration setup</Link></section>
     <section className="rounded-2xl border border-red-500/40 p-4"><h2 className="font-semibold">Spending safety</h2><p className="mt-2 text-sm text-white/70">Keep live spending blocked until owner approval and external verification.</p><button disabled={busy} onClick={()=>void pause()} className="mt-3 min-h-11 w-full rounded-lg bg-red-800 px-4 text-white disabled:opacity-50">Emergency pause advertising</button><p role="status" className="mt-2 text-sm">{message}</p></section>
   </div>;
