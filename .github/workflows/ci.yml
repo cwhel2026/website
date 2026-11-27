@@ -101,6 +101,13 @@ jobs:
           node-version: "22"
           cache: npm
           cache-dependency-path: apps/web/package-lock.json
+      - name: Dependency audit (report only pending remediation)
+        working-directory: apps/web
+        run: npm audit --json > /tmp/surfacecoat-npm-audit.json || true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: npm-security-audit
+          path: /tmp/surfacecoat-npm-audit.json
       - name: Install and build
         working-directory: apps/web
         run: |
