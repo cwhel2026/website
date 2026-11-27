@@ -52,11 +52,11 @@ def assess_launch_readiness() -> dict:
     blockers: list[str] = []
     for key, label, optional in CHECKLIST_ITEMS:
         st = status_for(key)
-        if st in ("not_configured", "failed") and not optional:
+        if st not in ("read_access_verified", "write_access_verified") and not optional:
             blockers.append(label)
         items.append({"key": key, "label": label, "status": st, "optional": optional})
 
-    ready_score = sum(1 for i in items if i["status"] in ("read_access_verified", "write_access_verified", "configured_untested")) 
+    ready_score = sum(1 for i in items if i["status"] in ("read_access_verified", "write_access_verified")) 
     return {
         "assessed_at": datetime.now(UTC).isoformat(),
         "pre_launch": True,
