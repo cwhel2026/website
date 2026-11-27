@@ -23,3 +23,11 @@ def test_authorised_when_user_in_list(monkeypatch):
 
 def test_start_message_defined():
     assert "SurfaceCoat" in START_MESSAGE
+
+def test_business_report_empty_and_unknown():
+    from app.routers.telegram import format_business_report
+    report = format_business_report("COATING", {"jobs": [{"reference": "SC-1", "target_date": None}], "appointments": []})
+    assert "SC-1" in report
+    assert "target date: unknown" in report
+    assert "None recorded" in report
+    assert "Read-only report" in report
