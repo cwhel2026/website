@@ -10,7 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import Settings, get_settings
-from app.models.finance import FreeAgentConnection, FreeAgentConnectionState, Invoice
+from app.models.finance import FreeAgentConnection, FreeAgentConnectionState, Invoice, InvoiceStatus
 from app.services.finance import freeagent_client
 from app.services.finance.token_vault import (
     decrypt_token,
@@ -175,6 +175,31 @@ def _freeagent_id_from_url(url: str | None) -> str | None:
     return url.rstrip("/").split("/")[-1]
 
 
+def apply_remote_invoice_balance(inv: Invoice, item: dict) -> bool:
+    """Only apply complete, internally consistent GBP invoice snapshots."""
+    try:
+        if item.get("currency", "GBP") != "GBP":
+            return False
+        total = Decimal(str(item["total_value"]))
+        net = Decimal(str(item["net_value"]))
+        due = Decimal(str(item["due_value"]))
+        if not all(v.is_finite() for v in (total, net, due)) or not 0 <= net <= total or not 0 <= due <= total:
+            return False
+        status = str(item.get("status", "")).lower()
+        if status not in {"draft", "sent", "paid", "overdue", "part paid", "part_paid", "scheduled"}:
+            return False
+        if status == "paid" and due != 0:
+            return False
+        inv.total_inc_vat_gbp = total
+        inv.subtotal_ex_vat_gbp = net
+        inv.vat_gbp = total - net
+        inv.amount_paid_gbp = total - due
+        inv.status = (InvoiceStatus.DRAFT if status == "draft" else InvoiceStatus.PAID if due == 0 else InvoiceStatus.PART_PAID if due < total else InvoiceStatus.OVERDUE if status == "overdue" else InvoiceStatus.SENT)
+        return True
+    except (KeyError, ValueError, ArithmeticError, TypeError):
+        return False
+
+
 async def sync_invoices_from_freeagent(db: AsyncSession) -> dict:
     settings = get_settings()
     status = await freeagent_status(db)
@@ -195,7 +220,7 @@ async def sync_invoices_from_freeagent(db: AsyncSession) -> dict:
         await db.flush()
         return {"synced": 0, "fetched": 0, "message": row.last_error}
 
-    local = await db.execute(select(Invoice))
+    local = await db.execute(select(Invoice).where(Invoice.freeagent_id.is_not(None)).with_for_update())
     by_fa_id = {inv.freeagent_id: inv for inv in local.scalars().all() if inv.freeagent_id}
 
     updated = 0
@@ -207,12 +232,8 @@ async def sync_invoices_from_freeagent(db: AsyncSession) -> dict:
         inv = by_fa_id.get(fa_id)
         if inv is None:
             continue
-        total = item.get("total_value") or item.get("net_value")
-        if total is not None:
-            try:
-                inv.total_inc_vat_gbp = Decimal(str(total))
-            except Exception:
-                pass
+        if not apply_remote_invoice_balance(inv, item):
+            continue
         inv.freeagent_url = fa_url
         updated += 1
 
