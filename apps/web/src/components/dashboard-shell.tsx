@@ -78,7 +78,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
 
   const inMarketing = pathname.startsWith("/dashboard/marketing");
   // Pages not yet migrated to the dark portal components use light-theme text colours.
-  const darkNative = inMarketing || pathname === "/dashboard";
+  const darkNative = inMarketing || pathname === "/dashboard" || pathname === "/dashboard/launch-readiness";
 
   return (
     <div className="portal-root min-h-screen bg-[#1a1a1a] text-white overflow-x-hidden">
