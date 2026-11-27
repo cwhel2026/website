@@ -30,7 +30,8 @@ export function publicSiteBaseUrl(): string | null {
 
 export async function telegramSendMessage(chatId: number, text: string): Promise<boolean> {
   const token = process.env.TELEGRAM_BOT_TOKEN?.trim();
-  if (!token) return false;
+  if (!token || /\s/.test(token)) return false;
+  try {
   const res = await fetch(`${TELEGRAM_API}/bot${token}/sendMessage`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -38,6 +39,7 @@ export async function telegramSendMessage(chatId: number, text: string): Promise
   });
   const data = (await res.json()) as { ok?: boolean };
   return Boolean(res.ok && data.ok);
+  } catch { return false; }
 }
 
 export async function registerTelegramWebhook(): Promise<{
@@ -59,7 +61,7 @@ export async function registerTelegramWebhook(): Promise<{
     body: JSON.stringify({
       url: webhookUrl,
       secret_token: secret,
-      drop_pending_updates: true,
+      drop_pending_updates: false,
       allowed_updates: ["message"],
     }),
   });
@@ -71,8 +73,8 @@ export async function registerTelegramWebhook(): Promise<{
 }
 
 export const TELEGRAM_START_MESSAGE =
-  "SurfaceCoat assistant is connected.\n\n" +
-  "Ask about today's jobs, weather, quotations, or marketing — private owner access only.";
+  "🟡 SURFACECOAT | COMMAND CENTRE\nPrivate owner assistant\n\n" +
+  "📅 /today · /diary\n📋 /quotes · /approvals\n💷 /finance\n🌦 /weather\n\nBusiness commands require the connected API.";
 
 const seenUpdates = new Set<number>();
 const SEEN_MAX = 500;
