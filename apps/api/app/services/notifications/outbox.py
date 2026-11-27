@@ -114,10 +114,15 @@ async def deliver_telegram_outbox_item(db: AsyncSession, item: NotificationOutbo
     markup = None
     if item.category == "quotation":
         base = (settings.public_api_base_url or "").strip().rstrip("/")
-        parsed = urlsplit(base)
+        try:
+            parsed = urlsplit(base)
+        except ValueError:
+            parsed = urlsplit("")
         if parsed.scheme == "https" and parsed.hostname and not parsed.username and not parsed.password and not parsed.query and not parsed.fragment:
             markup = {"inline_keyboard": [[{"text": "📋 Quotations", "url": base + "/dashboard/quotations"}, {"text": "📅 Diary", "url": base + "/dashboard/calendar"}], [{"text": "🌦 Weather", "url": base + "/dashboard/weather"}]]}
         text = "🟡 SURFACECOAT | QUOTATION\n\n" + text + "\n\nReview the request in your dashboard before confirming a visit."
+    elif item.category != "assistant_reply":
+        text = "🟡 SURFACECOAT | BUSINESS UPDATE\n\n" + text
     errors: list[str] = []
     last_result: dict | None = None
     delivered_chats = list(payload.get("telegram_chat_ids", []))
