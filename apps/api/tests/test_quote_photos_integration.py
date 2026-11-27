@@ -75,6 +75,12 @@ def test_photos_attach_without_changing_the_estimate(monkeypatch, tmp_path):
     monkeypatch.setattr("app.services.quotation_workflow.travel_km_from_base", _fixed_travel)
     monkeypatch.setattr("app.services.quotation_persist.geocode_postcode", _geo)
     monkeypatch.setattr("app.services.quote_conversion.propose_two_stage_slots", _windows)
+    queued: list[str] = []
+
+    def _queue(set_id) -> None:
+        queued.append(str(set_id))
+
+    monkeypatch.setattr("app.routers.quotation_photos.enqueue_photo_assessment", _queue)
     monkeypatch.setattr("app.services.quote_photos.assess_image_bytes", _vision)
 
     jobs_before = _count("SELECT COUNT(*) FROM jobs")
@@ -145,8 +151,8 @@ def test_photos_attach_without_changing_the_estimate(monkeypatch, tmp_path):
 
     assert _count("SELECT COUNT(*) FROM jobs") == jobs_before
     url = os.environ["SYNC_DATABASE_URL"].replace("postgresql://", "postgresql+psycopg://", 1)
-    engine = sa.create_engine(url)
-    with engine.connect() as conn:
+    sync_engine = sa.create_engine(url)
+    with sync_engine.connect() as conn:
         row = conn.execute(
             sa.text(
                 "SELECT marketing_use_allowed, quotation_id IS NOT NULL, customer_id IS NOT NULL, "
@@ -160,6 +166,31 @@ def test_photos_attach_without_changing_the_estimate(monkeypatch, tmp_path):
     assert row[2] is True
     assert row[3] is True
     assert row[4] is True
-    assert row[5] is True
-    assert row[6] == "assessed"
+    assert row[5] is False
+    assert row[6] == "pending"
+    assert queued
+
+    import asyncio
+    from uuid import UUID
+
+    from app.database import engine as async_engine
+    from app.services.quote_photos import assess_photo_set
+
+    async def _run_worker() -> None:
+        await async_engine.dispose()
+        await assess_photo_set(UUID(queued[0]))
+
+    asyncio.run(_run_worker())
+    with sync_engine.connect() as conn:
+        after = conn.execute(
+            sa.text(
+                "SELECT review_required, ai_status, "
+                "(SELECT total_inc_vat_gbp FROM quotations WHERE id = quote_photo_sets.quotation_id) "
+                "FROM quote_photo_sets WHERE token = :token"
+            ),
+            {"token": token},
+        ).one()
+    assert after[0] is True
+    assert after[1] == "assessed"
+    assert Decimal(str(after[2])) == Decimal(str(total))
     get_settings.cache_clear()

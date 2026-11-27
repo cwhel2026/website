@@ -128,8 +128,8 @@ Nothing below is marked as working in production. Production still runs `main` (
 | C6 | Email the estimate only when SMTP is connected | **Merged (PR #60)** | Disconnected email is saved and the confirmation says it was not emailed. |
 | C7 | Tell the owner on Telegram only when the bot is connected | **Merged (PR #60)** | `telegram_notified` stays false when the token or chat is missing. The customer page does not claim a notification was sent. |
 | C8 | Suggest diary windows without confirming a booking | **Merged (PR #60)** | Uses the existing scheduler and live weather when both answer within a few seconds. If they do not, the customer still gets the confirmation and nothing is reserved. No job or appointment row is created. Confirming the appointment and creating the job remain L3. |
-| C9 | Optional photographs before the price, with a later secure link | **On branch** | Upload from the camera or gallery, or skip straight to the estimate. Photographs stay private, are kept for 24 months, and are not used for marketing. |
-| C10 | AI condition check that does not reprice the quote | **On branch** | Distinguishes wear, edge deterioration, cracks, potholes and unsuitable surfaces. Significant findings are flagged for the owner to price. The provider being unavailable still returns the estimate. |
+| C9 | Optional photographs before the price, with a later secure link | **On branch** | Photographs are compressed on the phone and upload one at a time with progress. The customer can open the estimate while they are still uploading, and a failed upload can be retried. Photographs stay private, are kept for 24 months, and are not used for marketing. |
+| C10 | AI condition check that does not reprice the quote | **On branch** | The check is a background worker task. Distinguishes wear, edge deterioration, cracks, potholes and unsuitable surfaces. Significant findings are flagged for the owner to price. If the worker or the provider is unavailable, the estimate still returns. |
 
 ### Future enhancements (explicitly not built in Phase 2)
 

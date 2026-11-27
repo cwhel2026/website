@@ -589,6 +589,27 @@ def marketing_capacity_snapshot(self) -> dict:
         session.close()
 
 
+@celery_app.task(name="rmd.assess_quote_photos", bind=True)
+def assess_quote_photos(self, set_id: str) -> dict:
+    """Vision check for driveway photographs. The quotation price does not wait for this."""
+    session = SessionLocal()
+    run = start_run(session, "assess_quote_photos", dedupe_key=set_id, worker_id=_worker_id())
+    try:
+        from uuid import UUID
+
+        from app.services.quote_photos import assess_photo_set
+
+        asyncio.run(assess_photo_set(UUID(set_id)))
+        detail = {"set_id": set_id}
+        finish_run(session, run, status=JobRunStatus.SUCCEEDED, detail=detail)
+        return detail
+    except Exception as exc:
+        finish_run(session, run, status=JobRunStatus.FAILED, error=str(exc))
+        raise
+    finally:
+        session.close()
+
+
 @celery_app.task(name="rmd.purge_quote_photos", bind=True)
 def purge_quote_photos(self) -> dict:
     session = SessionLocal()

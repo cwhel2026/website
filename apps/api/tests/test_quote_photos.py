@@ -20,6 +20,23 @@ def _jpeg_with_private_note() -> bytes:
     return data[:2] + marker + data[2:]
 
 
+def test_prepare_image_stays_within_the_upload_target_and_keeps_detail():
+    from PIL import Image
+    import io
+
+    from app.services.quote_photo_store import DETAIL_FLOOR_EDGE, TARGET_MAX_BYTES
+
+    image = Image.new("RGB", (2400, 1600), (180, 170, 150))
+    for x in range(200, 2200):
+        image.putpixel((x, 800), (20, 20, 20))
+    raw = io.BytesIO()
+    image.save(raw, format="JPEG", quality=95)
+    cleaned = prepare_image(raw.getvalue())
+    assert len(cleaned) <= TARGET_MAX_BYTES
+    opened = Image.open(io.BytesIO(cleaned))
+    assert max(opened.size) >= DETAIL_FLOOR_EDGE
+
+
 def test_prepare_image_strips_metadata_and_rejects_other_files():
     cleaned = prepare_image(_jpeg_with_private_note())
     assert cleaned.startswith(b"\xff\xd8")
@@ -59,6 +76,18 @@ async def test_missing_provider_does_not_invent_an_assessment(monkeypatch):
     assert result["status"] == "unavailable"
     assert result["changes_price"] is False
     assert result["review_required"] is False
+
+
+def test_assessment_enqueue_survives_a_missing_worker(monkeypatch):
+    from uuid import uuid4
+
+    def _boom(*_args, **_kwargs):
+        raise ConnectionError("redis down")
+
+    monkeypatch.setattr("app.worker.tasks.assess_quote_photos.apply_async", _boom)
+    from app.services.quote_photos import _publish_photo_assessment
+
+    _publish_photo_assessment(str(uuid4()))
 
 
 def test_repair_decision_does_not_touch_the_quotation_total():

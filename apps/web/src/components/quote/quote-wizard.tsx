@@ -3,8 +3,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { ApiError } from "@/lib/api";
-import { apiDelete, apiGet, apiPost, resolveApiUrl } from "@/lib/api";
+import { apiDelete, apiGet, apiPost } from "@/lib/api";
 import { trackFunnel, getStoredUtm } from "@/lib/analytics";
+import { compressDrivewayPhoto, newPhotoToken, postDrivewayPhoto } from "@/lib/quote-photos";
 
 const STORAGE_KEY = "rmd_quote_draft";
 const STEPS = ["Location", "Surface", "Measurements", "Condition", "Preparation", "Photos", "Quote", "Contact"];
@@ -37,7 +38,15 @@ type QuoteState = {
   photoNote: string;
 };
 
-type LocalPhoto = { id: string; url: string };
+type LocalPhoto = {
+  id: string;
+  serverId?: string;
+  url: string;
+  progress: number;
+  status: "uploading" | "saved" | "failed";
+  blob?: Blob;
+  file?: File;
+};
 
 type PackageItem = { title: string; detail: string };
 
@@ -125,7 +134,9 @@ export function QuoteWizard() {
   const [saved, setSaved] = useState<SavedQuotation | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [photos, setPhotos] = useState<LocalPhoto[]>([]);
-  const [uploading, setUploading] = useState(false);
+  const photosRef = useRef<LocalPhoto[]>([]);
+  const uploadStops = useRef<Map<string, () => void>>(new Map());
+  photosRef.current = photos;
 
   const pricingInputKey = useMemo(
     () =>
@@ -346,64 +357,114 @@ export function QuoteWizard() {
     await calculateProvisional();
   }
 
-  async function uploadFiles(fileList: FileList | null, replaceId?: string) {
-    if (!fileList || fileList.length === 0) return;
-    setUploading(true);
-    setError(null);
-    try {
-      const form = new FormData();
-      if (state.photoToken) form.append("token", state.photoToken);
-      if (state.photoNote.trim()) form.append("note", state.photoNote.trim());
-      if (replaceId) form.append("replace_id", replaceId);
-      for (const file of Array.from(fileList)) {
-        form.append("files", await compressPhoto(file), "driveway.jpg");
+  function updatePhoto(localId: string, patchPhoto: Partial<LocalPhoto>) {
+    setPhotos((current) => current.map((photo) => (photo.id === localId ? { ...photo, ...patchPhoto } : photo)));
+  }
+
+  async function sendPhoto(localId: string, token: string, blob: Blob | undefined, replaceServerId?: string) {
+    if (!blob) {
+      const file = photosRef.current.find((item) => item.id === localId)?.file;
+      if (!file) {
+        updatePhoto(localId, { status: "failed", progress: 0 });
+        return;
       }
-      const res = await fetch(`${resolveApiUrl()}/api/v1/quotation-photos`, {
-        method: "POST",
-        body: form,
-        credentials: "same-origin",
+      try {
+        blob = await compressDrivewayPhoto(file);
+        updatePhoto(localId, { blob, file: undefined, url: URL.createObjectURL(blob) });
+      } catch {
+        updatePhoto(localId, { status: "failed", progress: 0 });
+        return;
+      }
+    }
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      updatePhoto(localId, { status: "uploading" });
+      const upload = postDrivewayPhoto({
+        blob,
+        token,
+        note: state.photoNote.trim() || undefined,
+        replaceId: replaceServerId,
+        onProgress: (progress) => updatePhoto(localId, { progress }),
       });
-      if (!res.ok) {
-        const detail = await res.text();
-        let message = "Could not upload the photograph";
-        try {
-          const parsed = JSON.parse(detail) as { detail?: string };
-          if (typeof parsed.detail === "string") message = parsed.detail;
-        } catch {
-          if (detail) message = detail;
+      uploadStops.current.set(localId, upload.abort);
+      try {
+        const serverId = await upload.promise;
+        uploadStops.current.delete(localId);
+        updatePhoto(localId, { status: "saved", progress: 100, serverId, blob: undefined });
+        return;
+      } catch (err) {
+        uploadStops.current.delete(localId);
+        const aborted = err instanceof Error && err.message === "aborted";
+        if (aborted) return;
+        const status = (err as { status?: number }).status;
+        if (status && status < 500) {
+          updatePhoto(localId, { status: "failed", progress: 0 });
+          return;
         }
-        throw new Error(message);
+        if (attempt < 2) {
+          await new Promise((resolve) => setTimeout(resolve, 400 * (attempt + 1)));
+          continue;
+        }
+        updatePhoto(localId, { status: "failed", progress: 0, blob });
       }
-      const data = (await res.json()) as { token: string; photos: { id: string }[] };
-      patch({ photoToken: data.token });
-      setPhotos(
-        data.photos.map((photo) => ({
-          id: photo.id,
-          url: `/api/v1/quotation-photos/${data.token}/${photo.id}`,
-        })),
-      );
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not upload the photograph");
-    } finally {
-      setUploading(false);
     }
   }
 
-  async function removePhoto(photoId: string) {
-    if (!state.photoToken) return;
-    setError(null);
-    try {
-      const data = await apiDelete<{ photos: { id: string }[] }>(
-        `/api/v1/quotation-photos/${state.photoToken}/${photoId}`,
-      );
-      setPhotos(
-        data.photos.map((photo) => ({
-          id: photo.id,
-          url: `/api/v1/quotation-photos/${state.photoToken}/${photo.id}`,
-        })),
-      );
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not remove the photograph");
+  async function uploadFiles(fileList: FileList | null, replaceLocalId?: string) {
+    if (!fileList || fileList.length === 0) return;
+    const token = state.photoToken || newPhotoToken();
+    if (!state.photoToken) patch({ photoToken: token });
+    const replacing = photosRef.current.find((photo) => photo.id === replaceLocalId);
+    if (replacing) {
+      uploadStops.current.get(replacing.id)?.();
+      URL.revokeObjectURL(replacing.url);
+      setPhotos((current) => current.filter((photo) => photo.id !== replacing.id));
+    }
+    let replaceServerId = replacing?.serverId;
+    for (const file of Array.from(fileList)) {
+      const localId = crypto.randomUUID();
+      let blob: Blob | undefined;
+      let url = "";
+      try {
+        blob = await compressDrivewayPhoto(file);
+        url = URL.createObjectURL(blob);
+      } catch {
+        url = "";
+      }
+      const item: LocalPhoto = {
+        id: localId,
+        url,
+        progress: 0,
+        status: blob ? "uploading" : "failed",
+        blob,
+        file: blob ? undefined : file,
+      };
+      setPhotos((current) => [...current, item]);
+      if (blob) void sendPhoto(localId, token, blob, replaceServerId);
+      replaceServerId = undefined;
+    }
+  }
+
+  async function retryPhoto(localId: string) {
+    const token = state.photoToken || newPhotoToken();
+    if (!state.photoToken) patch({ photoToken: token });
+    const photo = photosRef.current.find((item) => item.id === localId);
+    if (!photo) return;
+    updatePhoto(localId, { status: "uploading", progress: 0 });
+    await sendPhoto(localId, token, photo.blob, photo.serverId);
+  }
+
+  async function removePhoto(localId: string) {
+    const photo = photosRef.current.find((item) => item.id === localId);
+    if (!photo) return;
+    uploadStops.current.get(localId)?.();
+    if (photo.url) URL.revokeObjectURL(photo.url);
+    setPhotos((current) => current.filter((item) => item.id !== localId));
+    if (photo.serverId && state.photoToken) {
+      try {
+        await apiDelete(`/api/v1/quotation-photos/${state.photoToken}/${photo.serverId}`);
+      } catch {
+        /* The preview is already gone. The secure link can remove it later. */
+      }
     }
   }
 
@@ -432,6 +493,9 @@ export function QuoteWizard() {
         </ol>
 
         <div className="mt-8 rounded-lg border border-stone-line bg-white p-6 shadow-sm md:p-10">
+          {step !== 5 && photos.some((photo) => photo.status !== "saved") && (
+            <PhotoUploadStatus photos={photos} onRetry={(photoId) => void retryPhoto(photoId)} />
+          )}
           {step === 0 && (
             <StepLocation
               state={state}
@@ -451,11 +515,11 @@ export function QuoteWizard() {
             <StepPhotos
               note={state.photoNote}
               photos={photos}
-              uploading={uploading}
               error={error}
               onNote={(photoNote) => patch({ photoNote })}
               onUpload={(files, replaceId) => void uploadFiles(files, replaceId)}
               onRemove={(photoId) => void removePhoto(photoId)}
+              onRetry={(photoId) => void retryPhoto(photoId)}
               onSkip={() => void showEstimate()}
               onEstimate={() => void showEstimate()}
             />
@@ -754,41 +818,53 @@ function StepPrep({
   );
 }
 
-async function compressPhoto(file: File): Promise<Blob> {
-  try {
-    const bitmap = await createImageBitmap(file);
-    const scale = Math.min(1, 1600 / Math.max(bitmap.width, bitmap.height));
-    const canvas = document.createElement("canvas");
-    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
-    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
-    const context = canvas.getContext("2d");
-    if (!context) return file;
-    context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.8));
-    return blob ?? file;
-  } catch {
-    return file;
-  }
+function photoStatusLabel(photo: LocalPhoto): string {
+  if (photo.status === "saved") return "Saved";
+  if (photo.status === "failed") return "Upload paused";
+  if (photo.progress > 0) return `Uploading ${photo.progress}%`;
+  return "Preparing";
+}
+
+function PhotoUploadStatus({ photos, onRetry }: { photos: LocalPhoto[]; onRetry: (photoId: string) => void }) {
+  const pending = photos.filter((photo) => photo.status !== "saved");
+  if (pending.length === 0) return null;
+  return (
+    <div className="mb-6 rounded-md border border-[#e0b323]/60 px-3 py-3 text-sm text-[#1a1a1a]">
+      <p>Photographs are still uploading. Your estimate does not wait for them.</p>
+      <ul className="mt-2 space-y-2">
+        {pending.map((photo) => (
+          <li key={photo.id}>
+            <p>{photoStatusLabel(photo)}</p>
+            {photo.status === "failed" && (
+              <button type="button" className="underline" onClick={() => onRetry(photo.id)}>
+                Retry upload
+              </button>
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
 }
 
 function StepPhotos({
   note,
   photos,
-  uploading,
   error,
   onNote,
   onUpload,
   onRemove,
+  onRetry,
   onSkip,
   onEstimate,
 }: {
   note: string;
   photos: LocalPhoto[];
-  uploading: boolean;
   error: string | null;
   onNote: (value: string) => void;
   onUpload: (files: FileList | null, replaceId?: string) => void;
   onRemove: (photoId: string) => void;
+  onRetry: (photoId: string) => void;
   onSkip: () => void;
   onEstimate: () => void;
 }) {
@@ -819,7 +895,8 @@ function StepPhotos({
       </div>
       {open && (
         <div className="mt-6">
-          <div className="flex flex-col gap-3 sm:flex-row">
+          <p className="text-sm text-[#1a1a1a]/75">You can see your estimate while photographs upload.</p>
+          <div className="mt-3 flex flex-col gap-3 sm:flex-row">
             <label className="w-full rounded-md border border-[#1a1a1a] px-4 py-3 text-center text-sm font-semibold">
               Take a photo
               <input
@@ -828,7 +905,10 @@ function StepPhotos({
                 capture="environment"
                 className="sr-only"
                 data-testid="camera-input"
-                onChange={(event) => onUpload(event.target.files)}
+                onChange={(event) => {
+                  onUpload(event.target.files);
+                  event.target.value = "";
+                }}
               />
             </label>
             <label className="w-full rounded-md border border-[#1a1a1a] px-4 py-3 text-center text-sm font-semibold">
@@ -852,8 +932,23 @@ function StepPhotos({
             <ul className="mt-4 grid grid-cols-2 gap-3">
               {photos.map((photo) => (
                 <li key={photo.id} className="rounded-md border border-stone-line p-2">
-                  <img src={photo.url} alt="Driveway photograph" className="h-28 w-full rounded object-cover" />
-                  <div className="mt-2 flex gap-2">
+                  {photo.url ? (
+                    <img src={photo.url} alt="Driveway photograph" className="h-28 w-full rounded object-cover" />
+                  ) : (
+                    <div className="flex h-28 items-center justify-center text-xs text-[#1a1a1a]/60">Preparing</div>
+                  )}
+                  <div
+                    className="mt-2 h-1.5 overflow-hidden rounded bg-stone-line"
+                    role="progressbar"
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-valuenow={photo.progress}
+                    aria-label={photoStatusLabel(photo)}
+                  >
+                    <div className="h-full bg-[#e0b323]" style={{ width: `${photo.status === "saved" ? 100 : photo.progress}%` }} />
+                  </div>
+                  <p className="mt-1 text-xs">{photoStatusLabel(photo)}</p>
+                  <div className="mt-2 flex flex-wrap gap-2">
                     <button type="button" className="text-sm underline" onClick={() => onRemove(photo.id)}>
                       Remove photograph
                     </button>
@@ -867,6 +962,11 @@ function StepPhotos({
                     >
                       Replace photograph
                     </button>
+                    {photo.status === "failed" && (
+                      <button type="button" className="text-sm underline" onClick={() => onRetry(photo.id)}>
+                        Retry upload
+                      </button>
+                    )}
                   </div>
                 </li>
               ))}
@@ -883,11 +983,10 @@ function StepPhotos({
           </label>
           <button
             type="button"
-            className="mt-4 w-full rounded-md bg-[#e0b323] px-6 py-4 text-base font-semibold text-[#1a1a1a] disabled:opacity-50"
-            disabled={uploading}
+            className="mt-4 w-full rounded-md bg-[#e0b323] px-6 py-4 text-base font-semibold text-[#1a1a1a]"
             onClick={onEstimate}
           >
-            {uploading ? "Uploading…" : "See my estimate"}
+            See my estimate
           </button>
         </div>
       )}

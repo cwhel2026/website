@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 import logging
+import re
 import secrets
+import threading
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from uuid import UUID
 
 from fastapi import HTTPException
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -31,6 +34,7 @@ from app.services.quote_photo_store import (
 
 logger = logging.getLogger(__name__)
 RETENTION_DAYS = 730
+_TOKEN = re.compile(r"^[A-Za-z0-9_-]{16,80}$")
 
 
 def new_photo_set() -> QuotePhotoSet:
@@ -44,15 +48,68 @@ def new_photo_set() -> QuotePhotoSet:
     )
 
 
+def _require_token(token: str | None) -> str | None:
+    cleaned = (token or "").strip()
+    if not cleaned:
+        return None
+    if _TOKEN.fullmatch(cleaned) is None:
+        raise HTTPException(status_code=400, detail="Photograph link was not recognised")
+    return cleaned
+
+
 async def load_set(db: AsyncSession, token: str) -> QuotePhotoSet:
-    if not token or len(token) > 80:
+    cleaned = _require_token(token)
+    if cleaned is None:
         raise HTTPException(status_code=404, detail="Photograph link was not recognised")
     row = await db.scalar(
-        select(QuotePhotoSet).options(selectinload(QuotePhotoSet.photos)).where(QuotePhotoSet.token == token)
+        select(QuotePhotoSet).options(selectinload(QuotePhotoSet.photos)).where(QuotePhotoSet.token == cleaned)
     )
     if row is None:
         raise HTTPException(status_code=404, detail="Photograph link was not recognised")
     return row
+
+
+async def ensure_photo_set(db: AsyncSession, token: str | None) -> QuotePhotoSet:
+    """Return the set for a client token, creating it if the upload has not arrived yet."""
+    cleaned = _require_token(token)
+    if cleaned is None:
+        created = new_photo_set()
+        db.add(created)
+        await db.flush()
+        return await load_set(db, created.token)
+    found = await db.scalar(
+        select(QuotePhotoSet).options(selectinload(QuotePhotoSet.photos)).where(QuotePhotoSet.token == cleaned)
+    )
+    if found is not None:
+        return found
+    created = new_photo_set()
+    created.token = cleaned
+    try:
+        async with db.begin_nested():
+            db.add(created)
+            await db.flush()
+    except IntegrityError:
+        found = await db.scalar(
+            select(QuotePhotoSet).options(selectinload(QuotePhotoSet.photos)).where(QuotePhotoSet.token == cleaned)
+        )
+        if found is None:
+            raise
+        return found
+    return await load_set(db, cleaned)
+
+
+def enqueue_photo_assessment(set_id: UUID) -> None:
+    """Hand the vision check to the worker. A missing broker must not fail the upload."""
+    threading.Thread(target=_publish_photo_assessment, args=(str(set_id),), name="quote-photo-ai", daemon=True).start()
+
+
+def _publish_photo_assessment(set_id: str) -> None:
+    try:
+        from app.worker.tasks import assess_quote_photos
+
+        assess_quote_photos.apply_async(args=[set_id], retry=False, expires=3600)
+    except Exception:
+        logger.warning("driveway photograph assessment was not queued", exc_info=True)
 
 
 async def add_photos(
@@ -62,7 +119,7 @@ async def add_photos(
     *,
     note: str | None,
     replace_id: UUID | None,
-) -> QuotePhotoSet:
+) -> list[QuotePhoto]:
     if replace_id is not None:
         await remove_photo(db, photo_set, replace_id)
     if not blobs:
@@ -75,16 +132,17 @@ async def add_photos(
             prepared.append(prepare_image(raw))
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
+    created: list[QuotePhoto] = []
     for jpeg in prepared:
         key, digest = save_photo_bytes(jpeg)
-        photo_set.photos.append(
-            QuotePhoto(storage_key=key, sha256=digest, byte_size=len(jpeg))
-        )
+        photo = QuotePhoto(storage_key=key, sha256=digest, byte_size=len(jpeg))
+        photo_set.photos.append(photo)
+        created.append(photo)
     if note is not None and note.strip():
         photo_set.customer_note = note.strip()[:1000]
     photo_set.ai_status = "pending"
     photo_set.marketing_use_allowed = False
-    return photo_set
+    return created
 
 
 async def remove_photo(db: AsyncSession, photo_set: QuotePhotoSet, photo_id: UUID) -> None:
@@ -108,17 +166,17 @@ async def link_photo_set(
 ) -> str:
     existing = await db.scalar(select(QuotePhotoSet).where(QuotePhotoSet.quotation_id == quotation_id))
     row: QuotePhotoSet | None = None
-    cleaned = (token or "").strip()
+    cleaned = _require_token(token)
     if cleaned:
         row = await db.scalar(select(QuotePhotoSet).where(QuotePhotoSet.token == cleaned))
-        if row is None:
-            raise HTTPException(status_code=400, detail="Photograph link was not recognised")
-        if row.quotation_id is not None and row.quotation_id != quotation_id:
+        if row is not None and row.quotation_id is not None and row.quotation_id != quotation_id:
             raise HTTPException(status_code=409, detail="These photographs are already attached to another quotation")
     if existing is not None and (row is None or existing.id != row.id):
         return existing.token
     if row is None:
         row = new_photo_set()
+        if cleaned:
+            row.token = cleaned
         db.add(row)
     row.quotation_id = quotation_id
     row.enquiry_id = enquiry_id

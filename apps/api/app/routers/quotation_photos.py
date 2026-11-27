@@ -4,7 +4,7 @@ from decimal import Decimal
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import select
@@ -20,9 +20,9 @@ from app.rate_limit import limiter
 from app.services.quote_photo_store import MAX_UPLOAD_BYTES, photo_file
 from app.services.quote_photos import (
     add_photos,
-    assess_photo_set,
+    enqueue_photo_assessment,
+    ensure_photo_set,
     load_set,
-    new_photo_set,
     record_repair_decision,
     remove_photo,
 )
@@ -38,6 +38,7 @@ class PhotoSetOut(BaseModel):
     token: str
     photos: list[PhotoOut]
     note: str | None = None
+    uploaded_id: UUID | None = None
 
 
 class ReviewOut(BaseModel):
@@ -64,11 +65,13 @@ class RepairDecisionIn(BaseModel):
     approved: bool = True
 
 
-def _public(photo_set: QuotePhotoSet) -> PhotoSetOut:
+def _public(photo_set: QuotePhotoSet, uploaded_id: UUID | None = None) -> PhotoSetOut:
+    ordered = sorted(photo_set.photos, key=lambda photo: photo.created_at.isoformat() if photo.created_at else "")
     return PhotoSetOut(
         token=photo_set.token,
-        photos=[PhotoOut(id=photo.id) for photo in photo_set.photos],
+        photos=[PhotoOut(id=photo.id) for photo in ordered],
         note=photo_set.customer_note,
+        uploaded_id=uploaded_id,
     )
 
 
@@ -125,7 +128,6 @@ async def decide_repair(
 @limiter.limit("20/minute")
 async def upload_photos(
     request: Request,
-    background_tasks: BackgroundTasks,
     db: Annotated[AsyncSession, Depends(get_db)],
     files: Annotated[list[UploadFile], File()],
     token: Annotated[str | None, Form()] = None,
@@ -133,24 +135,19 @@ async def upload_photos(
     replace_id: Annotated[UUID | None, Form()] = None,
 ) -> PhotoSetOut:
     del request
-    if token:
-        photo_set = await load_set(db, token.strip())
-    else:
-        photo_set = new_photo_set()
-        db.add(photo_set)
-        await db.flush()
-        photo_set = await load_set(db, photo_set.token)
+    photo_set = await ensure_photo_set(db, token)
     blobs: list[bytes] = []
     for upload in files:
         raw = await upload.read(MAX_UPLOAD_BYTES + 1)
         blobs.append(raw)
-    await add_photos(db, photo_set, blobs, note=note, replace_id=replace_id)
+    created = await add_photos(db, photo_set, blobs, note=note, replace_id=replace_id)
     set_id = photo_set.id
     token_value = photo_set.token
+    uploaded_id = created[-1].id if created else None
     await db.commit()
     photo_set = await load_set(db, token_value)
-    background_tasks.add_task(assess_photo_set, set_id)
-    return _public(photo_set)
+    enqueue_photo_assessment(set_id)
+    return _public(photo_set, uploaded_id)
 
 
 @router.get("/{token}", response_model=PhotoSetOut)

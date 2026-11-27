@@ -13,7 +13,10 @@ from app.config import get_settings
 
 MAX_UPLOAD_BYTES = 12 * 1024 * 1024
 MAX_EDGE = 1600
+TARGET_MAX_BYTES = 500 * 1024
 MAX_PHOTOS = 8
+# Stay large enough for a close-up of a crack. Byte size gives way once this floor is reached.
+DETAIL_FLOOR_EDGE = 1280
 
 
 def photos_root() -> Path:
@@ -38,11 +41,18 @@ def prepare_image(raw: bytes) -> bytes:
     image = ImageOps.exif_transpose(image)
     if image.mode != "RGB":
         image = image.convert("RGB")
-    image.thumbnail((MAX_EDGE, MAX_EDGE), Image.Resampling.LANCZOS)
-    image.info = {}
-    out = io.BytesIO()
-    image.save(out, format="JPEG", quality=80, optimize=True)
-    return out.getvalue()
+    best = b""
+    for edge in (MAX_EDGE, 1400, DETAIL_FLOOR_EDGE):
+        working = image.copy()
+        working.thumbnail((edge, edge), Image.Resampling.LANCZOS)
+        working.info = {}
+        for quality in (78, 70, 62):
+            out = io.BytesIO()
+            working.save(out, format="JPEG", quality=quality, optimize=True)
+            best = out.getvalue()
+            if len(best) <= TARGET_MAX_BYTES:
+                return best
+    return best
 
 
 def save_photo_bytes(data: bytes) -> tuple[str, str]:

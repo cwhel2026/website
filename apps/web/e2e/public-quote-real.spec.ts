@@ -90,6 +90,7 @@ test("upload a driveway photograph then still receive an estimate", async ({ pag
   await page.getByRole("button", { name: "Upload driveway photos" }).click();
   await page.getByTestId("gallery-input").setInputFiles("e2e/fixtures/driveway.jpg");
   await expect(page.getByRole("img", { name: "Driveway photograph" })).toBeVisible();
+  await expect(page.getByText("Saved")).toBeVisible();
   await page.getByLabel("Notes (optional)").fill("Crack near the gate");
   await page.getByRole("button", { name: "See my estimate" }).click();
 
@@ -111,4 +112,94 @@ test("upload a driveway photograph then still receive an estimate", async ({ pag
   }
   await expect(page.getByText(/do not change the price/i)).toBeVisible();
   await expect(page.getByText(/not a confirmed booking/i)).toBeVisible();
+});
+
+test("the estimate appears on a slow connection while a photograph is still uploading", async ({ page }) => {
+  const client = await page.context().newCDPSession(page);
+  await client.send("Network.emulateNetworkConditions", {
+    offline: false,
+    latency: 400,
+    downloadThroughput: (400 * 1024) / 8,
+    uploadThroughput: (150 * 1024) / 8,
+  });
+  await page.route("**/api/v1/quotation-photos", async (route) => {
+    if (route.request().method() !== "POST") {
+      await route.continue();
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 12_000));
+    try {
+      await route.continue();
+    } catch {
+      /* The estimate is already on screen; the held upload can end with the page. */
+    }
+  });
+
+  await page.goto("/quote");
+  const essential = page.getByRole("button", { name: "Essential only" });
+  if (await essential.isVisible().catch(() => false)) {
+    await essential.click();
+  }
+  await page.getByLabel("Postcode").fill("L39 2YG");
+  await page.getByLabel("Town (optional)").fill("Ormskirk");
+  await page.getByRole("button", { name: "Check coverage" }).click();
+  await page.getByRole("button", { name: "Continue" }).click();
+  await page.getByRole("button", { name: "Continue" }).click();
+  await page.getByPlaceholder("Length (m)").first().fill("10");
+  await page.getByPlaceholder("Width (m)").first().fill("4");
+  await page.getByRole("button", { name: "Continue" }).click();
+  await page.getByRole("button", { name: "Continue" }).click();
+  await page.getByRole("button", { name: "Continue" }).click();
+
+  await page.getByRole("button", { name: "Upload driveway photos" }).click();
+  await page.getByTestId("gallery-input").setInputFiles("e2e/fixtures/driveway.jpg");
+  await expect(page.getByRole("progressbar")).toBeVisible();
+  const started = Date.now();
+  await page.getByRole("button", { name: "See my estimate" }).click();
+  await expect(page.getByText("Your estimated price")).toBeVisible({ timeout: 8_000 });
+  expect(Date.now() - started).toBeLessThan(8_000);
+  await expect(page.getByText(/Uploading|Preparing/)).toBeVisible();
+  await expect(page.getByText(/does not wait for them/i)).toBeVisible();
+});
+
+test("a failed photograph upload can be retried without losing the quotation", async ({ page }) => {
+  let attempts = 0;
+  await page.route("**/api/v1/quotation-photos", async (route) => {
+    if (route.request().method() !== "POST") {
+      await route.continue();
+      return;
+    }
+    attempts += 1;
+    if (attempts < 4) {
+      await route.fulfill({ status: 500, contentType: "application/json", body: "{\"detail\":\"again\"}" });
+      return;
+    }
+    await route.continue();
+  });
+
+  await page.goto("/quote");
+  const essential = page.getByRole("button", { name: "Essential only" });
+  if (await essential.isVisible().catch(() => false)) {
+    await essential.click();
+  }
+  await page.getByLabel("Postcode").fill("L39 2YG");
+  await page.getByLabel("Town (optional)").fill("Ormskirk");
+  await page.getByRole("button", { name: "Check coverage" }).click();
+  await page.getByRole("button", { name: "Continue" }).click();
+  await page.getByRole("button", { name: "Continue" }).click();
+  await page.getByPlaceholder("Length (m)").first().fill("8");
+  await page.getByPlaceholder("Width (m)").first().fill("3");
+  await page.getByRole("button", { name: "Continue" }).click();
+  await page.getByRole("button", { name: "Continue" }).click();
+  await page.getByRole("button", { name: "Continue" }).click();
+  await page.getByRole("button", { name: "Upload driveway photos" }).click();
+  await page.getByLabel("Notes (optional)").fill("Close-up of a crack");
+  await page.getByTestId("gallery-input").setInputFiles("e2e/fixtures/driveway.jpg");
+  await expect(page.getByRole("button", { name: "Retry upload" })).toBeVisible({ timeout: 8_000 });
+  await expect(page.getByLabel("Notes (optional)")).toHaveValue("Close-up of a crack");
+  await expect(page.getByRole("img", { name: "Driveway photograph" })).toBeVisible();
+  await page.getByRole("button", { name: "Retry upload" }).click();
+  await expect(page.getByText("Saved")).toBeVisible();
+  await page.getByRole("button", { name: "I just want an estimate" }).click();
+  await expect(page.getByText("Your estimated price")).toBeVisible({ timeout: 30_000 });
 });
