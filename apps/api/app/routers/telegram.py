@@ -199,6 +199,7 @@ async def telegram_webhook(
             )
         )
         try:
+            await db.flush()
             data, fname = await download_telegram_file(photo_id)
             is_before = "before" in caption.lower()
             asset = await ingest_marketing_photo(
@@ -225,6 +226,9 @@ async def telegram_webhook(
                 msg += " Add '#permission_granted' in caption when customer has agreed to marketing use."
             await _safe_send(chat_id, msg)
             return JSONResponse({"status": "marketing_media_ok", "asset_id": str(asset.id)})
+        except IntegrityError:
+            await db.rollback()
+            return JSONResponse({"status": "duplicate"})
         except Exception as exc:
             await db.rollback()
             await _safe_send(chat_id, "Could not store marketing photo. Check integration health.")
@@ -244,11 +248,15 @@ async def telegram_webhook(
             )
         )
         try:
+            await db.flush()
             receipt, detail = await ingest_telegram_receipt(db, photo_id)
             outbound_text = summarise_receipt_reply(receipt, detail)
             await db.commit()
             await _safe_send(chat_id, outbound_text)
             return JSONResponse({"status": "receipt_ok", "receipt_id": str(receipt.id)})
+        except IntegrityError:
+            await db.rollback()
+            return JSONResponse({"status": "duplicate"})
         except Exception as exc:
             logger.exception("Receipt ingest failed")
             await db.rollback()
@@ -304,9 +312,10 @@ async def telegram_webhook(
         await enqueue_notification(
             db,
             channel="telegram",
-            title="Telegram reply failed",
-            body=outbound_text[:500],
-            category="integration_failure",
+            title="",
+            body=outbound_text[:4096],
+            category="assistant_reply",
+            payload={"reply_chat_id": chat_id},
             dedupe_key=f"telegram-reply-fail:{update.update_id}",
         )
         await db.commit()
