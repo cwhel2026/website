@@ -79,3 +79,8 @@ class FieldJobOut(BaseModel):
     next_appointment_type: AppointmentType | None
     next_appointment_start: datetime | None
     tasks: list[str] = Field(default_factory=list)
+
+class CompleteCoatIn(BaseModel):
+    completed_at: datetime | None = None
+    surface_dry_confirmed: bool
+    weather_safe_confirmed: bool

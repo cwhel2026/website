@@ -9,7 +9,7 @@ from sqlalchemy.orm import selectinload
 
 from app.auth import get_current_admin
 from app.database import get_db
-from app.models.crm import CustomerProperty
+from app.models.crm import CustomerProperty, Enquiry, PipelineStage
 from app.models.jobs import (
     Appointment,
     AppointmentStatus,
@@ -18,12 +18,15 @@ from app.models.jobs import (
     Job,
     JobStatus,
 )
-from app.models.quotation import Quotation
+from app.models.quotation import Quotation, QuotationStatus
 from app.models.service import Service
 from app.models.user import User
-from app.models.weather import ProductProfile
+from app.models.weather import ProductProfile, WorkActivity
+from app.services.weather.service import get_hourly_forecast
+from app.services.weather_engine import score_window
 from app.schemas.jobs import (
     CompletePrepIn,
+    CompleteCoatIn,
     CreateAppointmentIn,
     FieldJobOut,
     JobOut,
@@ -32,6 +35,8 @@ from app.schemas.jobs import (
 )
 from app.services.scheduling_engine import (
     find_conflicts,
+    earliest_search_from,
+    slot_inside_working_hours,
     get_scheduling_settings,
     job_from_quotation,
     propose_two_stage_slots,
@@ -130,13 +135,16 @@ async def create_job_from_quotation(
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[User, Depends(get_current_admin)],
 ) -> JobOut:
-    q_result = await db.execute(select(Quotation).where(Quotation.id == quotation_id))
+    q_result = await db.execute(select(Quotation).where(Quotation.id == quotation_id).with_for_update())
     quotation = q_result.scalar_one_or_none()
     if quotation is None:
         raise HTTPException(404, "Quotation not found")
-    existing = await db.execute(select(Job).where(Job.quotation_id == quotation_id))
-    if existing.scalar_one_or_none():
-        raise HTTPException(409, "Job already exists for quotation")
+    if quotation.status != QuotationStatus.ACCEPTED or quotation.is_test:
+        raise HTTPException(409, "An accepted non-test quotation is required")
+    existing = await db.execute(select(Job).options(selectinload(Job.appointments)).where(Job.quotation_id == quotation_id))
+    existing_job = existing.scalar_one_or_none()
+    if existing_job:
+        return (await _jobs_out(db, [existing_job]))[0]
     if quotation.service_id is None:
         raise HTTPException(400, "Quotation has no service")
     svc = await db.get(Service, quotation.service_id)
@@ -168,8 +176,8 @@ async def propose_schedule(
     job_id: UUID,
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[User, Depends(get_current_admin)],
-    lat: float = 53.65,
-    lon: float = -2.95,
+    lat: float | None = None,
+    lon: float | None = None,
 ) -> ProposeScheduleOut:
     result = await db.execute(
         select(Job).options(selectinload(Job.appointments)).where(Job.id == job_id)
@@ -177,17 +185,19 @@ async def propose_schedule(
     job = result.scalar_one_or_none()
     if job is None:
         raise HTTPException(404, "Job not found")
-    if job.customer_id:
+    if job.property_id:
         prop = await db.execute(
             select(CustomerProperty)
-            .where(CustomerProperty.customer_id == job.customer_id)
+            .where(CustomerProperty.id == job.property_id, CustomerProperty.customer_id == job.customer_id)
             .order_by(CustomerProperty.id.desc())
             .limit(1)
         )
         property_row = prop.scalar_one_or_none()
-        if property_row and property_row.latitude and property_row.longitude:
+        if property_row and property_row.latitude is not None and property_row.longitude is not None:
             lat = property_row.latitude
             lon = property_row.longitude
+    if lat is None or lon is None:
+        raise HTTPException(422, "Property coordinates required for weather scheduling")
     pp = await db.execute(select(ProductProfile).where(ProductProfile.is_active.is_(True)).limit(1))
     profile = pp.scalar_one_or_none()
     if profile is None:
@@ -227,11 +237,16 @@ async def add_appointment(
     _: Annotated[User, Depends(get_current_admin)],
 ) -> JobOut:
     result = await db.execute(
-        select(Job).options(selectinload(Job.appointments)).where(Job.id == job_id)
+        select(Job).options(selectinload(Job.appointments)).where(Job.id == job_id).with_for_update()
     )
     job = result.scalar_one_or_none()
     if job is None:
         raise HTTPException(404, "Job not found")
+    if job.status in (JobStatus.COMPLETED, JobStatus.CANCELLED, JobStatus.ON_HOLD):
+        raise HTTPException(409, "Job is not open for booking")
+    # Serialize bookings against the single diary settings row.
+    from app.models.scheduling import SchedulingSettings
+    await db.execute(select(SchedulingSettings).with_for_update())
     settings = await get_scheduling_settings(db)
     duration = body.duration_minutes
     if duration is None:
@@ -242,12 +257,37 @@ async def add_appointment(
         else:
             duration = 120
     end = body.scheduled_start + timedelta(minutes=duration)
+    if body.scheduled_start.tzinfo is None or duration <= 0 or body.scheduled_start < earliest_search_from(settings) or not slot_inside_working_hours(settings, body.scheduled_start, end):
+        raise HTTPException(422, "Appointment must be in a future working window")
+    if body.appointment_type == AppointmentType.COATING and job.requires_two_stage and not job.customer_washed_already:
+        prep_end = job.preparation_completed_at or max((a.scheduled_end for a in job.appointments if a.appointment_type == AppointmentType.PREPARATION and a.status == AppointmentStatus.CONFIRMED), default=None)
+        if prep_end is None or body.scheduled_start < prep_end + timedelta(hours=settings.min_drying_hours):
+            raise HTTPException(409, "Coating must follow preparation and drying")
     conflicts = await find_conflicts(db, body.scheduled_start, end)
-    if conflicts and not body.confirm:
+    if conflicts:
         raise HTTPException(
             409,
             detail={"message": "Scheduling conflicts", "conflicts": [c.reason for c in conflicts]},
         )
+    weather_safe = None
+    if body.appointment_type in (AppointmentType.PREPARATION, AppointmentType.COATING):
+        prop = await db.get(CustomerProperty, job.property_id) if job.property_id else None
+        if prop is None or prop.customer_id != job.customer_id or prop.latitude is None or prop.longitude is None:
+            raise HTTPException(422, "Job property coordinates required")
+        body.latitude, body.longitude, body.postcode = prop.latitude, prop.longitude, prop.postcode
+        if body.confirm:
+            profile = await db.scalar(select(ProductProfile).where(ProductProfile.is_active.is_(True)).limit(1))
+            if profile is None:
+                raise HTTPException(503, "Product weather profile unavailable")
+            try:
+                forecast, _, live = await get_hourly_forecast(db, prop.latitude, prop.longitude, hours=168, for_booking=True)
+            except RuntimeError as exc:
+                raise HTTPException(503, "Live weather unavailable") from exc
+            activity = WorkActivity.COATING if body.appointment_type == AppointmentType.COATING else WorkActivity.WASHING
+            score = score_window(activity, profile, forecast, body.scheduled_start, duration / 60)
+            weather_safe = live and score.is_safe
+            if not weather_safe:
+                raise HTTPException(409, "Safe live forecast required; use provisional booking instead")
     appt = Appointment(
         job_id=job.id,
         appointment_type=body.appointment_type,
@@ -258,11 +298,16 @@ async def add_appointment(
         latitude=body.latitude,
         longitude=body.longitude,
         postcode=body.postcode,
+        weather_suitable=weather_safe,
     )
-    db.add(appt)
+    job.appointments.append(appt)
     sync_job_status_from_appointments(job, customer_washed_already=job.customer_washed_already)
-    if job.status == JobStatus.BOOKED and job.appointments:
-        job.status = JobStatus.PREPARATION_SCHEDULED
+    if body.confirm and job.quotation_id:
+        quote = await db.get(Quotation, job.quotation_id)
+        if quote and quote.enquiry_id:
+            enquiry = await db.get(Enquiry, quote.enquiry_id)
+            if enquiry and enquiry.stage in (PipelineStage.QUOTE_ACCEPTED, PipelineStage.BOOKING_PENDING):
+                enquiry.stage = PipelineStage.BOOKED
     await db.commit()
     await db.refresh(job, ["appointments"])
     return (await _jobs_out(db, [job]))[0]
@@ -276,14 +321,22 @@ async def complete_preparation(
     _: Annotated[User, Depends(get_current_admin)],
 ) -> JobOut:
     result = await db.execute(
-        select(Job).options(selectinload(Job.appointments)).where(Job.id == job_id)
+        select(Job).options(selectinload(Job.appointments)).where(Job.id == job_id).with_for_update()
     )
     job = result.scalar_one_or_none()
     if job is None:
         raise HTTPException(404, "Job not found")
+    if job.status in (JobStatus.COMPLETED, JobStatus.CANCELLED, JobStatus.ON_HOLD):
+        raise HTTPException(409, "Job is not open")
+    if job.preparation_completed_at:
+        return (await _jobs_out(db, [job]))[0]
     completed = body.completed_at or datetime.now(UTC)
+    if completed.tzinfo is None or completed > datetime.now(UTC):
+        raise HTTPException(422, "Invalid completion time")
+    if not any(a.appointment_type == AppointmentType.PREPARATION and a.status in (AppointmentStatus.CONFIRMED, AppointmentStatus.IN_PROGRESS) for a in job.appointments):
+        raise HTTPException(409, "No confirmed preparation appointment")
     for appt in job.appointments:
-        if appt.appointment_type == AppointmentType.PREPARATION:
+        if appt.appointment_type == AppointmentType.PREPARATION and appt.status in (AppointmentStatus.CONFIRMED, AppointmentStatus.IN_PROGRESS):
             appt.completed_at = completed
             appt.status = AppointmentStatus.COMPLETED
     job.preparation_completed_at = completed
@@ -299,4 +352,42 @@ async def complete_preparation(
     )
     await db.commit()
     await db.refresh(job, ["appointments"])
+    return (await _jobs_out(db, [job]))[0]
+
+@router.post("/{job_id}/complete-coating", response_model=JobOut)
+async def complete_coating(
+    job_id: UUID,
+    body: CompleteCoatIn,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[User, Depends(get_current_admin)],
+) -> JobOut:
+    job = (await db.execute(select(Job).options(selectinload(Job.appointments)).where(Job.id == job_id).with_for_update())).scalar_one_or_none()
+    if job is None:
+        raise HTTPException(404, "Job not found")
+    if job.status == JobStatus.COMPLETED:
+        return (await _jobs_out(db, [job]))[0]
+    if job.status in (JobStatus.CANCELLED, JobStatus.ON_HOLD):
+        raise HTTPException(409, "Job is not open")
+    if job.requires_two_stage and not (job.preparation_completed_at or job.customer_washed_already):
+        raise HTTPException(409, "Complete preparation first")
+    if not body.surface_dry_confirmed or not body.weather_safe_confirmed:
+        raise HTTPException(422, "Confirm dry surface and safe on-site weather")
+    completed = body.completed_at or datetime.now(UTC)
+    if completed.tzinfo is None or completed > datetime.now(UTC) or (job.preparation_completed_at and completed < job.preparation_completed_at):
+        raise HTTPException(422, "Invalid completion time")
+    appts = [a for a in job.appointments if a.appointment_type == AppointmentType.COATING and a.status in (AppointmentStatus.CONFIRMED, AppointmentStatus.IN_PROGRESS)]
+    if not appts:
+        raise HTTPException(409, "No confirmed coating appointment")
+    for appt in appts:
+        appt.completed_at = completed
+        appt.status = AppointmentStatus.COMPLETED
+    job.drying_status = DryingStatus.CONFIRMED_ON_SITE
+    sync_job_status_from_appointments(job, customer_washed_already=job.customer_washed_already)
+    if job.status == JobStatus.COMPLETED and job.quotation_id:
+        quote = await db.get(Quotation, job.quotation_id)
+        if quote and quote.enquiry_id:
+            enquiry = await db.get(Enquiry, quote.enquiry_id)
+            if enquiry:
+                enquiry.stage = PipelineStage.JOB_COMPLETED
+    await db.commit()
     return (await _jobs_out(db, [job]))[0]

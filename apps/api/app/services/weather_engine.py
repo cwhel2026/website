@@ -26,12 +26,18 @@ def score_window(
     duration_hours: float,
 ) -> SuitabilityResult:
     window_end = window_start + timedelta(hours=duration_hours)
+    first_hour = window_start.replace(minute=0, second=0, microsecond=0)
+    expected = set()
+    cursor = first_hour
+    while cursor < window_end:
+        expected.add(cursor)
+        cursor += timedelta(hours=1)
     selected = [
         h
         for h in hours
-        if window_start <= h.forecast_time < window_end
+        if first_hour <= h.forecast_time < window_end
     ]
-    if not selected:
+    if not selected or not expected.issubset({h.forecast_time for h in selected}):
         return SuitabilityResult(0, False, True, {"reason": "no_forecast_data"})
 
     reasons: list[str] = []
@@ -49,7 +55,7 @@ def score_window(
                 reasons.append("rain_risk")
                 score -= 50
             if h.wind_mph > profile.max_wind_mph:
-                reasons.append("wind_too_high")
+                reasons.append("wind_too_high", "wind_unsafe")
                 score -= 30
         elif activity == WorkActivity.WASHING:
             # Washing prefers wet/overcast but must remain safe

@@ -5,7 +5,7 @@ from uuid import UUID
 
 import httpx
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -21,7 +21,9 @@ from app.models.finance import (
     Receipt,
     SyncSource,
 )
-from app.models.quotation import Quotation
+from app.models.quotation import Quotation, QuotationStatus
+from app.models.jobs import Job, JobStatus
+from app.models.crm import Enquiry, PipelineStage
 from app.models.user import User
 from app.services.audit import record_audit
 from app.services.finance.csv_import import import_bank_csv
@@ -51,7 +53,7 @@ class ExpenseIn(BaseModel):
 
 
 class PaymentIn(BaseModel):
-    amount_gbp: Decimal
+    amount_gbp: Decimal = Field(gt=0, max_digits=12, decimal_places=2)
     method: str = "bank_transfer"
     reference: str | None = None
 
@@ -126,10 +128,18 @@ async def invoice_from_quote(
     db: Annotated[AsyncSession, Depends(get_db)],
     user: Annotated[User, Depends(get_current_admin)],
 ) -> dict:
-    q = await db.get(Quotation, quotation_id)
+    q = await db.get(Quotation, quotation_id, with_for_update=True)
     if q is None:
         raise HTTPException(404, "Quotation not found")
-    inv = await create_invoice_from_quotation(db, q, q.customer_id)
+    if q.is_test or q.status != QuotationStatus.ACCEPTED:
+        raise HTTPException(409, "Accepted non-test quotation required")
+    job = (await db.execute(select(Job).where(Job.quotation_id == q.id))).scalar_one_or_none()
+    if not job or job.status != JobStatus.COMPLETED:
+        raise HTTPException(409, "Complete the job before invoicing")
+    existing = (await db.execute(select(Invoice).where(Invoice.quotation_id == q.id, Invoice.status != InvoiceStatus.VOID))).scalar_one_or_none()
+    if existing:
+        return {"invoice_number": existing.invoice_number, "id": str(existing.id)}
+    inv = await create_invoice_from_quotation(db, q, q.customer_id, job_id=job.id)
     await record_audit(
         db, actor_type="user", actor_id=str(user.id), action="finance.create_invoice", entity_id=inv.id
     )
@@ -144,9 +154,23 @@ async def record_payment(
     db: Annotated[AsyncSession, Depends(get_db)],
     user: Annotated[User, Depends(get_current_admin)],
 ) -> dict:
-    inv = await db.get(Invoice, invoice_id)
+    inv = await db.get(Invoice, invoice_id, with_for_update=True)
     if inv is None:
         raise HTTPException(404)
+    if inv.freeagent_id or inv.freeagent_url:
+        raise HTTPException(409, "Record payment in FreeAgent and sync")
+    if inv.status == InvoiceStatus.VOID:
+        raise HTTPException(409, "Invoice is void")
+    if not body.reference or not body.reference.strip():
+        raise HTTPException(422, "Payment reference required")
+    body.reference = body.reference.strip()
+    existing = (await db.execute(select(Payment).where(Payment.invoice_id == invoice_id, Payment.reference == body.reference))).scalar_one_or_none()
+    if existing:
+        if existing.amount_gbp != body.amount_gbp:
+            raise HTTPException(409, "Payment reference already used with different amount")
+        return {"status": inv.status.value, "amount_paid_gbp": float(inv.amount_paid_gbp)}
+    if inv.amount_paid_gbp + body.amount_gbp > inv.total_inc_vat_gbp:
+        raise HTTPException(422, "Payment exceeds outstanding balance")
     db.add(
         Payment(
             invoice_id=invoice_id,
@@ -162,6 +186,12 @@ async def record_payment(
         inv.status = InvoiceStatus.PAID
     elif inv.amount_paid_gbp > 0:
         inv.status = InvoiceStatus.PART_PAID
+    if inv.status == InvoiceStatus.PAID and inv.quotation_id:
+        q = await db.get(Quotation, inv.quotation_id)
+        if q and q.enquiry_id:
+            enquiry = await db.get(Enquiry, q.enquiry_id)
+            if enquiry:
+                enquiry.stage = PipelineStage.PAID
     await db.commit()
     return {"status": inv.status.value, "amount_paid_gbp": float(inv.amount_paid_gbp)}
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { apiGet, apiPatch } from "@/lib/api";
+import { apiGet, apiPatch, apiPost } from "@/lib/api";
 import { getToken } from "@/lib/auth-client";
 
 type Line = { label: string; amount_gbp?: number };
@@ -20,6 +20,7 @@ type PhotoReview = {
 };
 
 type Quotation = {
+  id: string;
   reference: string;
   status: string;
   total_inc_vat_gbp: number;
@@ -75,6 +76,15 @@ export default function QuotationsPage() {
     );
     setError(null);
     load();
+  }
+
+  async function acceptAndCreate(q: Quotation) {
+    if (!window.confirm(`Confirm customer agreed £${Number(q.total_inc_vat_gbp).toFixed(2)} and create job?`)) return;
+    try {
+      await apiPost(`/api/v1/quotations/${q.id}/accept`, { agreed_total_gbp: q.total_inc_vat_gbp, customer_confirmed: true });
+      await apiPost(`/api/v1/jobs/from-quotation/${q.id}`, {});
+      setError(null); load();
+    } catch (e) { setError(e instanceof Error ? e.message : "Could not create job"); }
   }
 
   return (
@@ -169,7 +179,7 @@ export default function QuotationsPage() {
                   ) : null}
                 </td>
                 <td>{Number(q.total_area_sqm).toFixed(1)}</td>
-                <td>{q.requires_approval ? "Required" : "—"}</td>
+                <td>{q.requires_approval ? "Required" : !["rejected", "expired"].includes(q.status) && <button className="rounded border px-2 py-1" onClick={() => void acceptAndCreate(q)}>Confirm agreement / create job</button>}</td>
               </tr>
             ))}
           </tbody>

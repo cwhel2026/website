@@ -138,7 +138,6 @@ async def propose_two_stage_slots(
 
     ``job`` is accepted for existing callers and is not written.
     """
-    del job
     settings = await get_scheduling_settings(db)
     now = datetime.now(UTC)
     search_from = _aware_utc(search_from) if search_from else earliest_search_from(settings, now)
@@ -159,7 +158,8 @@ async def propose_two_stage_slots(
 
     cursor = search_from
     horizon = search_from + timedelta(days=21)
-    while len(prep_slots) < max_prep_slots and cursor < horizon:
+    already_prepared = bool(job and (job.preparation_completed_at or job.customer_washed_already))
+    while not already_prepared and len(prep_slots) < max_prep_slots and cursor < horizon:
         start = cursor
         end = start + timedelta(minutes=settings.default_prep_duration_minutes)
         if start > now and slot_inside_working_hours(settings, start, end):
@@ -184,19 +184,25 @@ async def propose_two_stage_slots(
                 )
         cursor += timedelta(hours=1)
 
-    if not prep_slots:
+    if not prep_slots and not already_prepared:
         return prep_slots, coat_slots
 
+    prep_end = (job.preparation_completed_at or search_from - timedelta(hours=settings.min_drying_hours)) if already_prepared else prep_slots[0].end
     earliest_coat_start = max(
-        prep_slots[0].end + timedelta(hours=settings.min_drying_hours),
+        prep_end + timedelta(hours=settings.min_drying_hours),
         earliest_search_from(settings, now),
     )
     coat_cursor = earliest_coat_start
-    coat_horizon = prep_slots[0].start + timedelta(days=max(settings.seven_day_coating_target_days, 14))
+    coat_horizon = prep_end + timedelta(days=settings.seven_day_coating_target_days)
+    if job and job.seven_day_target_date:
+        coat_horizon = datetime.combine(job.seven_day_target_date + timedelta(days=1), time.min, tzinfo=LONDON).astimezone(UTC)
+    if already_prepared and coat_horizon <= earliest_coat_start:
+        # Overdue jobs still need a safe recovery window.
+        coat_horizon = earliest_coat_start + timedelta(days=7)
     while len(coat_slots) < max_prep_slots and coat_cursor < coat_horizon:
         c_start = coat_cursor
         c_end = c_start + timedelta(minutes=settings.default_coat_duration_minutes)
-        if c_start > now and slot_inside_working_hours(settings, c_start, c_end):
+        if c_start > now and c_end <= coat_horizon and slot_inside_working_hours(settings, c_start, c_end):
             conflicts = await find_conflicts(db, c_start, c_end)
             coat_score = score_window(
                 WorkActivity.COATING,
@@ -237,6 +243,7 @@ async def job_from_quotation(
         customer_id=quotation.customer_id,
         quotation_id=quotation.id,
         territory_id=quotation.territory_id,
+        property_id=quotation.property_id,
         requires_two_stage=requires_two,
         customer_washed_already=quotation.customer_washed_already,
         status=JobStatus.AWAITING_PREP_BOOKING if requires_two else JobStatus.BOOKED,
