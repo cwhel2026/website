@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+from urllib.parse import urlsplit
 from datetime import UTC, datetime
 
 from sqlalchemy import select
@@ -110,6 +111,18 @@ async def deliver_telegram_outbox_item(db: AsyncSession, item: NotificationOutbo
     await db.flush()
 
     text = f"{item.title}\n\n{item.body}" if item.title else item.body
+    markup = None
+    if item.category == "quotation":
+        base = (settings.public_api_base_url or "").strip().rstrip("/")
+        try:
+            parsed = urlsplit(base)
+        except ValueError:
+            parsed = urlsplit("")
+        if parsed.scheme == "https" and parsed.hostname and not parsed.username and not parsed.password and not parsed.query and not parsed.fragment:
+            markup = {"inline_keyboard": [[{"text": "📋 Quotations", "url": base + "/dashboard/quotations"}, {"text": "📅 Diary", "url": base + "/dashboard/calendar"}], [{"text": "🌦 Weather", "url": base + "/dashboard/weather"}]]}
+        text = "🟡 SURFACECOAT | QUOTATION\n\n" + text + "\n\nReview the request in your dashboard before confirming a visit."
+    elif item.category != "assistant_reply":
+        text = "🟡 SURFACECOAT | BUSINESS UPDATE\n\n" + text
     errors: list[str] = []
     last_result: dict | None = None
     delivered_chats = list(payload.get("telegram_chat_ids", []))
@@ -117,7 +130,7 @@ async def deliver_telegram_outbox_item(db: AsyncSession, item: NotificationOutbo
         if chat_id in delivered_chats:
             continue
         try:
-            last_result = await send_message(chat_id=chat_id, text=text)
+            last_result = await send_message(chat_id=chat_id, text=text, **({"reply_markup": markup} if markup else {}))
             delivered_chats.append(chat_id)
         except TelegramApiError as exc:
             errors.append(f"{chat_id}: Telegram delivery failed (status={exc.status_code})")
