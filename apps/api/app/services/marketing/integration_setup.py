@@ -134,7 +134,10 @@ def _row(
     env_vars: list[str],
     steps: str,
 ) -> dict:
-    state = "live_write_verified" if live_write else "live_read_verified" if live_read else "configured" if configured else "not_configured"
+    # This function only inspects configuration; no provider request is performed.
+    live_read = False
+    live_write = False
+    state = "configured_untested" if configured else "not_configured"
     return {
         "platform": platform,
         "state": state,

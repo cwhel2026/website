@@ -4,6 +4,7 @@ import { enforceReadOnly } from "./guard";
 
 const ROUTES = [
   "/dashboard",
+  "/dashboard/launch-readiness",
   "/dashboard/system-health",
   "/dashboard/tax-centre",
   "/dashboard/director-pay",
@@ -77,4 +78,12 @@ test("system health shows worker and schema status", async ({ page }) => {
   await page.goto("/dashboard/system-health", { waitUntil: "networkidle" });
   await expect(page.getByTestId("worker-overall")).toBeVisible();
   await expect(page.getByTestId("schema-status")).toBeVisible();
+});
+
+test("command centre links to launch readiness", async ({ page }) => {
+  await enforceReadOnly(page);
+  await page.goto("/dashboard", { waitUntil: "networkidle" });
+  await page.getByRole("link", { name: /launch centre/i }).first().click();
+  await expect(page.getByRole("heading", { name: "Launch centre", exact: true })).toBeVisible();
+  await assertNoHorizontalOverflow(page);
 });
