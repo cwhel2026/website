@@ -10,11 +10,13 @@ from sqlalchemy.orm import selectinload
 
 from app.auth import get_current_admin
 from app.database import get_db
-from app.models.crm import Enquiry
-from app.models.quotation import Quotation, QuotationCalculation
+from app.models.crm import Enquiry, PipelineStage
+from app.models.quotation import Quotation, QuotationCalculation, QuotationStatus
 from app.models.quotation_photo import QuotePhoto, QuotePhotoSet
 from app.models.user import User
 from app.rate_limit import limiter
+from pydantic import BaseModel
+from decimal import Decimal
 from app.schemas.quotation import (
     InstantQuotationRequest,
     ProvisionalQuotationOut,
@@ -243,3 +245,33 @@ async def get_quotation(
     if calc_row:
         out.breakdown = json.loads(calc_row.breakdown_json)
     return out
+
+class AcceptQuotationIn(BaseModel):
+    agreed_total_gbp: Decimal
+    customer_confirmed: bool
+
+
+@router.post("/{quotation_id}/accept")
+async def accept_quotation(
+    quotation_id: UUID,
+    body: AcceptQuotationIn,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[User, Depends(get_current_admin)],
+) -> dict:
+    q = await db.get(Quotation, quotation_id, with_for_update=True)
+    if q is None:
+        raise HTTPException(404, "Quotation not found")
+    if q.is_test or q.status in (QuotationStatus.REJECTED, QuotationStatus.EXPIRED):
+        raise HTTPException(409, "Quotation cannot be accepted")
+    if not body.customer_confirmed or body.agreed_total_gbp != q.total_inc_vat_gbp:
+        raise HTTPException(422, "Confirm customer agreement to the exact quotation total")
+    if q.requires_approval:
+        raise HTTPException(409, "Resolve internal pricing approval first")
+    if q.status != QuotationStatus.ACCEPTED:
+        q.status = QuotationStatus.ACCEPTED
+        if q.enquiry_id:
+            enquiry = await db.get(Enquiry, q.enquiry_id)
+            if enquiry:
+                enquiry.stage = PipelineStage.QUOTE_ACCEPTED
+    await db.commit()
+    return {"id": str(q.id), "status": q.status.value}
