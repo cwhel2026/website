@@ -105,7 +105,7 @@ Nothing below is marked as working in production. Production still runs `main` (
 | Q7 | Quotation independent of marketing/accounting integrations | **Verified** | Provisional path uses only services, territories, pricing profile, postcodes.io. |
 | Q8 | Mobile journey end-to-end test | **In CI** | `public-quote-mobile` Playwright project. |
 | Q9 | Quotation progress bar overflow on mobile | **Fixed** | Step pills use responsive grid (4 cols mobile / 7 desktop) instead of horizontal scroll. |
-| Q10 | Replace Revive My Drive → SurfaceCoat (public site) | **Partial** | Header, footer, layout metadata, service areas, commercial/privacy/media copy updated. Telegram-lite routes still reference legacy name (portal Telegram duplicate — see L1). |
+| Q10 | Replace Revive My Drive → SurfaceCoat (public site) | **Done (web)** | Header, footer, layout metadata, service areas, commercial/privacy/media copy + Telegram-lite web routes updated. API seed emails / legacy domains may remain in backend until Phase 3. |
 | Q11 | Coverage copy: Lancashire, GM, Merseyside, Cheshire, Cumbria, W Yorkshire; Preston as travel base only | **Done** | `public-brand.ts` + service-areas page. |
 | Q12 | **Future (not implemented):** customer photo upload + AI driveway condition assessment | **Recorded** | Enhancement only — no code in this phase. |
 

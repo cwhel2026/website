@@ -1,10 +1,9 @@
-import { test, expect, devices } from "@playwright/test";
+import { test, expect } from "@playwright/test";
 
 /**
  * Public instant quote — real API (no auth). Runs in CI against migrated Postgres + API.
  * Pricing must not be mocked; travel distance is computed server-side.
  */
-test.use({ ...devices["iPhone 13"] });
 
 test("complete provisional tarmac quote on mobile", async ({ page }) => {
   const draft = {

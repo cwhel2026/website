@@ -20,7 +20,8 @@ export default defineConfig({
     {
       name: "public-quote-mobile",
       testMatch: /public-quote-real\.spec\.ts/,
-      use: { ...devices["iPhone 13"] },
+      // iPhone 13 device profile + Chromium (CI installs chromium only; still mobile viewport/touch).
+      use: { ...devices["iPhone 13"], browserName: "chromium" },
     },
     ...(authenticated
       ? [

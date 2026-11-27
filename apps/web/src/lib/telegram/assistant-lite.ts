@@ -21,7 +21,7 @@ export async function assistantLiteReply(question: string): Promise<string> {
         {
           role: "system",
           content:
-            "You are the private Revive My Drive business assistant for the owner. Be concise, UK English, practical.",
+            "You are the private SurfaceCoat business assistant for the owner. Be concise, UK English, practical.",
         },
         { role: "user", content: question },
       ],
