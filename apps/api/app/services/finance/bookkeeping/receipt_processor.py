@@ -6,12 +6,12 @@ import base64
 import json
 import re
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
 import httpx
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
@@ -60,7 +60,8 @@ def _parse_decimal(value: Any) -> Decimal | None:
         return None
     try:
         text = str(value).replace("£", "").replace(",", "").strip()
-        return Decimal(text).quantize(Decimal("0.01"))
+        amount = Decimal(text)
+        return amount.quantize(Decimal("0.01")) if amount.is_finite() and amount >= 0 else None
     except (InvalidOperation, ValueError):
         return None
 
@@ -147,20 +148,22 @@ async def match_receipt_to_bank_transaction(
     tolerance_gbp: Decimal = Decimal("0.05"),
     day_window: int = 7,
 ) -> BankTransaction | None:
-    if receipt.extracted_total_gbp is None:
-        return None
     total = receipt.extracted_total_gbp
-    target = -abs(total)
-    result = await db.execute(select(BankTransaction).order_by(BankTransaction.transacted_at.desc()))
-    for txn in result.scalars().all():
-        if abs(txn.amount_gbp - target) <= tolerance_gbp:
-            if receipt.extracted_date and txn.transacted_at:
-                delta = abs((receipt.extracted_date - txn.transacted_at).days)
-                if delta <= day_window:
-                    return txn
-            elif receipt.extracted_date is None:
-                return txn
-    return None
+    if total is None or not total.is_finite() or total <= 0 or receipt.extracted_date is None:
+        return None
+    target = -total
+    result = await db.execute(
+        select(BankTransaction).where(
+            BankTransaction.amount_gbp.between(target - tolerance_gbp, target + tolerance_gbp),
+            BankTransaction.amount_gbp < 0,
+            BankTransaction.transacted_at.between(receipt.extracted_date - timedelta(days=day_window), receipt.extracted_date + timedelta(days=day_window)),
+            BankTransaction.is_duplicate.is_(False),
+            ~BankTransaction.id.in_(select(Receipt.matched_bank_transaction_id).where(Receipt.matched_bank_transaction_id.is_not(None), Receipt.id != receipt.id)),
+        ).order_by(BankTransaction.id).with_for_update()
+    )
+    candidates = list(result.scalars().all())
+    # Amount and date alone are only a candidate, never proof of reconciliation.
+    return candidates[0] if len(candidates) == 1 else None
 
 
 async def ingest_telegram_receipt(
@@ -172,6 +175,7 @@ async def ingest_telegram_receipt(
     content, filename = await download_telegram_file(file_id)
     storage_key, digest = save_receipt_bytes(content, filename)
 
+    await db.execute(text('SELECT pg_advisory_xact_lock(52703111)'))
     existing = await db.execute(select(Receipt).where(Receipt.content_sha256 == digest))
     dup = existing.scalar_one_or_none()
     if dup:
@@ -203,24 +207,16 @@ async def ingest_telegram_receipt(
     summary: list[str] = []
     if matched:
         receipt.matched_bank_transaction_id = matched.id
-        receipt.processing_status = "matched"
+        receipt.processing_status = "needs_review"
         if not matched.review_item_id:
             await create_review_for_transaction(db, matched)
-        summary.append(f"Matched bank line {matched.description[:60]} ({matched.transacted_at}).")
+        summary.append(f"Suggested bank match (review required): {matched.description[:60]} ({matched.transacted_at}).")
     elif extraction.total_gbp:
-        pending = Expense(
-            description=f"{merchant} (receipt pending bank match)",
-            category=suggest_for_description(merchant, -abs(extraction.total_gbp)).category,
-            amount_gbp=abs(extraction.total_gbp),
-            vat_gbp=extraction.vat_gbp or Decimal("0"),
-            expense_date=extraction.transacted_at or date.today(),
-            source=SyncSource.MANUAL,
-            receipt_id=receipt.id,
-        )
-        db.add(pending)
+        receipt.processing_status = "needs_review"
+        suggestion = suggest_for_description(merchant, -abs(extraction.total_gbp))
         item = BookkeepingReviewItem(
             receipt_id=receipt.id,
-            suggested_category=pending.category,
+            suggested_category=suggestion.category,
             confidence_score=60,
             plain_explanation="Receipt saved but no bank transaction matched yet — reconcile when import catches up.",
             status=ReviewItemStatus.PENDING,
@@ -243,14 +239,7 @@ async def ingest_telegram_receipt(
     route = classify_receipt_route(receipt, txn)
     receipt.accounting_route = route.value
     summary.append(f"Accounting route: {route.value}.")
-    if get_settings().finance_receipt_freeagent_attach or get_settings().finance_receipt_freeagent_expense:
-        attach = await push_receipt_to_freeagent(db, receipt, approved=False)
-        if attach.get("ok"):
-            summary.append("FreeAgent ready after approval.")
-        elif attach.get("reason") == "approval_required":
-            summary.append("Approve in dashboard to post to FreeAgent.")
-        else:
-            summary.append(f"FreeAgent: {attach.get('reason', attach.get('message', 'queued'))}.")
+    summary.append("Review and approve accounting treatment in the dashboard before posting.")
     return receipt, " ".join(summary)
 
 
