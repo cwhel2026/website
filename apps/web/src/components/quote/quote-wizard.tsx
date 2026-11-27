@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { ApiError } from "@/lib/api";
 import { apiDelete, apiGet, apiPost } from "@/lib/api";
@@ -565,9 +566,9 @@ export function QuoteWizard() {
 
           <div className="mt-10 flex flex-wrap justify-between gap-3 border-t border-stone-line pt-6">
             {saved ? (
-              <a href="/" className="btn-secondary">
+              <Link href="/" className="btn-secondary">
                 Return to homepage
-              </a>
+              </Link>
             ) : (
               <button type="button" onClick={back} disabled={step === 0} className="btn-secondary disabled:opacity-40">
                 Back
