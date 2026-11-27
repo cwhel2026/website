@@ -10,25 +10,44 @@ async function proxy(request: NextRequest, apiPath: string): Promise<NextRespons
   const url = `${internalBase}${apiPath}${query}`;
   const headers = new Headers();
   request.headers.forEach((value, key) => {
-    if (key === "host") return;
+    if (["host", "connection", "transfer-encoding", "content-length", "upgrade", "proxy-authorization"].includes(key)) return;
     headers.set(key, value);
   });
   let body: ArrayBuffer | undefined;
   if (request.method !== "GET" && request.method !== "HEAD") {
-    body = await request.arrayBuffer();
+    const limit = 16 * 1024 * 1024;
+    const reader = request.body?.getReader();
+    if (reader) {
+      const chunks: Uint8Array[] = [];
+      let size = 0;
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        size += value.byteLength;
+        if (size > limit) {
+          await reader.cancel();
+          return NextResponse.json({ detail: "Request too large" }, { status: 413 });
+        }
+        chunks.push(value);
+      }
+      const bytes = new Uint8Array(size);
+      let offset = 0;
+      for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
+      body = bytes.buffer;
+    }
   }
   let upstream: Response;
   try {
-    upstream = await fetch(url, { method: request.method, headers, body: body as BodyInit | undefined });
+    upstream = await fetch(url, { method: request.method, headers, body: body as BodyInit | undefined, redirect: "manual", signal: AbortSignal.timeout(120_000) });
   } catch {
     return NextResponse.json(
-      { detail: "FastAPI sidecar refused connection — check Railway logs for uvicorn startup errors." },
+      { detail: "Service temporarily unavailable. Please try again." },
       { status: 503 },
     );
   }
   const responseHeaders = new Headers();
   upstream.headers.forEach((value, key) => {
-    if (key === "transfer-encoding" || key === "set-cookie") return;
+    if (["transfer-encoding", "set-cookie", "connection", "content-encoding", "content-length"].includes(key)) return;
     responseHeaders.set(key, value);
   });
   // `set` would keep only the last cookie; the session and CSRF cookies arrive together.

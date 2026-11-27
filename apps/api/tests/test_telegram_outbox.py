@@ -26,7 +26,7 @@ class _Item:
 @pytest.mark.asyncio
 async def test_missing_credentials_leave_the_row_pending():
     item = _Item()
-    db = SimpleNamespace(add=lambda *_a, **_k: None, flush=AsyncMock())
+    db = SimpleNamespace(add=lambda *_a, **_k: None, flush=AsyncMock(), refresh=AsyncMock())
     from app.services.notifications import outbox as outbox_mod
 
     original = outbox_mod.get_settings
@@ -47,3 +47,22 @@ def test_admin_ids_include_group_chats():
     settings.telegram_owner_chat_id = 999
     assert settings.telegram_alert_chat_ids[0] == 999
     assert -1001234567890 in settings.telegram_alert_chat_ids
+
+
+@pytest.mark.asyncio
+async def test_partial_delivery_retries_only_failed_recipient(monkeypatch):
+    import json
+    from app.services.notifications import outbox as mod
+    from app.services.telegram.client import TelegramApiError
+
+    item = _Item()
+    db = SimpleNamespace(add=lambda *_: None, flush=AsyncMock(), refresh=AsyncMock())
+    monkeypatch.setattr(mod, "get_settings", lambda: SimpleNamespace(telegram_bot_token="test", telegram_alert_chat_ids=[1, 2]))
+    send = AsyncMock(side_effect=[{"message_id": 1}, TelegramApiError("failure"), {"message_id": 2}])
+    monkeypatch.setattr(mod, "send_message", send)
+    assert not await mod.deliver_telegram_outbox_item(db, item)
+    assert item.status == OutboxStatus.PENDING
+    assert json.loads(item.payload_json)["telegram_chat_ids"] == [1]
+    assert await mod.deliver_telegram_outbox_item(db, item)
+    assert item.status == OutboxStatus.DELIVERED
+    assert [call.kwargs["chat_id"] for call in send.await_args_list] == [1, 2, 2]
