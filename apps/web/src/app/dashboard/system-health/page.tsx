@@ -43,6 +43,16 @@ type SchemaReport = {
 
 type Task = { id: string; title: string; agent_slug: string; priority: number; status: string };
 
+type OutboxRow = {
+  id: string;
+  title: string;
+  status: string;
+  attempts: number;
+  last_error: string | null;
+  delivered_at: string | null;
+  created_at: string | null;
+};
+
 const OVERALL: Record<WorkerHealth["overall"], { label: string; tone: string; help: string }> = {
   ok: { label: "Operational", tone: "bg-emerald-100 text-emerald-900", help: "Scheduler heartbeat is fresh and no task's latest run failed." },
   degraded: { label: "Degraded", tone: "bg-amber-100 text-amber-900", help: "At least one task's most recent run failed." },
@@ -78,7 +88,59 @@ export default function SystemHealthPage() {
   const workers = useApi<WorkerHealth>("/api/v1/ops/workers");
   const schema = useApi<SchemaReport>("/api/v1/ops/schema");
   const tasks = useApi<Task[]>("/api/v1/business-director/tasks");
+  const outbox = useApi<OutboxRow[]>("/api/v1/notifications/outbox");
   const [scanError, setScanError] = useState<string | null>(null);
+  const [telegramMsg, setTelegramMsg] = useState<string | null>(null);
+
+  async function sendTestTelegram() {
+    setTelegramMsg(null);
+    try {
+      const result = await apiPost<{ delivered: boolean; last_error: string | null; status: string }>(
+        "/api/v1/notifications/telegram/test",
+        {},
+      );
+      setTelegramMsg(
+        result.delivered
+          ? "Test notification delivered to Telegram."
+          : `Test saved in the outbox (${result.status}). ${result.last_error ?? "Delivery did not complete."}`,
+      );
+      outbox.reload();
+    } catch (e) {
+      setTelegramMsg(describeApiError(e as Error).detail);
+    }
+  }
+
+  async function recoverTelegram() {
+    setTelegramMsg(null);
+    try {
+      const result = await apiPost<{ enquiries_requeued: number; delivered_now: number }>(
+        "/api/v1/notifications/telegram/recover",
+        {},
+      );
+      setTelegramMsg(`Requeued ${result.enquiries_requeued}. Delivered ${result.delivered_now} pending messages.`);
+      outbox.reload();
+    } catch (e) {
+      setTelegramMsg(describeApiError(e as Error).detail);
+    }
+  }
+
+  async function retryOutbox(id: string) {
+    setTelegramMsg(null);
+    try {
+      const result = await apiPost<{ delivered: boolean; status: string; last_error: string | null }>(
+        `/api/v1/notifications/outbox/${id}/retry`,
+        {},
+      );
+      setTelegramMsg(
+        result.delivered
+          ? "Notification delivered."
+          : `Retry saved as ${result.status}. ${result.last_error ?? ""}`.trim(),
+      );
+      outbox.reload();
+    } catch (e) {
+      setTelegramMsg(describeApiError(e as Error).detail);
+    }
+  }
 
   async function runScan() {
     setScanError(null);
@@ -210,6 +272,55 @@ export default function SystemHealthPage() {
               </div>
             );
           }}
+        </LoadState>
+      </section>
+
+      <section aria-labelledby="telegram-heading" className="space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 id="telegram-heading" className="text-lg font-semibold text-[#1a1a1a]">
+            Telegram booking alerts
+          </h2>
+          <div className="flex gap-2">
+            <button type="button" onClick={sendTestTelegram} className="rounded-full border px-3 py-1 text-xs font-medium text-slate-700">
+              Send test notification
+            </button>
+            <button type="button" onClick={recoverTelegram} className="rounded-full border px-3 py-1 text-xs font-medium text-slate-700">
+              Recover pending
+            </button>
+          </div>
+        </div>
+        <p className="text-sm text-slate-600">
+          Every booking request writes a row here first. Delivery is attempted immediately, then retried from this API if the worker is down.
+        </p>
+        {telegramMsg ? <p className="text-sm text-slate-800">{telegramMsg}</p> : null}
+        <LoadState resource={outbox} isEmpty={(rows) => rows.length === 0} empty="No notifications recorded yet.">
+          {(rows) => (
+            <ul className="space-y-2 text-sm">
+              {rows.slice(0, 12).map((row) => (
+                <li key={row.id} className="rounded-lg border px-3 py-2">
+                  <div className="flex flex-wrap justify-between gap-2">
+                    <span className="font-medium text-[#1a1a1a]">{row.title}</span>
+                    <span className="text-xs uppercase tracking-wide text-slate-600">{row.status}</span>
+                  </div>
+                  <p className="mt-1 text-xs text-slate-600">
+                    {when(row.created_at)}
+                    {row.delivered_at ? ` · delivered ${when(row.delivered_at)}` : ""}
+                    {row.attempts ? ` · ${row.attempts} attempt(s)` : ""}
+                  </p>
+                  {row.last_error ? <p className="mt-1 break-words text-xs text-red-700">{row.last_error}</p> : null}
+                  {row.status !== "delivered" ? (
+                    <button
+                      type="button"
+                      onClick={() => void retryOutbox(row.id)}
+                      className="mt-2 text-xs font-medium text-slate-700 underline"
+                    >
+                      Retry delivery
+                    </button>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          )}
         </LoadState>
       </section>
 

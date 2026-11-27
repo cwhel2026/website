@@ -2,7 +2,7 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy import DateTime, Enum, ForeignKey, Index, Integer, String, Text, UniqueConstraint, func, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -26,11 +26,19 @@ class OutboxStatus(str, enum.Enum):
 
 class NotificationOutbox(Base):
     __tablename__ = "notification_outbox"
+    __table_args__ = (
+        Index(
+            "uq_notification_outbox_dedupe_key",
+            "dedupe_key",
+            unique=True,
+            postgresql_where=text("dedupe_key IS NOT NULL"),
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
-    dedupe_key: Mapped[str | None] = mapped_column(String(160), nullable=True, index=True)
+    dedupe_key: Mapped[str | None] = mapped_column(String(160), nullable=True)
     channel: Mapped[str] = mapped_column(String(40), index=True)
     priority: Mapped[NotificationPriority] = mapped_column(
         Enum(NotificationPriority, name="notification_priority"),

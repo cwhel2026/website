@@ -1,15 +1,11 @@
 """Saved quotation requests against Postgres. No mocked prices, no created bookings."""
 
 import os
-from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 import pytest
 import sqlalchemy as sa
 from starlette.testclient import TestClient
-
-from app.models.jobs import AppointmentType
-from app.services.scheduling_engine import SlotProposal
 
 requires_postgres = pytest.mark.skipif(
     not os.environ.get("RUN_INTEGRATION_TESTS"),
@@ -60,21 +56,8 @@ def test_three_actions_save_intent_without_booking_or_fake_email(monkeypatch):
     async def _geo(_postcode: str):
         return _Point()
 
-    async def _windows(*_args, **_kwargs):
-        start = datetime.now(UTC) + timedelta(days=3)
-        prep = SlotProposal(
-            start=start,
-            end=start + timedelta(hours=2),
-            appointment_type=AppointmentType.PREPARATION,
-            travel_minutes=25,
-            weather_score=80,
-            weather_safe=True,
-        )
-        return [prep], []
-
     monkeypatch.setattr("app.services.quotation_workflow.travel_km_from_base", _fixed_travel)
     monkeypatch.setattr("app.services.quotation_persist.geocode_postcode", _geo)
-    monkeypatch.setattr("app.services.quote_conversion.propose_two_stage_slots", _windows)
 
     jobs_before = _count("SELECT COUNT(*) FROM jobs")
     appointments_before = _count("SELECT COUNT(*) FROM appointments")
@@ -109,8 +92,10 @@ def test_three_actions_save_intent_without_booking_or_fake_email(monkeypatch):
         assert booked_body["email_sent"] is False
         assert booked_body["telegram_notified"] is False
         assert booked_body["intention"] == "ready_to_book"
-        assert "not a confirmed booking" in booked_body["next_steps"]
-        assert booked_body["suggested_windows"]
+        assert "booking request" in booked_body["next_steps"].lower()
+        assert booked_body["suggested_windows"] == []
+        assert booked_body["confirmation_heading"] == "Thank you for choosing SurfaceCoat"
+        assert len(booked_body["next_step_items"]) == 3
         assert "breakdown" not in booked_body
         assert "vat_gbp" not in booked_body
 
@@ -141,6 +126,7 @@ def test_three_actions_save_intent_without_booking_or_fake_email(monkeypatch):
         assert callback.status_code == 200, callback.text
         assert "Weekday mornings" in callback.json()["next_steps"]
         assert callback.json()["appointment_confirmed"] is False
+        assert callback.json()["suggested_windows"] == []
 
         missing_time = client.post(
             "/api/v1/quotations/submit",
@@ -168,12 +154,14 @@ def test_three_actions_save_intent_without_booking_or_fake_email(monkeypatch):
         assert email_body["email_sent"] is False
         assert email_body["email_status"] == "not_sent_smtp_unconfigured"
         assert "We have emailed" not in email_body["next_steps"]
-        assert "could not email" in email_body["next_steps"]
+        assert "email sending is not connected" in email_body["next_steps"]
         assert email_body["appointment_confirmed"] is False
 
     assert _count("SELECT COUNT(*) FROM jobs") == jobs_before
     assert _count("SELECT COUNT(*) FROM appointments") == appointments_before
     assert _count("SELECT COUNT(*) FROM enquiries WHERE utm_campaign = 'spring-test'") == 3
+    assert _count("SELECT COUNT(*) FROM owner_follow_ups") >= 3
+    assert _count("SELECT COUNT(*) FROM notification_outbox WHERE category = 'quotation'") >= 3
     assert _count(
         "SELECT COUNT(*) FROM enquiries WHERE intention = 'ready_to_book' AND priority = 'high' AND utm_campaign = 'spring-test'"
     ) == 1

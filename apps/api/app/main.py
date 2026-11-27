@@ -51,6 +51,7 @@ from app.routers import (
     telegram,
     territories,
     weather,
+    notifications,
 )
 from app.seeds.bootstrap import seed_database
 
@@ -85,6 +86,32 @@ async def _bootstrap_data() -> None:
         await asyncio.to_thread(_try_register_telegram_webhook)
     except Exception:
         logger.exception("API bootstrap failed (migrations, seed, or webhook registration)")
+    try:
+        async with SessionLocal() as recover_db:
+            from app.services.notifications.outbox import process_pending_telegram
+            from app.services.quote_conversion import recover_outstanding_quote_alerts
+
+            recovered = await recover_outstanding_quote_alerts(recover_db)
+            delivered = await process_pending_telegram(recover_db)
+            if recovered or delivered:
+                logger.info("Telegram recovery: requeued=%s delivered=%s", recovered, delivered)
+    except Exception:
+        logger.exception("Telegram outbox recovery failed")
+
+
+async def _telegram_outbox_pump() -> None:
+    """Deliver pending Telegram rows even when the Celery worker is not running."""
+    from app.services.notifications.outbox import process_pending_telegram
+
+    while True:
+        await asyncio.sleep(90)
+        try:
+            async with SessionLocal() as session:
+                await process_pending_telegram(session)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception("Telegram outbox pump failed")
 
 
 @asynccontextmanager
@@ -96,8 +123,12 @@ async def lifespan(_: FastAPI):
         yield
         return
     bootstrap = asyncio.create_task(_bootstrap_data())
+    pump = asyncio.create_task(_telegram_outbox_pump())
     yield
+    pump.cancel()
     bootstrap.cancel()
+    with contextlib.suppress(asyncio.CancelledError):
+        await pump
     with contextlib.suppress(asyncio.CancelledError):
         await bootstrap
 
@@ -140,6 +171,7 @@ app.include_router(briefings.router, prefix=prefix)
 app.include_router(automations.router, prefix=prefix)
 app.include_router(communications.router, prefix=prefix)
 app.include_router(telegram.router, prefix=prefix)
+app.include_router(notifications.router, prefix=prefix)
 app.include_router(marketing.router, prefix=prefix)
 app.include_router(marketing_integrations.router, prefix=prefix)
 app.include_router(marketing_content.router, prefix=prefix)

@@ -2,7 +2,7 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, String, Text, func, text
+from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, String, Text, UniqueConstraint, func, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -44,6 +44,7 @@ class Customer(Base):
     source: Mapped[str | None] = mapped_column(String(120), nullable=True)
     campaign: Mapped[str | None] = mapped_column(String(120), nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    is_test: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -117,6 +118,8 @@ class Enquiry(Base):
         String(40), default="not_requested", server_default=text("'not_requested'")
     )
     telegram_notified: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    telegram_outbox_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    is_test: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
@@ -125,3 +128,32 @@ class Enquiry(Base):
     )
 
     customer: Mapped["Customer"] = relationship(back_populates="enquiries")
+
+
+class OwnerFollowUp(Base):
+    """One owner action per enquiry intention. Not a confirmed appointment."""
+
+    __tablename__ = "owner_follow_ups"
+    __table_args__ = (UniqueConstraint("enquiry_id", "kind", name="uq_owner_follow_ups_enquiry_kind"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    enquiry_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("enquiries.id", ondelete="CASCADE")
+    )
+    quotation_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("quotations.id", ondelete="SET NULL"), nullable=True
+    )
+    customer_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("customers.id", ondelete="SET NULL"), nullable=True
+    )
+    kind: Mapped[str] = mapped_column(String(40))
+    title: Mapped[str] = mapped_column(String(255))
+    status: Mapped[str] = mapped_column(String(40), default="open", server_default=text("'open'"), index=True)
+    due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

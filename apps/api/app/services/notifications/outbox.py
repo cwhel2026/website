@@ -5,9 +5,9 @@ from __future__ import annotations
 import json
 import logging
 from datetime import UTC, datetime
-from uuid import UUID
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
@@ -28,19 +28,18 @@ async def enqueue_notification(
     dedupe_key: str | None = None,
     payload: dict | None = None,
     scheduled_for: datetime | None = None,
-    max_attempts: int = 5,
+    max_attempts: int = 8,
 ) -> NotificationOutbox:
     if dedupe_key:
         existing = await db.execute(
-            select(NotificationOutbox).where(
-                NotificationOutbox.dedupe_key == dedupe_key,
-                NotificationOutbox.status.in_(
-                    [OutboxStatus.PENDING, OutboxStatus.SENDING, OutboxStatus.DELIVERED]
-                ),
-            )
+            select(NotificationOutbox).where(NotificationOutbox.dedupe_key == dedupe_key)
         )
         row = existing.scalar_one_or_none()
         if row:
+            if row.status in {OutboxStatus.FAILED, OutboxStatus.CANCELLED}:
+                row.status = OutboxStatus.PENDING
+                row.last_error = None
+                db.add(row)
             return row
 
     item = NotificationOutbox(
@@ -53,34 +52,64 @@ async def enqueue_notification(
         payload_json=json.dumps(payload or {}),
         scheduled_for=scheduled_for,
         max_attempts=max_attempts,
+        status=OutboxStatus.PENDING,
     )
     db.add(item)
-    await db.flush()
-    return item
+    try:
+        async with db.begin_nested():
+            await db.flush()
+        return item
+    except IntegrityError:
+        existing = (
+            await db.execute(select(NotificationOutbox).where(NotificationOutbox.dedupe_key == dedupe_key))
+            if dedupe_key
+            else None
+        )
+        row = existing.scalar_one_or_none() if existing is not None else None
+        if row:
+            return row
+        raise
+
+
+def _chat_ids() -> list[int]:
+    return get_settings().telegram_alert_chat_ids
 
 
 async def deliver_telegram_outbox_item(db: AsyncSession, item: NotificationOutbox) -> bool:
+    if item.status == OutboxStatus.DELIVERED:
+        return True
     settings = get_settings()
-    if not settings.telegram_bot_token or not settings.telegram_admin_id_list:
-        item.last_error = "Telegram not configured"
-        item.status = OutboxStatus.FAILED
+    chats = _chat_ids()
+    if not settings.telegram_bot_token or not chats:
+        item.last_error = "Telegram not configured (TELEGRAM_BOT_TOKEN or admin/owner chat id missing)"
+        item.status = OutboxStatus.PENDING
         db.add(item)
+        await db.flush()
         return False
 
-    chat_id = settings.telegram_admin_id_list[0]
     item.status = OutboxStatus.SENDING
     item.attempts += 1
     db.add(item)
     await db.flush()
 
     text = f"{item.title}\n\n{item.body}" if item.title else item.body
-    try:
-        result = await send_message(chat_id=chat_id, text=text)
+    errors: list[str] = []
+    last_result: dict | None = None
+    delivered_chats: list[int] = []
+    for chat_id in chats:
+        try:
+            last_result = await send_message(chat_id=chat_id, text=text)
+            delivered_chats.append(chat_id)
+        except TelegramApiError as exc:
+            errors.append(f"{chat_id}: {exc}")
+
+    if delivered_chats:
         item.status = OutboxStatus.DELIVERED
         item.delivered_at = datetime.now(UTC)
         item.last_error = None
         payload = json.loads(item.payload_json or "{}")
-        payload["telegram_message_id"] = result.get("message_id")
+        payload["telegram_message_id"] = last_result.get("message_id") if last_result else None
+        payload["telegram_chat_ids"] = delivered_chats
         item.payload_json = json.dumps(payload)
         db.add(item)
         if item.dedupe_key and item.dedupe_key.startswith("fin-report:"):
@@ -88,15 +117,16 @@ async def deliver_telegram_outbox_item(db: AsyncSession, item: NotificationOutbo
 
             await mark_finance_report_delivered(db, item.dedupe_key)
         return True
-    except TelegramApiError as exc:
-        logger.warning("Telegram delivery failed for outbox %s: %s", item.id, exc)
-        item.last_error = str(exc)
-        if item.attempts >= item.max_attempts:
-            item.status = OutboxStatus.FAILED
-        else:
-            item.status = OutboxStatus.PENDING
-        db.add(item)
-        return False
+
+    logger.warning("Telegram delivery failed for outbox %s: %s", item.id, "; ".join(errors))
+    item.last_error = "; ".join(errors)[:2000] or "Telegram sendMessage failed"
+    if item.attempts >= item.max_attempts:
+        item.status = OutboxStatus.FAILED
+    else:
+        item.status = OutboxStatus.PENDING
+    db.add(item)
+    await db.flush()
+    return False
 
 
 async def process_pending_telegram(db: AsyncSession, *, limit: int = 20) -> int:
@@ -105,15 +135,19 @@ async def process_pending_telegram(db: AsyncSession, *, limit: int = 20) -> int:
         select(NotificationOutbox)
         .where(
             NotificationOutbox.channel == "telegram",
-            NotificationOutbox.status == OutboxStatus.PENDING,
+            NotificationOutbox.status.in_([OutboxStatus.PENDING, OutboxStatus.SENDING]),
             (NotificationOutbox.scheduled_for.is_(None) | (NotificationOutbox.scheduled_for <= now)),
         )
         .order_by(NotificationOutbox.created_at)
         .limit(limit)
+        .with_for_update(skip_locked=True)
     )
     rows = list(result.scalars().all())
     delivered = 0
     for row in rows:
+        if row.status == OutboxStatus.SENDING and row.attempts > 0:
+            # A crashed send left the row locked in SENDING — retry it.
+            row.status = OutboxStatus.PENDING
         if await deliver_telegram_outbox_item(db, row):
             delivered += 1
     await db.commit()
@@ -129,6 +163,7 @@ async def notify_owner_telegram(
     dedupe_key: str | None = None,
     priority: NotificationPriority = NotificationPriority.NORMAL,
     deliver_immediately: bool = True,
+    payload: dict | None = None,
 ) -> NotificationOutbox:
     item = await enqueue_notification(
         db,
@@ -138,6 +173,7 @@ async def notify_owner_telegram(
         category=category,
         priority=priority,
         dedupe_key=dedupe_key,
+        payload=payload,
     )
     await db.commit()
     if deliver_immediately:

@@ -5,7 +5,13 @@ from types import SimpleNamespace
 import pytest
 from fastapi import HTTPException
 
-from app.services.quote_conversion import customer_next_steps, validate_conversion_request
+from app.services.quote_conversion import (
+    BOOKING_SUPPORTING,
+    CUSTOMER_HEADING,
+    confirmation_steps,
+    customer_next_steps,
+    validate_conversion_request,
+)
 
 
 def _enquiry(**kwargs):
@@ -19,30 +25,24 @@ def _enquiry(**kwargs):
     return SimpleNamespace(**defaults)
 
 
+def test_booking_copy_is_a_request_not_a_confirmed_visit():
+    text = customer_next_steps(_enquiry(intention="ready_to_book"), [], email="ada@example.co.uk")
+    assert text == BOOKING_SUPPORTING
+    assert CUSTOMER_HEADING.startswith("Thank you")
+    steps = confirmation_steps(_enquiry(intention="ready_to_book"))
+    assert len(steps) == 3
+    assert any("booked until we confirm" in item for item in steps)
+
+
 def test_estimate_copy_does_not_claim_an_email_when_smtp_is_off():
     text = customer_next_steps(_enquiry(), [], email="ada@example.co.uk")
     assert "We have emailed" not in text
-    assert "could not email" in text
-    assert "not a confirmed booking" in text
+    assert "email sending is not connected" in text
 
 
 def test_sent_estimate_copy_says_the_email_went():
     text = customer_next_steps(_enquiry(email_delivery="sent"), [], email="ada@example.co.uk")
-    assert "We have emailed your estimate to ada@example.co.uk" in text
-    assert "not a confirmed booking" in text
-
-
-def test_booking_copy_does_not_confirm_an_appointment():
-    text = customer_next_steps(_enquiry(intention="ready_to_book"), [], email="ada@example.co.uk")
-    assert "not a confirmed booking" in text
-    assert "earliest visit" in text
-    assert "inspection visit" in text
-
-
-def test_estimate_without_photos_skips_photo_warnings():
-    text = customer_next_steps(_enquiry(), [], email="ada@example.co.uk")
-    assert "photograph" not in text.lower()
-    assert "inspection visit" not in text
+    assert "We have emailed it to ada@example.co.uk" in text
 
 
 def test_callback_copy_names_the_requested_time():
@@ -52,7 +52,6 @@ def test_callback_copy_names_the_requested_time():
         email="ada@example.co.uk",
     )
     assert "Weekday mornings" in text
-    assert "not booked" in text
 
 
 def test_marketing_consent_is_not_required():

@@ -22,7 +22,7 @@ export async function GET() {
     admin_ids_count: (process.env.TELEGRAM_ADMIN_IDS ?? "")
       .split(",")
       .map((s) => s.trim())
-      .filter((s) => /^\d+$/.test(s)).length,
+      .filter((s) => /^-?\d+$/.test(s)).length,
     webhook_secret_set: Boolean(process.env.TELEGRAM_WEBHOOK_SECRET?.trim()),
     expected_webhook_url: expected ? webhookUrl : null,
     telegram: {
