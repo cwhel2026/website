@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { apiGet, apiPost } from "@/lib/api";
 import { getToken } from "@/lib/auth-client";
-import { PortalError, PortalKpi, PortalPageTitle } from "@/components/portal-ui";
+import { PortalError, PortalKpi } from "@/components/portal-ui";
 
 type Command = { as_of: string; open_quotes: number; pending_approvals: number; coating_due_within_two_days: number; outstanding_invoice_gbp: string; upcoming_visits: {id:string; reference:string; start:string; type:string; weather_suitable:boolean|null}[]; director_tasks: {id:string; title:string; priority:number}[] };
 type Quotation = {
@@ -117,10 +117,15 @@ export default function DashboardOverviewPage() {
 
   return (
     <div className="max-w-full overflow-x-hidden">
-      <PortalPageTitle
-        title="Business command centre"
-        subtitle="Your operations, money and decisions in one place."
-      />
+      <header className="relative overflow-hidden rounded-3xl border border-amber-300/20 bg-gradient-to-br from-[#39301c] via-[#20231f] to-[#141716] p-5 sm:p-8">
+        <p className="text-xs font-bold uppercase tracking-[.24em] text-amber-300">SurfaceCoat / Operations</p>
+        <h1 className="mt-3 text-3xl font-bold tracking-tight text-white sm:text-5xl">Business command centre</h1>
+        <p className="mt-2 text-sm text-white/70">Your operations, money and decisions in one place.</p>
+        <div className="mt-6 grid grid-cols-2 gap-3">
+          <Link href="/dashboard/approvals" className="rounded-2xl bg-black/30 p-4"><span className="block text-xs text-amber-200">Awaiting approval</span><strong className="mt-1 block text-3xl text-white">{command?.pending_approvals ?? "—"}</strong></Link>
+          <Link href="/dashboard/calendar" className="rounded-2xl bg-black/30 p-4"><span className="block text-xs text-amber-200">Coating due · 2 days</span><strong className="mt-1 block text-3xl text-white">{command?.coating_due_within_two_days ?? "—"}</strong></Link>
+        </div>
+      </header>
 
       <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
         <p role="status" className="text-xs text-white/70">{loading ? "Refreshing business data…" : errors.length ? "Partial data — some services unavailable" : updated ? "Updated " + updated.toLocaleTimeString("en-GB") : "Not loaded"}</p>
@@ -134,7 +139,8 @@ export default function DashboardOverviewPage() {
       )}
 
       <Link href="/dashboard/launch-readiness" className="mt-4 flex items-center justify-between rounded-2xl border border-[#eab308]/40 bg-gradient-to-br from-[#3b3218] to-[#242424] p-4"><div><p className="text-xs uppercase tracking-widest text-[#eab308]">Launch centre</p><p className="mt-1 font-semibold">Check operational readiness</p><p className="text-xs text-white/70">Integration evidence and setup steps</p></div><span aria-hidden="true">›</span></Link>
-      <div className="mt-4 grid grid-cols-2 gap-2 md:grid-cols-3 lg:grid-cols-4">
+      <h2 className="mt-7 text-lg font-semibold">Business performance</h2>
+      <div className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
         <PortalKpi label="Recorded payments (30d)" value={revenue} />
         <PortalKpi label="FreeAgent" value={faLabel} hint={finance?.freeagent?.message} />
         <PortalKpi label="Growth fund" value={growthBal != null ? formatGbp(growthBal) : "—"} />
@@ -152,7 +158,8 @@ export default function DashboardOverviewPage() {
       </div>
 
       <div className="mt-3 grid grid-cols-2 gap-2"><PortalKpi label="Coating due within 2 days" value={String(command?.coating_due_within_two_days ?? "—")} /><PortalKpi label="Outstanding invoices" value={formatGbp(command?.outstanding_invoice_gbp)} /></div>
-      <div className="mt-6 grid grid-cols-2 gap-2 sm:grid-cols-3">
+      <h2 className="mt-7 text-lg font-semibold">Your workspace</h2>
+      <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
         <QuickLink href="/dashboard/quotations" label="New quote" />
         <QuickLink href="/dashboard/calendar" label="Diary" />
         <QuickLink href="/dashboard/marketing/overview" label="Marketing" />
@@ -164,7 +171,7 @@ export default function DashboardOverviewPage() {
         <QuickLink href="/dashboard/system-health" label="Telegram & system" />
       </div>
 
-      <section className="mt-5 rounded-xl border border-white/15 p-3">
+      <section className="mt-7 rounded-3xl border border-amber-300/25 bg-gradient-to-br from-[#302a1b] to-[#202320] p-5">
         <h2 className="font-semibold text-[#eab308]">Business director</h2>
         <p className="mt-1 text-sm text-white/70">Review approvals, coating priorities, stock and overdue invoices.</p>
         <button onClick={() => void scanDirector()} disabled={scanning || loading} className="mt-3 min-h-11 rounded-lg bg-[#eab308] px-4 font-semibold text-black disabled:opacity-50">{scanning ? "Scanning…" : "Scan business"}</button>
@@ -227,9 +234,9 @@ function QuickLink({ href, label }: { href: string; label: string }) {
   return (
     <Link
       href={href}
-      className="rounded-full border border-[#eab308]/40 bg-[#eab308]/15 inline-flex min-h-11 items-center px-4 py-2 text-xs font-semibold text-[#eab308]"
+      className="flex min-h-20 items-center justify-between gap-2 rounded-2xl border border-white/10 bg-[#222624] p-4 text-sm font-semibold text-white hover:border-amber-300/50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-300"
     >
-      {label}
+      {label}<span aria-hidden="true" className="text-amber-300">↗</span>
     </Link>
   );
 }
@@ -246,7 +253,7 @@ function ListSection({
   children: React.ReactNode;
 }) {
   return (
-    <section className="rounded-2xl border border-white/10 bg-[#202020] p-3 sm:p-4">
+    <section className="min-w-0 rounded-3xl border border-white/10 bg-[#202422] p-4 sm:p-5">
       <h2 className="text-sm font-semibold text-[#eab308]">{title}</h2>
       {items === 0 ? (
         <p className="mt-2 text-sm text-white/50">{empty}</p>
