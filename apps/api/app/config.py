@@ -97,6 +97,12 @@ class Settings(BaseSettings):
         self.database_url = normalize_async_database_url(self.database_url)
         sync = (self.sync_database_url or "").strip()
         dev_sync_default = "postgresql://rmd:rmd_dev_password@localhost:5432/revive_my_drive"
+        # In production, DATABASE_URL (usually a Railway ${{Postgres.*}} reference) is the only
+        # credential source. A hand-typed SYNC_DATABASE_URL often keeps an old password and breaks
+        # startup migrations while DATABASE_URL is correct.
+        if self.environment.lower() == "production":
+            self.sync_database_url = derive_sync_from_async(self.database_url)
+            return self
         if not sync or sync == dev_sync_default:
             self.sync_database_url = derive_sync_from_async(self.database_url)
         else:

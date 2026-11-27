@@ -34,10 +34,22 @@ You **do not** need to move env vars off “website”. You only change **how th
 | `PUBLIC_API_BASE_URL` | **Same** public site URL, e.g. `https://website-production-….up.railway.app` |
 | `TELEGRAM_*`, `DATABASE_URL`, `JWT_SECRET`, etc. | Keep everything you already added |
 | `CORS_ORIGINS` | Same public site URL |
-| `DATABASE_URL` | `postgresql+asyncpg://…` |
-| `SYNC_DATABASE_URL` | `postgresql://…` |
+| `DATABASE_URL` | **Variable reference** `${{Postgres.DATABASE_URL}}` (app adds `+asyncpg`). On private networking use `${{Postgres.DATABASE_PRIVATE_URL}}` |
+| `SYNC_DATABASE_URL` | **Omit in production** — derived automatically from `DATABASE_URL`. Delete it if you added a hand-typed copy (stale passwords cause startup migration failures) |
 
 5. **Redeploy.**
+
+### Database connection errors
+
+If deploy logs show `password authentication failed for user "postgres"` during `python -m app.schema.cli upgrade`:
+
+1. Railway → your **Postgres** plugin → **Connect** → confirm the URL works (user is often `postgres`; the password is **only** in that panel).
+2. Railway → **website** service → **Variables**:
+   - Set `DATABASE_URL` to **Add variable reference** → Postgres → `DATABASE_URL` or `DATABASE_PRIVATE_URL` (not a pasted string from an old deploy).
+   - **Remove** `SYNC_DATABASE_URL` if it is a hand-typed duplicate.
+3. Do **not** paste passwords into chat or commit them. Redeploy the website service.
+
+If it still fails after a reference-based `DATABASE_URL`, the Postgres password was rotated: update the reference by redeploying Postgres or resetting credentials in Railway, then redeploy the website service.
 
 6. After deploy finishes, check `https://YOUR-URL/health` → JSON from FastAPI (proxied). Railway HTTP health checks are disabled in config for faster rollouts.  
    Check `https://YOUR-URL/api/deploy-hint` → web deploy hint.
