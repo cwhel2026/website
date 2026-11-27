@@ -7,7 +7,7 @@ import { test, expect } from "@playwright/test";
 
 test("complete provisional tarmac quote on mobile", async ({ page }) => {
   const draft = {
-    postcode: "L39 2JG",
+    postcode: "L39 2YG",
     town: "Ormskirk",
     service_slug: "tarmac-driveway-restoration",
     surface_type: "tarmac",
