@@ -57,25 +57,16 @@ async def compute_tax_reserves(db: AsyncSession) -> dict:
         date.today(),
         prof.vat_rate_percent if prof else None,
     )
-    vat_known = charge_vat
-    vat_amount: Decimal | None = None
-    if vat_known:
-        # Not a filing estimate — rough liability reserve only when registered
-        net_taxable = Decimal(str(vat["taxable_turnover_gbp"])) * Decimal("0.2") * Decimal("0.17")
-        vat_amount = net_taxable.quantize(Decimal("0.01"))
-    elif vat.get("registration_may_be_required"):
-        vat_amount = Decimal("0")
+    # Turnover alone cannot establish VAT payable or payroll liabilities.
     vat_bucket = _liability_bucket(
-        known=vat_known or vat.get("data_complete") is False,
-        amount=vat_amount,
-        note="VAT reserve only when registration status confirmed.",
+        known=False,
+        amount=None,
+        note="VAT liability requires verified return-period output VAT, recoverable input VAT and payments. Rolling turnover is not VAT payable.",
     )
-
-    paye_known = prof is not None and prof.paye_status == PayrollStatus.REGISTERED
     paye_bucket = _liability_bucket(
-        known=paye_known,
-        amount=Decimal("0") if paye_known else None,
-        note="PAYE/NI accrual requires FreeAgent payroll read — set PAYE status on company profile.",
+        known=False,
+        amount=None,
+        note="PAYE/NI liability requires verified payroll balances and payments; registration alone does not establish a zero balance.",
     )
 
     known_amounts = [
