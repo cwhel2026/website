@@ -17,8 +17,10 @@ class CompanyProfileIn(BaseModel):
     accounting_reference_month: int | None = Field(default=None, ge=1, le=12)
     accounting_reference_day: int | None = Field(default=None, ge=1, le=31)
     company_utr: str | None = None
-    vat_status: VatStatus = VatStatus.UNKNOWN
+    vat_status: VatStatus = VatStatus.NOT_REGISTERED
     vat_number: str | None = None
+    vat_rate_percent: Decimal | None = None
+    vat_effective_from: date | None = None
     paye_status: PayrollStatus = PayrollStatus.UNKNOWN
     paye_reference: str | None = None
     corporation_tax_registered: bool | None = None

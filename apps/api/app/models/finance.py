@@ -76,6 +76,8 @@ class Invoice(Base):
     subtotal_ex_vat_gbp: Mapped[Decimal] = mapped_column(Numeric(12, 2))
     vat_gbp: Mapped[Decimal] = mapped_column(Numeric(12, 2))
     total_inc_vat_gbp: Mapped[Decimal] = mapped_column(Numeric(12, 2))
+    vat_charged: Mapped[bool] = mapped_column(Boolean, default=False)
+    vat_rate_percent: Mapped[Decimal] = mapped_column(Numeric(5, 2), default=Decimal("0"))
     amount_paid_gbp: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal("0"))
     freeagent_url: Mapped[str | None] = mapped_column(String(255), nullable=True)
     freeagent_id: Mapped[str | None] = mapped_column(String(64), nullable=True)

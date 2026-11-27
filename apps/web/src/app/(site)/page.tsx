@@ -248,7 +248,7 @@ function FinalCta() {
       <div className="site-container text-center">
         <h2 className="font-display text-3xl font-semibold text-asphalt">Ready to revive your driveway?</h2>
         <p className="mx-auto mt-3 max-w-lg text-asphalt/70">
-          Start with your postcode and measurements — provisional pricing uses your live pricing engine.
+          Start with your postcode and measurements for an estimated price.
         </p>
         <Link href="/quote" className="btn-primary mt-8">
           Get my instant quote

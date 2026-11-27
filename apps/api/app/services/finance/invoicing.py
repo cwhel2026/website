@@ -27,6 +27,8 @@ async def create_invoice_from_quotation(
         subtotal_ex_vat_gbp=quotation.subtotal_ex_vat_gbp,
         vat_gbp=quotation.vat_gbp,
         total_inc_vat_gbp=quotation.total_inc_vat_gbp,
+        vat_charged=quotation.vat_charged,
+        vat_rate_percent=quotation.vat_rate_percent,
     )
     db.add(inv)
     await db.flush()

@@ -59,9 +59,11 @@ class CompanyProfile(Base):
     accounting_reference_day: Mapped[int | None] = mapped_column(Integer, nullable=True)
     company_utr: Mapped[str | None] = mapped_column(String(20), nullable=True)
     vat_status: Mapped[VatStatus] = mapped_column(
-        Enum(VatStatus, name="vat_status"), default=VatStatus.UNKNOWN
+        Enum(VatStatus, name="vat_status"), default=VatStatus.NOT_REGISTERED
     )
     vat_number: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    vat_rate_percent: Mapped[Decimal] = mapped_column(Numeric(5, 2), default=Decimal("20"))
+    vat_effective_from: Mapped[date | None] = mapped_column(Date, nullable=True)
     paye_status: Mapped[PayrollStatus] = mapped_column(
         Enum(PayrollStatus, name="payroll_status"), default=PayrollStatus.UNKNOWN
     )

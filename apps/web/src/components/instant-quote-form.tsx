@@ -9,11 +9,10 @@ type Section = { label: string; length_m: string; width_m: string };
 
 type QuotationResult = {
   reference: string;
-  total_inc_vat_gbp: string | number;
-  subtotal_ex_vat_gbp: string | number;
-  estimated_contribution_gbp: string | number;
-  requires_approval: boolean;
-  provisional_disclaimer: string;
+  total_gbp?: string | number;
+  total_inc_vat_gbp?: string | number;
+  customer_note?: string;
+  provisional_disclaimer?: string;
   status: string;
 };
 
@@ -237,14 +236,9 @@ export function InstantQuoteForm() {
         <div className="mt-8 rounded-2xl border border-emerald-200 bg-emerald-50 p-6">
           <h2 className="text-xl font-semibold text-emerald-950">Reference {result.reference}</h2>
           <p className="mt-2 text-3xl font-bold text-emerald-900">
-            £{Number(result.total_inc_vat_gbp).toFixed(2)}{" "}
-            <span className="text-base font-normal">inc. VAT</span>
+            £{Number(result.total_gbp ?? result.total_inc_vat_gbp).toFixed(2)}
           </p>
-          <p className="mt-2 text-sm text-emerald-900/80">
-            Ex VAT: £{Number(result.subtotal_ex_vat_gbp).toFixed(2)} · Status: {result.status}
-            {result.requires_approval ? " · Requires owner approval" : ""}
-          </p>
-          <p className="mt-4 text-sm text-emerald-900/70">{result.provisional_disclaimer}</p>
+          <p className="mt-4 text-sm text-emerald-900/70">{result.customer_note ?? result.provisional_disclaimer}</p>
         </div>
       )}
     </div>

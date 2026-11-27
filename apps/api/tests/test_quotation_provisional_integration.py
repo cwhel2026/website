@@ -37,13 +37,18 @@ def test_provisional_quote_returns_computed_price(monkeypatch):
         assert res.status_code == 200, res.text
         body = res.json()
         assert body["surface_supported"] is True
-        assert body["total_inc_vat_gbp"] is not None
-        total = Decimal(body["total_inc_vat_gbp"])
+        assert body["vat_applied"] is False
+        total = Decimal(body["total_gbp"])
         assert total > 0
         assert total % Decimal("5") == 0
-        assert Decimal(body["subtotal_ex_vat_gbp"]) + Decimal(body["vat_gbp"]) == total
-        surface = next(line for line in body["breakdown"]["lines"] if line["label"] == "Surface restoration")
-        assert Decimal(str(surface["amount_gbp"])) == Decimal("400.00")
+        assert "breakdown" not in body
+        assert "subtotal_ex_vat_gbp" not in body
+        assert "vat_gbp" not in body
+        joined = " ".join(item["title"] for item in body["included"] + body["visits"])
+        assert "Professional driveway cleaning" in joined
+        assert "Visit 2" in joined
+        assert "£" not in str(body["included"])
+        assert "live pricing" not in body["customer_note"].lower()
         assert body.get("input_fingerprint")
 
         standard = client.post(
@@ -61,12 +66,10 @@ def test_provisional_quote_returns_computed_price(monkeypatch):
             },
         )
         assert standard.status_code == 200, standard.text
-        standard_surface = next(
-            line
-            for line in standard.json()["breakdown"]["lines"]
-            if line["label"] == "Surface restoration"
-        )
-        assert Decimal(str(standard_surface["amount_gbp"])) == Decimal("480.00")
+        assert standard.json()["vat_applied"] is False
+        assert "breakdown" not in standard.json()
+        assert Decimal(standard.json()["total_gbp"]) % Decimal("5") == 0
+        assert "One visit" in " ".join(item["title"] for item in standard.json()["visits"])
 
         blocked = client.post(
             "/api/v1/quotations/provisional",

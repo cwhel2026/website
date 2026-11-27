@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import date, timedelta
+from decimal import Decimal
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -181,7 +182,11 @@ async def get_or_create_profile(db: AsyncSession) -> CompanyProfile:
     result = await db.execute(select(CompanyProfile).limit(1))
     profile = result.scalar_one_or_none()
     if profile is None:
-        profile = CompanyProfile(registered_name="Revive My Drive Ltd")
+        profile = CompanyProfile(
+            registered_name="SurfaceCoat Ltd",
+            vat_status=VatStatus.NOT_REGISTERED,
+            vat_rate_percent=Decimal("20"),
+        )
         db.add(profile)
         await db.flush()
     await ensure_onboarding_tasks(db)

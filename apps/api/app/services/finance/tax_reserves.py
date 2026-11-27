@@ -1,12 +1,12 @@
 import json
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.compliance import TaxReserveSnapshot
-from app.models.company import CompanyProfile, PayrollStatus, VatStatus
+from app.models.company import CompanyProfile, PayrollStatus
 from app.services.finance.freeagent_adapter import freeagent_status
 from app.services.finance.freeagent_reports import _extract_net_profit_before_tax, get_cached_report
 from app.services.tax_engine.marginal_relief import corporation_tax_with_marginal_relief
@@ -49,7 +49,15 @@ async def compute_tax_reserves(db: AsyncSession) -> dict:
     )
 
     vat = await rolling_vat_taxable_turnover(db)
-    vat_known = prof is not None and prof.vat_status in (VatStatus.REGISTERED, VatStatus.APPLIED)
+    from app.services.vat_settings import vat_applies
+
+    charge_vat, _rate = vat_applies(
+        prof.vat_status if prof else None,
+        prof.vat_effective_from if prof else None,
+        date.today(),
+        prof.vat_rate_percent if prof else None,
+    )
+    vat_known = charge_vat
     vat_amount: Decimal | None = None
     if vat_known:
         # Not a filing estimate — rough liability reserve only when registered

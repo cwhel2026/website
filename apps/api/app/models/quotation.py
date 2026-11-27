@@ -80,6 +80,9 @@ class Quotation(Base):
     subtotal_ex_vat_gbp: Mapped[Decimal] = mapped_column(Numeric(12, 2))
     vat_gbp: Mapped[Decimal] = mapped_column(Numeric(12, 2))
     total_inc_vat_gbp: Mapped[Decimal] = mapped_column(Numeric(12, 2))
+    # Frozen on the day the quote was priced. Later registration changes do not rewrite it.
+    vat_charged: Mapped[bool] = mapped_column(Boolean, default=False)
+    vat_rate_percent: Mapped[Decimal] = mapped_column(Numeric(5, 2), default=Decimal("0"))
     estimated_labour_hours: Mapped[Decimal] = mapped_column(Numeric(8, 2))
     estimated_materials_gbp: Mapped[Decimal] = mapped_column(Numeric(12, 2))
     estimated_travel_gbp: Mapped[Decimal] = mapped_column(Numeric(12, 2))

@@ -59,6 +59,8 @@ class PricingInput:
     distance_km_from_base: Decimal
     # "launch" (£10/m² tarmac) or "standard" (£12/m²). Other surfaces need their own rules.
     pricing_tier: str = "launch"
+    charge_vat: bool = False
+    vat_rate: Decimal = Decimal("0")
 
 
 @dataclass
@@ -72,6 +74,8 @@ class PricingResult:
     estimated_contribution_gbp: Decimal
     meets_minimum_margin: bool
     requires_approval: bool
+    vat_charged: bool
+    vat_rate_percent: Decimal
     breakdown: dict
     pricing_profile_id: UUID
     total_area_sqm: Decimal
@@ -213,24 +217,26 @@ async def calculate_quotation(
     driving_charge = money(hours_one_way * per_hour * legs)
     travel = money(mileage_charge + driving_charge)
 
-    subtotal_ex_vat = money(subtotal_before_travel + travel)
-    vat_rate = _rule_amount(rules, PricingRuleType.VAT_RATE)
-    if vat_rate is None:
-        vat_rate = Decimal("20")
-    if vat_rate > Decimal("1"):
-        vat_rate = vat_rate / Decimal("100")
-    vat_gbp = money(subtotal_ex_vat * vat_rate)
-    exact_inc_vat = money(subtotal_ex_vat + vat_gbp)
-    total_inc_vat = round_up_to_nearest_five(exact_inc_vat)
-    rounding_uplift = money(total_inc_vat - exact_inc_vat)
-    if rounding_uplift > 0 and vat_rate > 0:
-        uplift_ex = money(rounding_uplift / (Decimal("1") + vat_rate))
-        uplift_vat = money(rounding_uplift - uplift_ex)
-        subtotal_ex_vat = money(subtotal_ex_vat + uplift_ex)
-        vat_gbp = money(vat_gbp + uplift_vat)
-        # Penny residue stays on VAT so ex-VAT + VAT equals the rounded gross.
-        residue = money(total_inc_vat - (subtotal_ex_vat + vat_gbp))
-        vat_gbp = money(vat_gbp + residue)
+    net_before_round = money(subtotal_before_travel + travel)
+    # Round the amount the customer pays, after VAT when it applies.
+    # Do not fold a VAT-inclusive uplift back into the net lines: that made
+    # £600 + £74.80 + £0.24 fail to equal either £675 or £810.
+    if data.charge_vat and data.vat_rate > 0:
+        vat_gbp = money(net_before_round * data.vat_rate)
+        exact_payable = money(net_before_round + vat_gbp)
+        total_payable = round_up_to_nearest_five(exact_payable)
+        rounding_uplift = money(total_payable - exact_payable)
+        subtotal_ex_vat = net_before_round
+        vat_charged = True
+        vat_rate_percent = (data.vat_rate * Decimal("100")).quantize(Decimal("0.01"))
+    else:
+        total_payable = round_up_to_nearest_five(net_before_round)
+        rounding_uplift = money(total_payable - net_before_round)
+        subtotal_ex_vat = total_payable
+        vat_gbp = Decimal("0.00")
+        vat_charged = False
+        vat_rate_percent = Decimal("0.00")
+    total_inc_vat = total_payable
 
     labour_rate = Decimal("42")
     hours_per_sqm = LABOUR_HOURS_PER_SQM.get(
@@ -249,7 +255,8 @@ async def calculate_quotation(
         materials_cost += money(total_area * Decimal("1.10"))
 
     total_cost = money(labour_cost + materials_cost + travel)
-    contribution = money(subtotal_ex_vat - total_cost)
+    revenue_ex_vat = money(total_payable - vat_gbp)
+    contribution = money(revenue_ex_vat - total_cost)
 
     min_margin_pct = _rule_amount(rules, PricingRuleType.MIN_CONTRIBUTION_MARGIN) or Decimal(
         "35"
@@ -270,10 +277,16 @@ async def calculate_quotation(
         "condition_recorded": data.surface_condition.value,
         "condition_multiplier_not_applied": str(CONDITION_MULTIPLIER[data.surface_condition]),
         "rate_gbp_per_sqm": float(base_rate),
+        "vat_charged": vat_charged,
+        "vat_rate_percent": float(vat_rate_percent),
+        "net_before_rounding_gbp": float(net_before_round),
+        "customer_total_gbp": float(total_payable),
         "minimum_rule": (
             "Works subtotal is raised to the greater of the pricing-rule minimum "
             "and the territory minimum. Travel is added after that. "
-            "The VAT-inclusive total is then rounded up to the next £5."
+            "The amount the customer pays is then rounded up to the next £5. "
+            "VAT is added before that rounding only when the company is VAT registered "
+            "on the pricing date."
         ),
         "visits": visits,
         "lines": [
@@ -318,6 +331,8 @@ async def calculate_quotation(
         estimated_contribution_gbp=contribution,
         meets_minimum_margin=meets_margin,
         requires_approval=requires_approval,
+        vat_charged=vat_charged,
+        vat_rate_percent=vat_rate_percent,
         breakdown=breakdown,
         pricing_profile_id=profile.id,
         total_area_sqm=total_area,

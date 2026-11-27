@@ -120,7 +120,8 @@ Nothing below is marked as working in production. Production still runs `main` (
 | P3 | Travel £0.45/mile and £25/hour; both returns; two visits when wash and coat are separate | **Verified (local)** | Replaces the old territory £/km return charge so mileage is not counted twice. |
 | P4 | Round the VAT-inclusive total up to the next £5 | **Verified (integration)** | Uplift is split back into ex-VAT and VAT so the two still add up to the rounded total. |
 | P5 | Block paving and imprinted concrete configurable, no invented prices | **Verified (integration)** | Existing per-m² rules deactivated, not deleted. Quote returns 422 until a rule is added. |
-| P6 | Do not mark instant quote operational | **Open** | Production still needs an approved deploy and a full iPhone quotation. This branch is not deployed. |
+| P6 | Do not mark instant quote operational | **Open** | A price is showing in production. Customer presentation and VAT treatment are corrected on `cursor/phase2-quote-presentation-vat-9428` and still need a production check after that branch is deployed. |
+| P7 | Public quote showed an internal breakdown and 20% VAT while the company is not VAT registered | **Fixed on branch** | VAT is off until Company setup records Registered and an effective date. The customer total is rounded up to £5 before VAT is added, and only when VAT applies. The £0.24 line was that VAT-inclusive uplift, which is why £600 + £74.80 did not equal £675. Public API no longer returns the costing lines. |
 
 ### Future enhancements (explicitly not built in Phase 2)
 
