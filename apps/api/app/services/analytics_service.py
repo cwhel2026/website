@@ -2,13 +2,26 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.crm import Customer, Enquiry
 from app.models.finance import Expense, Invoice, InvoiceStatus, Payment
 from app.models.quotation import Quotation, QuotationStatus
 from app.services.finance.profitability import territory_profitability
+
+
+def issued_business_invoices():
+    return (
+        select(Invoice.id)
+        .join(Customer, Customer.id == Invoice.customer_id)
+        .outerjoin(Quotation, Quotation.id == Invoice.quotation_id)
+        .where(
+            Invoice.status.notin_([InvoiceStatus.DRAFT, InvoiceStatus.VOID]),
+            Customer.is_test.is_(False),
+            or_(Invoice.quotation_id.is_(None), Quotation.is_test.is_(False)),
+        )
+    )
 
 
 @dataclass
@@ -45,10 +58,10 @@ async def build_analytics_snapshot(db: AsyncSession, days: int = 30) -> Analytic
     invoices = await db.scalar(
         select(func.count())
         .select_from(Invoice)
-        .where(Invoice.created_at >= since, Invoice.status != InvoiceStatus.VOID)
+        .where(Invoice.created_at >= since, Invoice.id.in_(issued_business_invoices()))
     )
     collected = await db.scalar(
-        select(func.coalesce(func.sum(Payment.amount_gbp), 0)).where(Payment.paid_at >= since)
+        select(func.coalesce(func.sum(Payment.amount_gbp), 0)).where(Payment.paid_at >= since, Payment.paid_at <= datetime.now(UTC), Payment.invoice_id.in_(issued_business_invoices()))
     )
     quoted_sum = await db.scalar(
         select(func.coalesce(func.sum(Quotation.total_inc_vat_gbp), 0)).where(
@@ -79,10 +92,10 @@ async def build_analytics_snapshot(db: AsyncSession, days: int = 30) -> Analytic
 async def revenue_and_expense_summary(db: AsyncSession, days: int = 7) -> dict:
     since = datetime.now(UTC) - timedelta(days=days)
     collected = await db.scalar(
-        select(func.coalesce(func.sum(Payment.amount_gbp), 0)).where(Payment.paid_at >= since)
+        select(func.coalesce(func.sum(Payment.amount_gbp), 0)).where(Payment.paid_at >= since, Payment.paid_at <= datetime.now(UTC), Payment.invoice_id.in_(issued_business_invoices()))
     )
     expense_sum = await db.scalar(
-        select(func.coalesce(func.sum(Expense.amount_gbp), 0)).where(Expense.expense_date >= since.date())
+        select(func.coalesce(func.sum(Expense.amount_gbp), 0)).where(Expense.expense_date >= since.date(), Expense.expense_date <= datetime.now(UTC).date())
     )
     revenue = Decimal(str(collected or 0))
     expenses = Decimal(str(expense_sum or 0))
@@ -91,6 +104,8 @@ async def revenue_and_expense_summary(db: AsyncSession, days: int = 7) -> dict:
         "revenue_gbp": float(revenue),
         "expenses_gbp": float(expenses),
         "profit_estimate_gbp": float(revenue - expenses),
+        "basis": "Recorded payments linked to issued non-test invoices less recorded expenses; not accrual profit or reconciled bank cash.",
+        "is_provisional": True,
     }
 
 

@@ -56,12 +56,14 @@ async def generate_daily_finance_report(db: AsyncSession) -> FinancialReportReco
     reserves = await compute_tax_reserves(db)
     issues = await run_financial_watchdog(db)
     urgent = [i for i in issues if i["severity"] == "high"]
+    reserve = reserves.get("recommended_reserve_gbp")
+    reserve_text = f"£{reserve:.2f}" if reserve is not None else "unknown — reconciliation required"
     payload = {
         "generated_at": datetime.now(UTC).isoformat(),
         "tax_reserves": reserves,
         "urgent_issues": urgent,
         "plain_english": (
-            f"Morning finance check: planning reserve £{reserves.get('recommended_reserve_gbp', 0):.2f}. "
+            f"Morning finance check: planning reserve {reserve_text}. "
             f"{len(urgent)} urgent items." + (" Data provisional." if reserves.get("is_provisional") else "")
         ),
     }
@@ -124,7 +126,9 @@ async def generate_monthly_finance_report(db: AsyncSession) -> FinancialReportRe
     obligation = Decimal(str(reserves.get("recommended_reserve_gbp") or 0))
     opt = None
     blocked_reason = None
-    if dist.get("blocked"):
+    if reserves.get("has_unknown_liabilities"):
+        blocked_reason = "Tax liabilities incomplete; remuneration recommendations withheld."
+    elif dist.get("blocked"):
         blocked_reason = dist.get("message") or "Reserves unavailable"
     else:
         opt = optimise_remuneration(
@@ -141,7 +145,8 @@ async def generate_monthly_finance_report(db: AsyncSession) -> FinancialReportRe
     ct_forecast = corporation_tax_with_marginal_relief(profit) if profit > 0 else {"corporation_tax_gbp": None}
     deadlines = await upcoming_reminders(db, within_days=90)
     cashflow = await multi_horizon_cashflow(db)
-    adequacy = reserves.get("recommended_reserve_gbp", 0)
+    adequacy = reserves.get("recommended_reserve_gbp")
+    adequacy_text = f"£{adequacy:.0f}" if adequacy is not None else "unknown"
     payload = {
         "management_accounts": {
             "pl_ytd_cached": pl is not None,
@@ -163,7 +168,7 @@ async def generate_monthly_finance_report(db: AsyncSession) -> FinancialReportRe
             blocked_reason
             if blocked_reason
             else (
-                f"Monthly accounts pack ready. Suggested reserve £{adequacy:.0f}. "
+                f"Monthly accounts pack ready. Suggested reserve {adequacy_text}. "
                 f"Target take-home £{desired}/mo — open director pay for scenarios."
             )
         ),
