@@ -90,7 +90,12 @@ async def run_business_director_scan(db: AsyncSession) -> list[AgentTask]:
 
 
 def task_identity(task: AgentTask) -> tuple:
-    payload = json.loads(task.payload_json or "{}")
+    try:
+        payload = json.loads(task.payload_json or "{}")
+    except (ValueError, TypeError):
+        payload = {}
+    if not isinstance(payload, dict):
+        payload = {}
     return task.agent_slug, task.action_key, payload.get("sku") if task.action_key == "replenish_stock" else None
 
 
@@ -107,7 +112,7 @@ async def list_open_tasks(db: AsyncSession, limit: int = 50) -> list[AgentTask]:
 async def complete_task(db: AsyncSession, task_id, result: dict | None = None) -> AgentTask | None:
     from uuid import UUID
 
-    task = await db.get(AgentTask, UUID(str(task_id)) if isinstance(task_id, str) else task_id)
+    task = await db.get(AgentTask, UUID(str(task_id)) if isinstance(task_id, str) else task_id, with_for_update=True)
     if task is None:
         return None
     if task.status != TaskStatus.QUEUED:
