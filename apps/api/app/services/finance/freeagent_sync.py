@@ -98,7 +98,7 @@ async def sync_bank_transactions_from_freeagent(db: AsyncSession) -> dict:
                 txns, total = await freeagent_client.fetch_bank_transactions(
                     settings, token, account_url, page=page, per_page=50
                 )
-            except httpx.HTTPError:
+            except (httpx.HTTPError, ValueError):
                 incomplete = True
                 break
             fetched += len(txns)
@@ -112,7 +112,11 @@ async def sync_bank_transactions_from_freeagent(db: AsyncSession) -> dict:
                 description = str(item.get("description") or item.get("long_description") or "Bank line")
                 try:
                     amount_dec = Decimal(str(amount))
-                except Exception:
+                except (ArithmeticError, ValueError, TypeError):
+                    incomplete = True
+                    continue
+                if not amount_dec.is_finite():
+                    incomplete = True
                     continue
                 explanation = item.get("bank_transaction_explanation") or item.get("explanation")
                 txn = BankTransaction(
