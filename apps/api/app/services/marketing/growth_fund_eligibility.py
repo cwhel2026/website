@@ -25,7 +25,7 @@ async def eligible_revenue_gbp(
     """VAT-exclusive eligible portion of this inflow."""
     if txn.is_duplicate or txn.amount_gbp <= 0:
         return Decimal("0")
-    if not txn.is_reconciled and not txn.matched_invoice_id:
+    if not txn.is_reconciled or not txn.matched_invoice_id:
         return Decimal("0")
     if is_excluded_description(txn.description):
         return Decimal("0")
@@ -39,7 +39,5 @@ async def eligible_revenue_gbp(
         ex_vat_portion = (amount * ex_vat_ratio).quantize(Decimal("0.01"))
         return min(ex_vat_portion, invoice.subtotal_ex_vat_gbp)
 
-    if txn.amount_gbp > 0 and txn.is_reconciled:
-        return amount
 
     return Decimal("0")
