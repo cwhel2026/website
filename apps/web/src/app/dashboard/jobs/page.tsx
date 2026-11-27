@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { apiGet } from "@/lib/api";
+import { apiGet, apiPost } from "@/lib/api";
 import { getToken } from "@/lib/auth-client";
 
 type Job = {
+  id: string;
   reference: string;
   quotation_id: string | null;
   status: string;
@@ -18,11 +19,17 @@ export default function JobsPage() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
+  function load() {
     const token = getToken();
     if (!token) return;
     apiGet<Job[]>("/api/v1/jobs", token).then(setJobs).catch(() => setError("Could not load jobs."));
-  }, []);
+  }
+  useEffect(load, []);
+
+  async function action(path: string, body: unknown) {
+    try { await apiPost(path, body); setError(null); load(); }
+    catch (e) { setError(e instanceof Error ? e.message : "Action failed"); }
+  }
 
   return (
     <div>
@@ -37,6 +44,11 @@ export default function JobsPage() {
             <li key={j.reference} className="rounded-lg border p-4 text-sm">
               <div className="font-semibold">{j.reference}</div>
               <div className="text-slate-600">{j.status}</div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {j.status === "preparation_scheduled" && <button className="rounded border p-2" onClick={() => { if (window.confirm("Confirm washing is complete?")) void action(`/api/v1/jobs/${j.id}/complete-preparation`, { surface_dry_confirmed: false }); }}>Complete washing</button>}
+                {j.status === "coating_scheduled" && <button className="rounded border p-2" onClick={() => { if (window.confirm("Confirm coating is complete, surface was dry and on-site weather was safe?")) void action(`/api/v1/jobs/${j.id}/complete-coating`, { surface_dry_confirmed: true, weather_safe_confirmed: true }); }}>Complete coating</button>}
+                {j.status === "completed" && j.quotation_id && <button className="rounded border p-2" onClick={() => void action(`/api/v1/finance/invoices/from-quotation/${j.quotation_id}`, {})}>Create draft invoice</button>}
+              </div>
               {j.quotation_id && (
                 <div className="text-slate-600">Photographs on the quotation: {j.photo_count ?? 0}</div>
               )}
