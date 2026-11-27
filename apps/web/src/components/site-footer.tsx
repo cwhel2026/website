@@ -79,8 +79,8 @@ export function SiteFooter() {
       </div>
       <div className="border-t border-white/10">
         <p className="site-container py-5 text-xs leading-relaxed text-white/75">
-          © {year} {publicBrand.legalName}. Photographs marked as reference or illustrative are not completed
-          SurfaceCoat projects. We do not publish reviews, accreditations or project history we cannot verify.
+          © {year} {publicBrand.legalName}. We do not publish reviews, accreditations or a project history we cannot
+          verify.
         </p>
       </div>
     </footer>

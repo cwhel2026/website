@@ -33,8 +33,7 @@ export function ServicePage({
           <figure>
             <StockImage asset={media} aspect="aspect-[21/9]" sizes="(max-width: 1152px) 100vw, 1152px" />
             <figcaption className="mt-2 text-xs leading-relaxed text-brand-ink/60">
-              {media.caption ??
-                `Licensed reference photograph (${media.credit}). Not a completed SurfaceCoat project.`}
+              {media.caption ?? media.alt}
             </figcaption>
           </figure>
         ) : (

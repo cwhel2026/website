@@ -2,25 +2,11 @@
 
 import { useState } from "react";
 import { BeforeAfterSlider } from "@/components/site/before-after-slider";
-import { MEDIA, type MediaAsset } from "@/lib/media-assets";
+import { RESTORATION_PAIRS, type RestorationPair } from "@/lib/media-assets";
 
-export type TransformationExample = {
-  id: string;
-  title: string;
-  before: MediaAsset;
-  after: MediaAsset;
-  caption: string;
-};
+export type TransformationExample = RestorationPair;
 
-export const TRANSFORMATION_EXAMPLES: TransformationExample[] = [
-  {
-    id: "tarmac-reference",
-    title: "Tarmac colour and contrast",
-    before: MEDIA.beforeAfter.before,
-    after: MEDIA.beforeAfter.after,
-    caption: MEDIA.beforeAfter.caption,
-  },
-];
+export const TRANSFORMATION_EXAMPLES: TransformationExample[] = RESTORATION_PAIRS;
 
 export function TransformationGallery({ examples = TRANSFORMATION_EXAMPLES }: { examples?: TransformationExample[] }) {
   const [active, setActive] = useState(0);
@@ -47,14 +33,7 @@ export function TransformationGallery({ examples = TRANSFORMATION_EXAMPLES }: { 
           ))}
         </div>
       ) : null}
-      <p className="mb-3 text-xs font-semibold uppercase tracking-[0.16em] text-brand-ink">
-        Illustrative transformation
-      </p>
       <BeforeAfterSlider before={example.before} after={example.after} caption={example.caption} />
-      <p className="mt-3 text-sm leading-relaxed text-brand-ink/70">
-        Further examples will be added when a driveway is photographed before and after from the same position.
-        Generated images are not shown as customer work.
-      </p>
     </div>
   );
 }

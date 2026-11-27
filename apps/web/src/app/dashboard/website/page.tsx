@@ -3,10 +3,10 @@
 import Link from "next/link";
 
 const REQUIRED_ASSETS = [
-  { id: "hero-home", detail: "Homepage hero (21:9, ≥1600px wide)", status: "Geograph reference (CC BY-SA) — WebP/AVIF" },
-  { id: "before-after-pair", detail: "Verified before/after pair with customer consent", status: "Same-frame illustrative pair until owned project" },
-  { id: "per-service", detail: "One hero image per service slug in catalogue", status: "4/5 verified — imprinted concrete pending" },
-  { id: "regional", detail: "Optional imagery for /areas pages", status: "Text-only (no unrelated stock)" },
+  { id: "hero-home", detail: "Homepage hero", status: "Tarmac restoration photograph — WebP/AVIF" },
+  { id: "before-after-pair", detail: "Before and after pairs on the public site", status: "Seven restoration pairs" },
+  { id: "per-service", detail: "One photograph per service", status: "Tarmac, block paving, imprinted concrete, repairs, commercial" },
+  { id: "regional", detail: "Optional imagery for /areas pages", status: "Text-only" },
 ];
 
 export default function WebsiteDashboardPage() {
@@ -15,8 +15,8 @@ export default function WebsiteDashboardPage() {
       <h1 className="text-2xl font-semibold text-asphalt">Website &amp; marketing</h1>
         <p className="mt-2 text-sm text-asphalt/70">
         Public imagery is configured in <code className="text-xs">apps/web/src/lib/media-assets.ts</code> with
-        committed files under <code className="text-xs">apps/web/public/media/approved/</code>. Reference photos are
-        labelled on the live site and must not be presented as completed projects. Pre-launch mode is on unless{" "}
+        committed files under <code className="text-xs">apps/web/public/media/approved/</code>. Captions name the
+        service. They do not name a customer or a town. Pre-launch mode is on unless{" "}
         <code className="text-xs">NEXT_PUBLIC_PRELAUNCH</code> is <code className="text-xs">false</code>. Turning it
         off hides the March 2027 notice. It does not confirm bookings by itself.
       </p>
@@ -44,7 +44,7 @@ export default function WebsiteDashboardPage() {
       </section>
 
       <dl className="mt-8 grid gap-4 text-sm md:grid-cols-2">
-        <Item title="Live public site" detail="Verified reference photography, quote funnel (provisional + submit)" status="Implemented — verify on Railway" />
+        <Item title="Live public site" detail="Restoration photographs, quote funnel (provisional + submit)" status="Implemented — verify on Railway" />
         <Item title="Quotation funnel" detail="No CRM records until customer submit" status="Implemented" />
         <Item title="Media library" detail="Manifest + dashboard checklist" status="Scaffolded" />
         <Item title="Landing page builder" detail="Dashboard editor + approval queue" status="Not started" />

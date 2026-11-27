@@ -47,7 +47,7 @@ export default function CommercialPage() {
         <figure>
           <StockImage asset={MEDIA.services["commercial-car-parks"]} aspect="aspect-[21/9]" sizes="100vw" />
           <figcaption className="mt-2 text-xs text-brand-ink/60">
-            Licensed UK reference photograph. Not a completed SurfaceCoat project.
+            {MEDIA.services["commercial-car-parks"].caption}
           </figcaption>
         </figure>
 

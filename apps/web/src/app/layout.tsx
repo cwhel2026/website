@@ -35,8 +35,8 @@ export const metadata: Metadata = {
     siteName: publicBrand.legalName,
     images: [
       {
-        url: "/media/approved/hero-home.webp",
-        alt: "UK residential tarmac driveway used as a reference photograph",
+        url: "/media/approved/tarmac-approach-after.webp",
+        alt: "Restored black tarmac driveway in front of a house",
       },
     ],
   },

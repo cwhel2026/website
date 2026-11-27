@@ -1,74 +1,60 @@
 {
-  "version": 2,
-  "policy": "Only verified, service-accurate UK reference photography. No hotlinked stock URLs.",
-  "pending": [
-    {
-      "serviceSlug": "imprinted-concrete",
-      "reason": "No verified UK imprinted/pattern-imprinted concrete driveway reference approved for the public site yet."
-    }
-  ],
+  "version": 3,
+  "policy": "Restoration photographs supplied for the public site. Captions name the service. They do not name a customer.",
+  "pending": [],
   "assets": [
     {
-      "id": "hero-home",
-      "paths": { "webp": "/media/approved/hero-home.webp", "avif": "/media/approved/hero-home.avif" },
-      "subject": "UK residential tarmac driveway",
-      "credit": "Phil Catterall",
-      "license": "CC BY-SA 2.0",
-      "source": "https://www.geograph.org.uk/photo/409433",
-      "verified": true
+      "id": "tarmac-drive",
+      "service": "tarmac restoration",
+      "before": "/media/approved/tarmac-drive-before.webp",
+      "after": "/media/approved/tarmac-drive-after.webp"
     },
     {
-      "id": "ba-before",
-      "paths": { "webp": "/media/approved/ba-before.webp", "avif": "/media/approved/ba-before.avif" },
-      "subject": "Cracked UK residential tarmac (before reference)",
-      "credit": "Simon Carey",
-      "license": "CC BY-SA 2.0",
-      "source": "https://www.geograph.org.uk/photo/276811",
-      "verified": true
+      "id": "imprinted-patio",
+      "service": "pattern-imprinted concrete restoration",
+      "before": "/media/approved/imprinted-patio-before.webp",
+      "after": "/media/approved/imprinted-patio-after.webp"
     },
     {
-      "id": "ba-after",
-      "paths": { "webp": "/media/approved/ba-after.webp", "avif": "/media/approved/ba-after.avif" },
-      "subject": "Illustrative refresh — derivative of ba-before",
-      "credit": "Derivative treatment; original Simon Carey / Geograph 276811",
-      "license": "CC BY-SA 2.0",
-      "illustrative": true,
-      "verified": true
+      "id": "block-herringbone",
+      "service": "block paving restoration",
+      "before": "/media/approved/block-herringbone-before.webp",
+      "after": "/media/approved/block-herringbone-after.webp"
     },
     {
-      "id": "tarmac-surface",
-      "paths": { "webp": "/media/approved/tarmac-surface.webp", "avif": "/media/approved/tarmac-surface.avif" },
-      "credit": "Phil Catterall",
-      "license": "CC BY-SA 2.0",
-      "source": "https://www.geograph.org.uk/photo/409433",
-      "verified": true
+      "id": "car-park",
+      "service": "tarmac restoration",
+      "before": "/media/approved/car-park-before.webp",
+      "after": "/media/approved/car-park-after.webp"
     },
     {
-      "id": "block-paving",
-      "paths": { "webp": "/media/approved/block-paving.webp", "avif": "/media/approved/block-paving.avif" },
-      "credit": "Robin Stott",
-      "license": "CC BY-SA 2.0",
-      "source": "https://www.geograph.org.uk/photo/4239736",
-      "verified": true
+      "id": "imprinted-drive",
+      "service": "pattern-imprinted concrete restoration",
+      "before": "/media/approved/imprinted-drive-before.webp",
+      "after": "/media/approved/imprinted-drive-after.webp"
     },
     {
-      "id": "tarmac-wear",
-      "paths": { "webp": "/media/approved/tarmac-wear.webp", "avif": "/media/approved/tarmac-wear.avif" },
-      "credit": "Maigheach-gheal",
-      "license": "CC BY-SA 2.0",
-      "source": "https://www.geograph.org.uk/photo/2435499",
-      "verified": true
+      "id": "tarmac-approach",
+      "service": "tarmac restoration",
+      "before": "/media/approved/tarmac-approach-before.webp",
+      "after": "/media/approved/tarmac-approach-after.webp",
+      "alsoUsedAs": "homepage hero"
     },
     {
-      "id": "commercial-lot",
-      "paths": { "webp": "/media/approved/commercial-lot.webp", "avif": "/media/approved/commercial-lot.avif" },
-      "credit": "Snowmanradio",
-      "license": "CC BY-SA 3.0",
-      "source": "https://www.geograph.org.uk/photo/610171",
-      "verified": true
+      "id": "block-seal",
+      "service": "block paving wash and wet-look seal",
+      "before": "/media/approved/block-seal-before.webp",
+      "after": "/media/approved/block-seal-after.webp"
     }
   ],
   "retired": [
+    "/media/approved/hero-home.webp",
+    "/media/approved/ba-before.webp",
+    "/media/approved/ba-after.webp",
+    "/media/approved/tarmac-surface.webp",
+    "/media/approved/block-paving.webp",
+    "/media/approved/tarmac-wear.webp",
+    "/media/approved/commercial-lot.webp",
     "/media/stock/hero-home.jpg",
     "/media/stock/tarmac-worn.jpg",
     "/media/stock/driveway-refreshed.jpg",
