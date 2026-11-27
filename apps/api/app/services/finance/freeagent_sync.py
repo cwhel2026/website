@@ -48,6 +48,7 @@ async def sync_bank_transactions_from_freeagent(db: AsyncSession) -> dict:
     if row is None:
         return {"fetched": 0, "imported": 0, "message": "Not connected"}
 
+    await db.refresh(row, with_for_update=True)
     dedupe_key = f"freeagent-bank:{datetime.now(UTC).date().isoformat()}"
     existing_run = await db.execute(
         select(FinanceSyncRun).where(
@@ -85,6 +86,7 @@ async def sync_bank_transactions_from_freeagent(db: AsyncSession) -> dict:
     fetched = 0
     imported = 0
     skipped = 0
+    incomplete = False
 
     for account in accounts:
         account_url = account.get("url") or ""
@@ -97,6 +99,7 @@ async def sync_bank_transactions_from_freeagent(db: AsyncSession) -> dict:
                     settings, token, account_url, page=page, per_page=50
                 )
             except httpx.HTTPError:
+                incomplete = True
                 break
             fetched += len(txns)
             for item in txns:
@@ -129,14 +132,17 @@ async def sync_bank_transactions_from_freeagent(db: AsyncSession) -> dict:
             if len(txns) < 50:
                 break
             page += 1
+        if page > 20:
+            incomplete = True
 
     run.fetched_count = fetched
     run.applied_count = imported
     run.skipped_duplicates = skipped
-    run.status = FinanceSyncStatus.SUCCEEDED if imported or fetched else FinanceSyncStatus.PARTIAL
+    run.status = FinanceSyncStatus.PARTIAL if incomplete else FinanceSyncStatus.SUCCEEDED
     run.finished_at = datetime.now(UTC)
     run.detail_json = json.dumps({"accounts": len(accounts)})
-    row.last_sync_at = datetime.now(UTC)
+    if not incomplete:
+        row.last_sync_at = datetime.now(UTC)
     await db.flush()
 
     from app.services.finance.bookkeeping.review_queue import categorize_uncategorized_transactions
@@ -146,10 +152,12 @@ async def sync_bank_transactions_from_freeagent(db: AsyncSession) -> dict:
     try:
         from app.services.marketing.growth_fund import process_revenue_allocations
 
-        growth = await process_revenue_allocations(db, notify=True)
+        async with db.begin_nested():
+            growth = await process_revenue_allocations(db, notify=True)
     except Exception:
         growth = {"processed": 0, "message": "growth fund skipped"}
     return {
+        "complete": not incomplete,
         "fetched": fetched,
         "imported": imported,
         "skipped_duplicates": skipped,
