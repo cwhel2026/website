@@ -6,7 +6,7 @@ from decimal import Decimal
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.marketing import AdPlatform, RegionalCampaign
+from app.models.marketing import AdPlatform, RegionalCampaign, CampaignStatus
 from app.models.marketing_ops import MarketingBudgetPolicy
 
 
@@ -58,7 +58,7 @@ async def validate_campaign_spend(
             "allowed": False,
             "reason": "Live paid spend is not approved — enable in Marketing → Budget controls.",
         }
-    if daily_budget_gbp <= 0:
+    if not daily_budget_gbp.is_finite() or daily_budget_gbp <= 0:
         return {"allowed": False, "reason": "Budget must be greater than zero."}
     if policy.daily_limit_gbp > 0 and daily_budget_gbp > policy.daily_limit_gbp:
         return {"allowed": False, "reason": "Exceeds overall daily limit."}
@@ -72,12 +72,22 @@ async def validate_campaign_spend(
     if policy.daily_limit_gbp > 0 and today + daily_budget_gbp > policy.daily_limit_gbp:
         return {"allowed": False, "reason": f"Would exceed today's committed spend (£{today})."}
     if not simulation_only:
+        active = (await db.execute(select(RegionalCampaign).where(RegionalCampaign.simulation_only.is_(False), RegionalCampaign.status.in_((CampaignStatus.LIVE, CampaignStatus.APPROVED, CampaignStatus.PAUSED))))).scalars().all()
+        combined = daily_budget_gbp + sum((Decimal(str(c.daily_budget_gbp or 0)) for c in active), Decimal('0'))
+        platform_combined = daily_budget_gbp + sum((Decimal(str(c.daily_budget_gbp or 0)) for c in active if c.platform == platform), Decimal('0'))
+        platform_limit = policy.meta_daily_limit_gbp if platform == AdPlatform.META else policy.google_daily_limit_gbp
+        if policy.daily_limit_gbp > 0 and combined > policy.daily_limit_gbp:
+            return {"allowed": False, "reason": "Combined campaign daily budget exceeds approved limit."}
+        if platform_limit > 0 and platform_combined > platform_limit:
+            return {"allowed": False, "reason": "Combined platform budget exceeds approved limit."}
+        if policy.monthly_limit_gbp > 0 and combined * 31 > policy.monthly_limit_gbp:
+            return {"allowed": False, "reason": "Combined projected monthly budget exceeds approved limit."}
         try:
             from app.services.marketing.growth_fund import fund_summary
 
             fund = await fund_summary(db)
             weekly_cap = policy.weekly_limit_gbp or Decimal("150")
-            if daily_budget_gbp * 7 > weekly_cap:
+            if combined * 7 > weekly_cap:
                 return {
                     "allowed": False,
                     "reason": f"Exceeds approved weekly advertising limit (£{weekly_cap}). "
@@ -90,7 +100,7 @@ async def validate_campaign_spend(
                     f"(available £{fund['available_uncommitted_gbp']:.2f}).",
                 }
         except Exception:
-            pass
+            return {"allowed": False, "reason": "Marketing reserve verification unavailable; live spend blocked."}
     return {"allowed": True, "policy": _policy_dict(policy)}
 
 
