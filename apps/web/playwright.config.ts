@@ -15,8 +15,13 @@ export default defineConfig({
     trace: "on-first-retry",
   },
   projects: [
-    { name: "mobile", testIgnore: /authenticated\//, use: { ...devices["iPhone 13"] } },
-    { name: "desktop", testIgnore: /authenticated\//, use: { ...devices["Desktop Chrome"] } },
+    { name: "mobile", testIgnore: /authenticated\/|public-quote-real/, use: { ...devices["iPhone 13"] } },
+    { name: "desktop", testIgnore: /authenticated\/|public-quote-real/, use: { ...devices["Desktop Chrome"] } },
+    {
+      name: "public-quote-mobile",
+      testMatch: /public-quote-real\.spec\.ts/,
+      use: { ...devices["iPhone 13"] },
+    },
     ...(authenticated
       ? [
           { name: "auth-setup", testMatch: /authenticated\/auth\.setup\.ts/ },

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { publicBrand } from "@/lib/public-brand";
 
 export function SiteFooter() {
   const year = new Date().getFullYear();
@@ -6,17 +7,17 @@ export function SiteFooter() {
     <footer className="border-t border-asphalt-900/10 bg-asphalt text-stone-wash">
       <div className="site-container grid gap-10 py-14 md:grid-cols-3">
         <div>
-          <p className="font-display text-lg font-semibold">Revive My Drive</p>
+          <p className="font-display text-lg font-semibold">{publicBrand.tradingName}</p>
           <p className="mt-3 max-w-xs text-sm leading-relaxed text-stone-wash/75">
-            Professional exterior surface restoration for homeowners and businesses across Lancashire,
-            Merseyside and Greater Manchester. Headquarters in Burscough.
+            Professional exterior surface restoration for homeowners and businesses across{" "}
+            {publicBrand.coverageAreas}.
           </p>
         </div>
         <FooterExplore />
         <FooterLegal />
       </div>
       <p className="border-t border-white/10 py-6 text-center text-xs text-stone-wash/50">
-        © {year} Revive My Drive. All rights reserved.
+        © {year} {publicBrand.legalName}. All rights reserved.
       </p>
     </footer>
   );

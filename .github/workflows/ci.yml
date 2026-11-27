@@ -69,7 +69,7 @@ jobs:
         run: python -m app.schema.cli upgrade
       - name: Integration smoke
         working-directory: apps/api
-        run: pytest -q tests/test_smoke_integration.py tests/test_auth_login.py tests/test_session_security_integration.py tests/test_worker_guard_integration.py tests/test_campaign_approval_integration.py
+        run: pytest -q tests/test_smoke_integration.py tests/test_auth_login.py tests/test_session_security_integration.py tests/test_worker_guard_integration.py tests/test_campaign_approval_integration.py tests/test_quotation_provisional_integration.py
       - name: Worker smoke (real Celery worker + beat writes a heartbeat)
         working-directory: apps/api
         run: |
@@ -175,7 +175,7 @@ jobs:
           E2E_EMAIL: e2e-auditor@example.com
           E2E_PASSWORD: ci-only-auditor-password-0123456789
           E2E_EXPECT_ROLE: AUDITOR
-        run: npx playwright test --project=authenticated-mobile --project=authenticated-desktop --reporter=list
+        run: npx playwright test --project=public-quote-mobile --project=authenticated-mobile --project=authenticated-desktop --reporter=list
       - name: Server logs
         if: failure()
         run: tail -100 /tmp/api.log; tail -50 /tmp/web.log

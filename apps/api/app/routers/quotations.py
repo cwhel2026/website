@@ -40,17 +40,20 @@ async def calculate_provisional_quotation(
 ) -> ProvisionalQuotationOut:
     """Anonymous pricing only — does not create customers, properties or quotations."""
     service = await load_active_service(db, body.service_slug)
-    pricing, fingerprint, supported, unsupported_reason, territory = await price_quotation_inputs(
-        db,
-        service=service,
-        surface_type=body.surface_type,
-        surface_condition=body.surface_condition,
-        sections_raw=body.sections,
-        requires_washing=body.requires_washing,
-        customer_washed_already=body.customer_washed_already,
-        postcode=body.postcode,
-        town=body.town,
-    )
+    try:
+        pricing, fingerprint, supported, unsupported_reason, territory = await price_quotation_inputs(
+            db,
+            service=service,
+            surface_type=body.surface_type,
+            surface_condition=body.surface_condition,
+            sections_raw=body.sections,
+            requires_washing=body.requires_washing,
+            customer_washed_already=body.customer_washed_already,
+            postcode=body.postcode,
+            town=body.town,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     out = ProvisionalQuotationOut(
         input_fingerprint=fingerprint,
         priced_at=priced_at_now(),
