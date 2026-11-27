@@ -12,6 +12,7 @@ from app.services.notifications.outbox import deliver_telegram_outbox_item
 
 class _Item:
     id = "outbox-1"
+    category = "general"
     status = OutboxStatus.PENDING
     last_error = None
     attempts = 0
@@ -66,3 +67,29 @@ async def test_partial_delivery_retries_only_failed_recipient(monkeypatch):
     assert await mod.deliver_telegram_outbox_item(db, item)
     assert item.status == OutboxStatus.DELIVERED
     assert [call.kwargs["chat_id"] for call in send.await_args_list] == [1, 2, 2]
+
+
+@pytest.mark.asyncio
+async def test_private_reply_delivery_and_revocation(monkeypatch):
+    from app.services.notifications import outbox as mod
+    from app.services.telegram.client import TelegramApiError
+
+    item = _Item()
+    item.category = "assistant_reply"
+    item.title = ""
+    item.payload_json = '{"reply_chat_id": 1}'
+    db = SimpleNamespace(add=lambda *_: None, flush=AsyncMock(), refresh=AsyncMock())
+    cfg = SimpleNamespace(telegram_bot_token="test", telegram_alert_chat_ids=[1, 2], telegram_admin_id_list=[1, 2])
+    monkeypatch.setattr(mod, "get_settings", lambda: cfg)
+    send = AsyncMock(side_effect=[TelegramApiError("failure"), {"message_id": 3}])
+    monkeypatch.setattr(mod, "send_message", send)
+    assert not await mod.deliver_telegram_outbox_item(db, item)
+    assert await mod.deliver_telegram_outbox_item(db, item)
+    assert [call.kwargs["chat_id"] for call in send.await_args_list] == [1, 1]
+    revoked = _Item()
+    revoked.category = "assistant_reply"
+    revoked.payload_json = '{"reply_chat_id": 1}'
+    cfg.telegram_admin_id_list = [2]
+    assert not await mod.deliver_telegram_outbox_item(db, revoked)
+    assert revoked.status == OutboxStatus.CANCELLED
+    assert send.await_count == 2
