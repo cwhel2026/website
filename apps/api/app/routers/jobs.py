@@ -36,18 +36,25 @@ from app.services.scheduling_engine import (
     job_from_quotation,
     propose_two_stage_slots,
 )
+from app.services.quote_photos import photo_counts_for_quotations
 from app.services.two_stage_workflow import assess_seven_day_risk, sync_job_status_from_appointments
 
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
 
 
-def _job_out(job: Job) -> JobOut:
+def _job_out(job: Job, photo_count: int = 0) -> JobOut:
     risk = assess_seven_day_risk(job)
     data = JobOut.model_validate(job)
     data.seven_day_at_risk = risk.at_risk
     data.seven_day_message = risk.message
+    data.photo_count = photo_count
     return data
+
+
+async def _jobs_out(db: AsyncSession, jobs: list[Job]) -> list[JobOut]:
+    counts = await photo_counts_for_quotations(db, [job.quotation_id for job in jobs if job.quotation_id])
+    return [_job_out(job, counts.get(job.quotation_id, 0) if job.quotation_id else 0) for job in jobs]
 
 
 @router.get("", response_model=list[JobOut])
@@ -58,7 +65,7 @@ async def list_jobs(
     result = await db.execute(
         select(Job).options(selectinload(Job.appointments)).order_by(Job.created_at.desc()).limit(200)
     )
-    return [_job_out(j) for j in result.scalars().all()]
+    return await _jobs_out(db, list(result.scalars().all()))
 
 
 @router.get("/wash-pending-coat", response_model=list[JobOut])
@@ -76,7 +83,7 @@ async def wash_pending_coat(
         )
         .order_by(Job.seven_day_target_date.asc().nulls_last())
     )
-    return [_job_out(j) for j in result.scalars().all()]
+    return await _jobs_out(db, list(result.scalars().all()))
 
 
 @router.get("/field/today", response_model=list[FieldJobOut])
@@ -138,7 +145,7 @@ async def create_job_from_quotation(
     job = await job_from_quotation(db, quotation, svc)
     await db.commit()
     await db.refresh(job, ["appointments"])
-    return _job_out(job)
+    return (await _jobs_out(db, [job]))[0]
 
 
 @router.get("/{job_id}", response_model=JobOut)
@@ -153,7 +160,7 @@ async def get_job(
     job = result.scalar_one_or_none()
     if job is None:
         raise HTTPException(404, "Job not found")
-    return _job_out(job)
+    return (await _jobs_out(db, [job]))[0]
 
 
 @router.get("/{job_id}/propose-schedule", response_model=ProposeScheduleOut)
@@ -258,7 +265,7 @@ async def add_appointment(
         job.status = JobStatus.PREPARATION_SCHEDULED
     await db.commit()
     await db.refresh(job, ["appointments"])
-    return _job_out(job)
+    return (await _jobs_out(db, [job]))[0]
 
 
 @router.post("/{job_id}/complete-preparation", response_model=JobOut)
@@ -292,4 +299,4 @@ async def complete_preparation(
     )
     await db.commit()
     await db.refresh(job, ["appointments"])
-    return _job_out(job)
+    return (await _jobs_out(db, [job]))[0]

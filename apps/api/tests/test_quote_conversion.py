@@ -36,6 +36,13 @@ def test_booking_copy_does_not_confirm_an_appointment():
     text = customer_next_steps(_enquiry(intention="ready_to_book"), [], email="ada@example.co.uk")
     assert "not a confirmed booking" in text
     assert "earliest visit" in text
+    assert "inspection visit" in text
+
+
+def test_estimate_without_photos_skips_photo_warnings():
+    text = customer_next_steps(_enquiry(), [], email="ada@example.co.uk")
+    assert "photograph" not in text.lower()
+    assert "inspection visit" not in text
 
 
 def test_callback_copy_names_the_requested_time():

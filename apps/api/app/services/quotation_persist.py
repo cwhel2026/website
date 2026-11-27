@@ -24,6 +24,7 @@ from app.services.geocode import geocode_postcode
 from app.schemas.quotation import InstantQuotationRequest, QuotationOut, QuotationSectionIn
 from app.services.approval_service import ensure_quotation_approval
 from app.services.quote_conversion import apply_customer_intention
+from app.services.quote_photos import link_photo_set
 from app.services.service_aliases import resolve_service_slug
 from app.services.quotation_workflow import (
     PROVISIONAL_DISCLAIMER,
@@ -55,7 +56,7 @@ async def persist_submitted_quotation(
     *,
     input_fingerprint: str,
     idempotency_key: str | None,
-) -> tuple[QuotationOut, Enquiry | None, bool]:
+) -> tuple[QuotationOut, Enquiry | None, bool, str]:
     if idempotency_key:
         existing = await db.execute(
             select(QuotationSubmissionIdempotency).where(
@@ -85,9 +86,19 @@ async def persist_submitted_quotation(
                 if enquiry is not None:
                     apply_customer_intention(enquiry, body)
                     enquiry.quotation_id = q.id
-                    await db.commit()
+                token = await link_photo_set(
+                    db,
+                    token=body.photo_token,
+                    quotation_id=q.id,
+                    enquiry_id=enquiry.id if enquiry is not None else q.enquiry_id,
+                    customer_id=q.customer_id,
+                    property_id=q.property_id,
+                    note=body.photo_note,
+                )
+                await db.commit()
+                if enquiry is not None:
                     await db.refresh(enquiry)
-                return out, enquiry, False
+                return out, enquiry, False, token
 
     service = await load_active_service(db, body.service_slug)
     pricing, fingerprint, supported, unsupported_reason, territory = await price_quotation_inputs(
@@ -218,6 +229,15 @@ async def persist_submitted_quotation(
             )
         )
     await ensure_quotation_approval(db, quotation)
+    token = await link_photo_set(
+        db,
+        token=body.photo_token,
+        quotation_id=quotation.id,
+        enquiry_id=enquiry.id,
+        customer_id=customer.id,
+        property_id=prop.id,
+        note=body.photo_note,
+    )
     await db.commit()
 
     result = await db.execute(
@@ -229,4 +249,4 @@ async def persist_submitted_quotation(
     out = QuotationOut.model_validate(q)
     out.breakdown = pricing.breakdown
     await db.refresh(enquiry)
-    return out, enquiry, True
+    return out, enquiry, True, token

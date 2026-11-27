@@ -1,13 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { ApiError } from "@/lib/api";
-import { apiGet, apiPost } from "@/lib/api";
+import { apiDelete, apiGet, apiPost, resolveApiUrl } from "@/lib/api";
 import { trackFunnel, getStoredUtm } from "@/lib/analytics";
 
 const STORAGE_KEY = "rmd_quote_draft";
-const STEPS = ["Location", "Surface", "Measurements", "Condition", "Preparation", "Quote", "Contact"];
+const STEPS = ["Location", "Surface", "Measurements", "Condition", "Preparation", "Photos", "Quote", "Contact"];
 
 type Service = { slug: string; name: string };
 type Section = { label: string; length_m: string; width_m: string; area_sqm: string };
@@ -33,7 +33,11 @@ type QuoteState = {
   consent_service_messages: boolean;
   intention: "" | "ready_to_book" | "callback_requested" | "estimate_requested";
   callback_preferred_time: string;
+  photoToken: string;
+  photoNote: string;
 };
+
+type LocalPhoto = { id: string; url: string };
 
 type PackageItem = { title: string; detail: string };
 
@@ -62,6 +66,8 @@ type SavedQuotation = {
   email_status: string;
   next_steps: string;
   suggested_windows: SuggestedWindow[];
+  photo_later_path?: string;
+  photos_attached?: boolean;
 };
 
 const SURFACE_TYPES = [
@@ -101,6 +107,8 @@ function defaultState(postcode = ""): QuoteState {
     consent_service_messages: true,
     intention: "",
     callback_preferred_time: "",
+    photoToken: "",
+    photoNote: "",
   };
 }
 
@@ -116,6 +124,8 @@ export function QuoteWizard() {
   const [provisional, setProvisional] = useState<ProvisionalQuotation | null>(null);
   const [saved, setSaved] = useState<SavedQuotation | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [photos, setPhotos] = useState<LocalPhoto[]>([]);
+  const [uploading, setUploading] = useState(false);
 
   const pricingInputKey = useMemo(
     () =>
@@ -295,6 +305,8 @@ export function QuoteWizard() {
       idempotency_key: idempotencyKey,
       source: utm.source ?? "website",
       campaign: utm.campaign ?? null,
+      photo_token: state.photoToken || null,
+      photo_note: state.photoNote.trim() || null,
     };
     try {
       const data = await apiPost<SavedQuotation>("/api/v1/quotations/submit", payload);
@@ -314,7 +326,7 @@ export function QuoteWizard() {
       setError("Enter at least one measurement section before continuing.");
       return;
     }
-    if (step === 5 && !provisional) void calculateProvisional();
+    if (step === 6 && !provisional) void calculateProvisional();
     else setStep((s) => Math.min(s + 1, STEPS.length - 1));
   }
 
@@ -325,7 +337,74 @@ export function QuoteWizard() {
   function chooseAction(intention: QuoteState["intention"]) {
     patch({ intention });
     setError(null);
+    setStep(7);
+  }
+
+  async function showEstimate() {
+    setError(null);
     setStep(6);
+    await calculateProvisional();
+  }
+
+  async function uploadFiles(fileList: FileList | null, replaceId?: string) {
+    if (!fileList || fileList.length === 0) return;
+    setUploading(true);
+    setError(null);
+    try {
+      const form = new FormData();
+      if (state.photoToken) form.append("token", state.photoToken);
+      if (state.photoNote.trim()) form.append("note", state.photoNote.trim());
+      if (replaceId) form.append("replace_id", replaceId);
+      for (const file of Array.from(fileList)) {
+        form.append("files", await compressPhoto(file), "driveway.jpg");
+      }
+      const res = await fetch(`${resolveApiUrl()}/api/v1/quotation-photos`, {
+        method: "POST",
+        body: form,
+        credentials: "same-origin",
+      });
+      if (!res.ok) {
+        const detail = await res.text();
+        let message = "Could not upload the photograph";
+        try {
+          const parsed = JSON.parse(detail) as { detail?: string };
+          if (typeof parsed.detail === "string") message = parsed.detail;
+        } catch {
+          if (detail) message = detail;
+        }
+        throw new Error(message);
+      }
+      const data = (await res.json()) as { token: string; photos: { id: string }[] };
+      patch({ photoToken: data.token });
+      setPhotos(
+        data.photos.map((photo) => ({
+          id: photo.id,
+          url: `/api/v1/quotation-photos/${data.token}/${photo.id}`,
+        })),
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not upload the photograph");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function removePhoto(photoId: string) {
+    if (!state.photoToken) return;
+    setError(null);
+    try {
+      const data = await apiDelete<{ photos: { id: string }[] }>(
+        `/api/v1/quotation-photos/${state.photoToken}/${photoId}`,
+      );
+      setPhotos(
+        data.photos.map((photo) => ({
+          id: photo.id,
+          url: `/api/v1/quotation-photos/${state.photoToken}/${photo.id}`,
+        })),
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not remove the photograph");
+    }
   }
 
   return (
@@ -337,7 +416,7 @@ export function QuoteWizard() {
         </h1>
 
         <ol
-          className="mt-8 grid grid-cols-4 gap-2 text-[10px] sm:grid-cols-7 sm:text-xs"
+          className="mt-8 grid grid-cols-4 gap-2 text-[10px] sm:grid-cols-8 sm:text-xs"
           aria-label="Progress"
         >
           {STEPS.map((label, i) => (
@@ -369,6 +448,19 @@ export function QuoteWizard() {
           {step === 3 && <StepCondition state={state} patch={patch} />}
           {step === 4 && <StepPrep state={state} patch={patch} />}
           {step === 5 && (
+            <StepPhotos
+              note={state.photoNote}
+              photos={photos}
+              uploading={uploading}
+              error={error}
+              onNote={(photoNote) => patch({ photoNote })}
+              onUpload={(files, replaceId) => void uploadFiles(files, replaceId)}
+              onRemove={(photoId) => void removePhoto(photoId)}
+              onSkip={() => void showEstimate()}
+              onEstimate={() => void showEstimate()}
+            />
+          )}
+          {step === 6 && (
             <StepQuote
               result={provisional}
               loading={loading}
@@ -377,7 +469,7 @@ export function QuoteWizard() {
               onChoose={chooseAction}
             />
           )}
-          {step === 6 && (
+          {step === 7 && (
             <StepContact
               state={state}
               patch={patch}
@@ -393,14 +485,14 @@ export function QuoteWizard() {
             <button type="button" onClick={back} disabled={step === 0} className="btn-secondary disabled:opacity-40">
               Back
             </button>
-            {step < 6 && !(step === 5 && provisional) && (
+            {step < 7 && step !== 5 && !(step === 6 && provisional) && (
               <button
                 type="button"
                 onClick={next}
                 disabled={step === 0 && !state.postcode.trim()}
                 className="btn-primary"
               >
-                {step === 5 ? "Calculate estimate" : "Continue"}
+                {step === 6 ? "Calculate estimate" : "Continue"}
               </button>
             )}
           </div>
@@ -662,6 +754,148 @@ function StepPrep({
   );
 }
 
+async function compressPhoto(file: File): Promise<Blob> {
+  try {
+    const bitmap = await createImageBitmap(file);
+    const scale = Math.min(1, 1600 / Math.max(bitmap.width, bitmap.height));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+    const context = canvas.getContext("2d");
+    if (!context) return file;
+    context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.8));
+    return blob ?? file;
+  } catch {
+    return file;
+  }
+}
+
+function StepPhotos({
+  note,
+  photos,
+  uploading,
+  error,
+  onNote,
+  onUpload,
+  onRemove,
+  onSkip,
+  onEstimate,
+}: {
+  note: string;
+  photos: LocalPhoto[];
+  uploading: boolean;
+  error: string | null;
+  onNote: (value: string) => void;
+  onUpload: (files: FileList | null, replaceId?: string) => void;
+  onRemove: (photoId: string) => void;
+  onSkip: () => void;
+  onEstimate: () => void;
+}) {
+  const [open, setOpen] = useState(photos.length > 0);
+  const replaceRef = useRef<string | null>(null);
+  return (
+    <div className="text-[#1a1a1a]">
+      <h2 className="font-display text-xl font-semibold">Photographs</h2>
+      <p className="mt-3 text-sm leading-relaxed text-[#1a1a1a]/80">
+        If you have any cracks or areas that may need repairing, please include a close-up photograph. Minor wear
+        around edges is perfectly normal.
+      </p>
+      <div className="mt-6 flex flex-col gap-3">
+        <button
+          type="button"
+          className="w-full rounded-md border border-[#1a1a1a] bg-white px-6 py-4 text-base font-semibold"
+          onClick={() => setOpen(true)}
+        >
+          Upload driveway photos
+        </button>
+        <button
+          type="button"
+          className="w-full rounded-md bg-[#e0b323] px-6 py-4 text-base font-semibold text-[#1a1a1a]"
+          onClick={onSkip}
+        >
+          I just want an estimate
+        </button>
+      </div>
+      {open && (
+        <div className="mt-6">
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <label className="w-full rounded-md border border-[#1a1a1a] px-4 py-3 text-center text-sm font-semibold">
+              Take a photo
+              <input
+                type="file"
+                accept="image/*"
+                capture="environment"
+                className="sr-only"
+                data-testid="camera-input"
+                onChange={(event) => onUpload(event.target.files)}
+              />
+            </label>
+            <label className="w-full rounded-md border border-[#1a1a1a] px-4 py-3 text-center text-sm font-semibold">
+              Choose from gallery
+              <input
+                type="file"
+                accept="image/*"
+                multiple
+                className="sr-only"
+                data-testid="gallery-input"
+                onChange={(event) => {
+                  const replacing = replaceRef.current ?? undefined;
+                  replaceRef.current = null;
+                  onUpload(event.target.files, replacing);
+                  event.target.value = "";
+                }}
+              />
+            </label>
+          </div>
+          {photos.length > 0 && (
+            <ul className="mt-4 grid grid-cols-2 gap-3">
+              {photos.map((photo) => (
+                <li key={photo.id} className="rounded-md border border-stone-line p-2">
+                  <img src={photo.url} alt="Driveway photograph" className="h-28 w-full rounded object-cover" />
+                  <div className="mt-2 flex gap-2">
+                    <button type="button" className="text-sm underline" onClick={() => onRemove(photo.id)}>
+                      Remove photograph
+                    </button>
+                    <button
+                      type="button"
+                      className="text-sm underline"
+                      onClick={() => {
+                        replaceRef.current = photo.id;
+                        document.querySelector<HTMLInputElement>("[data-testid=gallery-input]")?.click();
+                      }}
+                    >
+                      Replace photograph
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+          <label className="mt-4 block text-sm font-medium">
+            Notes (optional)
+            <textarea
+              value={note}
+              onChange={(event) => onNote(event.target.value)}
+              rows={3}
+              className="mt-1 w-full rounded-md border border-stone-line px-4 py-3"
+            />
+          </label>
+          <button
+            type="button"
+            className="mt-4 w-full rounded-md bg-[#e0b323] px-6 py-4 text-base font-semibold text-[#1a1a1a] disabled:opacity-50"
+            disabled={uploading}
+            onClick={onEstimate}
+          >
+            {uploading ? "Uploading…" : "See my estimate"}
+          </button>
+        </div>
+      )}
+      {error && <p className="mt-4 text-sm text-red-700">{error}</p>}
+    </div>
+  );
+}
+
 function StepQuote({
   result,
   loading,
@@ -800,6 +1034,13 @@ function StepContact({
         )}
         {saved.appointment_confirmed === false && (
           <p className="mt-4 text-sm text-[#1a1a1a]/75">Your appointment is not confirmed yet.</p>
+        )}
+        {saved.photo_later_path && (
+          <p className="mt-4 text-sm">
+            <a href={saved.photo_later_path} className="underline">
+              Add or update photographs
+            </a>
+          </p>
         )}
       </div>
     );

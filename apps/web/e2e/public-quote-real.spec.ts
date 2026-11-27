@@ -34,7 +34,8 @@ test("complete provisional tarmac quote on mobile", async ({ page }) => {
   await page.getByRole("button", { name: "Continue" }).click();
   await page.getByRole("button", { name: "Continue" }).click();
 
-  await page.getByRole("button", { name: "Calculate estimate" }).click();
+  await expect(page.getByText("Minor wear around edges is perfectly normal.")).toBeVisible();
+  await page.getByRole("button", { name: "I just want an estimate" }).click();
 
   await expect(page.getByText(/Internal Server Error/i)).toHaveCount(0);
   await expect(page.getByText("Your estimated price")).toBeVisible({ timeout: 30_000 });
@@ -65,4 +66,49 @@ test("complete provisional tarmac quote on mobile", async ({ page }) => {
 
   const stored = await page.evaluate(() => sessionStorage.getItem("rmd_quote_draft"));
   expect(stored).toBeNull();
+  await expect(page.getByRole("link", { name: "Add or update photographs" })).toBeVisible();
+});
+
+test("upload a driveway photograph then still receive an estimate", async ({ page }) => {
+  await page.goto("/quote");
+  const essential = page.getByRole("button", { name: "Essential only" });
+  if (await essential.isVisible().catch(() => false)) {
+    await essential.click();
+  }
+
+  await page.getByLabel("Postcode").fill("L39 2YG");
+  await page.getByLabel("Town (optional)").fill("Ormskirk");
+  await page.getByRole("button", { name: "Check coverage" }).click();
+  await page.getByRole("button", { name: "Continue" }).click();
+  await page.getByRole("button", { name: "Continue" }).click();
+  await page.getByPlaceholder("Length (m)").first().fill("10");
+  await page.getByPlaceholder("Width (m)").first().fill("4");
+  await page.getByRole("button", { name: "Continue" }).click();
+  await page.getByRole("button", { name: "Continue" }).click();
+  await page.getByRole("button", { name: "Continue" }).click();
+
+  await page.getByRole("button", { name: "Upload driveway photos" }).click();
+  await page.getByTestId("gallery-input").setInputFiles("e2e/fixtures/driveway.jpg");
+  await expect(page.getByRole("img", { name: "Driveway photograph" })).toBeVisible();
+  await page.getByLabel("Notes (optional)").fill("Crack near the gate");
+  await page.getByRole("button", { name: "See my estimate" }).click();
+
+  await expect(page.getByText("Your estimated price")).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText(/£[0-9]/).first()).toBeVisible();
+  await expect(page.getByText(/inc\. VAT|Ex VAT|Travel|live pricing/i)).toHaveCount(0);
+
+  await page.getByRole("button", { name: "Email me my estimate" }).click();
+  await page.getByLabel("Your name").fill("Photo Customer");
+  await page.getByLabel("Email").fill("mobile.photo@example.co.uk");
+  await page.getByLabel("Property address").fill("2 Test Lane");
+  await page.getByRole("button", { name: "Email my estimate" }).click();
+
+  const confirmation = page.getByRole("heading", { name: "What happens next" });
+  const problem = page.locator("p.text-red-700");
+  await expect(confirmation.or(problem)).toBeVisible({ timeout: 30_000 });
+  if (await problem.isVisible()) {
+    throw new Error(await problem.innerText());
+  }
+  await expect(page.getByText(/do not change the price/i)).toBeVisible();
+  await expect(page.getByText(/not a confirmed booking/i)).toBeVisible();
 });

@@ -589,6 +589,31 @@ def marketing_capacity_snapshot(self) -> dict:
         session.close()
 
 
+@celery_app.task(name="rmd.purge_quote_photos", bind=True)
+def purge_quote_photos(self) -> dict:
+    session = SessionLocal()
+    run = start_run(session, "purge_quote_photos", dedupe_key=None, worker_id=_worker_id())
+    try:
+        from app.database import SessionLocal as AsyncSessionLocal
+        from app.services.quote_photos import purge_expired_quote_photos
+
+        async def _purge():
+            async with AsyncSessionLocal() as adb:
+                removed = await purge_expired_quote_photos(adb)
+                await adb.commit()
+                return removed
+
+        removed = asyncio.run(_purge())
+        detail = {"removed": removed}
+        finish_run(session, run, status=JobRunStatus.SUCCEEDED, detail=detail)
+        return detail
+    except Exception as exc:
+        finish_run(session, run, status=JobRunStatus.FAILED, error=str(exc))
+        raise
+    finally:
+        session.close()
+
+
 @celery_app.task(name="rmd.marketing_organic_sync", bind=True)
 def marketing_organic_sync(self) -> dict:
     session = SessionLocal()
