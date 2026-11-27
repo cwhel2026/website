@@ -50,3 +50,18 @@ class EnquiryOut(ORMModel):
     surface_type: SurfaceType | None
     message: str | None
     created_at: datetime
+    intention: str | None = None
+    priority: str = "normal"
+    quotation_id: UUID | None = None
+    callback_phone: str | None = None
+    callback_preferred_time: str | None = None
+    callback_status: str = "not_applicable"
+    callback_outcome: str | None = None
+    email_delivery: str = "not_requested"
+    utm_source: str | None = None
+    utm_campaign: str | None = None
+
+
+class CallbackOutcomeIn(BaseModel):
+    completed: bool
+    outcome: str = Field(min_length=2, max_length=500)

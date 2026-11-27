@@ -10,7 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.models.crm import Enquiry, PipelineStage
+from app.models.crm import Enquiry
 from app.models.quotation import (
     Quotation,
     QuotationCalculation,
@@ -23,6 +23,7 @@ from app.services.customer_records import ensure_property, upsert_customer
 from app.services.geocode import geocode_postcode
 from app.schemas.quotation import InstantQuotationRequest, QuotationOut, QuotationSectionIn
 from app.services.approval_service import ensure_quotation_approval
+from app.services.quote_conversion import apply_customer_intention
 from app.services.service_aliases import resolve_service_slug
 from app.services.quotation_workflow import (
     PROVISIONAL_DISCLAIMER,
@@ -54,7 +55,7 @@ async def persist_submitted_quotation(
     *,
     input_fingerprint: str,
     idempotency_key: str | None,
-) -> QuotationOut:
+) -> tuple[QuotationOut, Enquiry | None, bool]:
     if idempotency_key:
         existing = await db.execute(
             select(QuotationSubmissionIdempotency).where(
@@ -80,7 +81,13 @@ async def persist_submitted_quotation(
                 calc_row = calc.scalar_one_or_none()
                 if calc_row:
                     out.breakdown = json.loads(calc_row.breakdown_json)
-                return out
+                enquiry = await db.get(Enquiry, q.enquiry_id) if q.enquiry_id else None
+                if enquiry is not None:
+                    apply_customer_intention(enquiry, body)
+                    enquiry.quotation_id = q.id
+                    await db.commit()
+                    await db.refresh(enquiry)
+                return out, enquiry, False
 
     service = await load_active_service(db, body.service_slug)
     pricing, fingerprint, supported, unsupported_reason, territory = await price_quotation_inputs(
@@ -128,7 +135,7 @@ async def persist_submitted_quotation(
         customer=customer,
         address_line1=body.address_line1,
         address_line2=body.address_line2,
-        town=body.town,
+        town=(body.town or "").strip(),
         postcode=body.postcode,
         territory_id=territory.id if territory else None,
         latitude=latitude,
@@ -140,10 +147,10 @@ async def persist_submitted_quotation(
         property_id=prop.id,
         surface_type=body.surface_type,
         message=body.visible_damage,
-        stage=PipelineStage.QUOTE_GENERATED,
         utm_source=body.source,
         utm_campaign=body.campaign,
     )
+    apply_customer_intention(enquiry, body)
     db.add(enquiry)
     await db.flush()
 
@@ -183,6 +190,7 @@ async def persist_submitted_quotation(
     )
     db.add(quotation)
     await db.flush()
+    enquiry.quotation_id = quotation.id
 
     for s, raw in zip(sections_in, body.sections, strict=True):
         db.add(
@@ -220,4 +228,5 @@ async def persist_submitted_quotation(
     q = result.scalar_one()
     out = QuotationOut.model_validate(q)
     out.breakdown = pricing.breakdown
-    return out
+    await db.refresh(enquiry)
+    return out, enquiry, True
