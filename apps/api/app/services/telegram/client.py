@@ -29,9 +29,12 @@ async def send_message(
     disable_notification: bool = False,
 ) -> dict[str, Any]:
     settings = get_settings()
-    token = settings.telegram_bot_token
+    token = (settings.telegram_bot_token or "").strip()
     if not token:
         raise TelegramApiError("TELEGRAM_BOT_TOKEN is not configured")
+
+    if any(ch.isspace() or ord(ch) < 32 for ch in token):
+        raise TelegramApiError("Telegram bot token contains invalid whitespace")
 
     body: dict[str, Any] = {
         "chat_id": chat_id,
@@ -48,7 +51,7 @@ async def send_message(
         try:
             response = await client.post(url, json=body)
             data = response.json()
-        except (httpx.RequestError, ValueError):
+        except (httpx.RequestError, httpx.InvalidURL, ValueError):
             raise TelegramApiError("Telegram transport or response failure") from None
         if not isinstance(data, dict):
             raise TelegramApiError("Invalid Telegram response")
