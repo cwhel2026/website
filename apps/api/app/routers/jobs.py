@@ -21,7 +21,9 @@ from app.models.jobs import (
 from app.models.quotation import Quotation, QuotationStatus
 from app.models.service import Service
 from app.models.user import User
-from app.models.weather import ProductProfile
+from app.models.weather import ProductProfile, WorkActivity
+from app.services.weather.service import get_hourly_forecast
+from app.services.weather_engine import score_window
 from app.schemas.jobs import (
     CompletePrepIn,
     CompleteCoatIn,
@@ -235,7 +237,7 @@ async def add_appointment(
     _: Annotated[User, Depends(get_current_admin)],
 ) -> JobOut:
     result = await db.execute(
-        select(Job).options(selectinload(Job.appointments)).where(Job.id == job_id)
+        select(Job).options(selectinload(Job.appointments)).where(Job.id == job_id).with_for_update()
     )
     job = result.scalar_one_or_none()
     if job is None:
@@ -267,6 +269,25 @@ async def add_appointment(
             409,
             detail={"message": "Scheduling conflicts", "conflicts": [c.reason for c in conflicts]},
         )
+    weather_safe = None
+    if body.appointment_type in (AppointmentType.PREPARATION, AppointmentType.COATING):
+        prop = await db.get(CustomerProperty, job.property_id) if job.property_id else None
+        if prop is None or prop.customer_id != job.customer_id or prop.latitude is None or prop.longitude is None:
+            raise HTTPException(422, "Job property coordinates required")
+        body.latitude, body.longitude, body.postcode = prop.latitude, prop.longitude, prop.postcode
+        if body.confirm:
+            profile = await db.scalar(select(ProductProfile).where(ProductProfile.is_active.is_(True)).limit(1))
+            if profile is None:
+                raise HTTPException(503, "Product weather profile unavailable")
+            try:
+                forecast, _, live = await get_hourly_forecast(db, prop.latitude, prop.longitude, hours=168, for_booking=True)
+            except RuntimeError as exc:
+                raise HTTPException(503, "Live weather unavailable") from exc
+            activity = WorkActivity.COATING if body.appointment_type == AppointmentType.COATING else WorkActivity.WASHING
+            score = score_window(activity, profile, forecast, body.scheduled_start, duration / 60)
+            weather_safe = live and score.is_safe
+            if not weather_safe:
+                raise HTTPException(409, "Safe live forecast required; use provisional booking instead")
     appt = Appointment(
         job_id=job.id,
         appointment_type=body.appointment_type,
@@ -277,11 +298,16 @@ async def add_appointment(
         latitude=body.latitude,
         longitude=body.longitude,
         postcode=body.postcode,
+        weather_suitable=weather_safe,
     )
     job.appointments.append(appt)
     sync_job_status_from_appointments(job, customer_washed_already=job.customer_washed_already)
-    if job.status == JobStatus.BOOKED and job.appointments:
-        job.status = JobStatus.PREPARATION_SCHEDULED
+    if body.confirm and job.quotation_id:
+        quote = await db.get(Quotation, job.quotation_id)
+        if quote and quote.enquiry_id:
+            enquiry = await db.get(Enquiry, quote.enquiry_id)
+            if enquiry and enquiry.stage in (PipelineStage.QUOTE_ACCEPTED, PipelineStage.BOOKING_PENDING):
+                enquiry.stage = PipelineStage.BOOKED
     await db.commit()
     await db.refresh(job, ["appointments"])
     return (await _jobs_out(db, [job]))[0]
@@ -295,7 +321,7 @@ async def complete_preparation(
     _: Annotated[User, Depends(get_current_admin)],
 ) -> JobOut:
     result = await db.execute(
-        select(Job).options(selectinload(Job.appointments)).where(Job.id == job_id)
+        select(Job).options(selectinload(Job.appointments)).where(Job.id == job_id).with_for_update()
     )
     job = result.scalar_one_or_none()
     if job is None:
