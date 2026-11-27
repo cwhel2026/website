@@ -1,5 +1,6 @@
 import hmac
 import logging
+from urllib.parse import urlsplit
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Header, HTTPException
@@ -100,9 +101,23 @@ def _reply_chat_id(message: dict[str, Any] | None) -> int | None:
     return chat.get("id")
 
 
-async def _safe_send(chat_id: int, text: str) -> int | None:
+def report_review_markup(command: str, origin: str) -> dict | None:
+    routes = {"/approvals": ("Review approvals", "/dashboard/approvals"), "/schedule": ("Review jobs", "/dashboard/jobs")}
+    if command not in routes:
+        return None
     try:
-        result = await send_message(chat_id=chat_id, text=text[:4096])
+        url = urlsplit(origin)
+        if url.scheme != "https" or not url.hostname or url.username or url.password or url.path not in ("", "/") or url.query or url.fragment:
+            return None
+    except ValueError:
+        return None
+    label, path = routes[command]
+    return {"inline_keyboard": [[{"text": label, "url": origin.rstrip("/") + path}]]}
+
+
+async def _safe_send(chat_id: int, text: str, reply_markup: dict | None = None) -> int | None:
+    try:
+        result = await send_message(chat_id=chat_id, text=text[:4096], **({"reply_markup": reply_markup} if reply_markup else {}))
         return result.get("message_id")
     except TelegramApiError as exc:
         logger.warning("Telegram outbound failed for chat %s: %s", chat_id, exc)
@@ -357,7 +372,8 @@ async def telegram_webhook(
             )
             reply_meta = {"error": "assistant_unavailable"}
 
-    telegram_message_id = await _safe_send(chat_id, outbound_text)
+    markup = report_review_markup(text.lower(), cfg.public_origin)
+    telegram_message_id = await _safe_send(chat_id, outbound_text, markup)
     if telegram_message_id is None:
         await enqueue_notification(
             db,
