@@ -59,7 +59,7 @@ async def test_ensure_owner_creates_user(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_ensure_owner_updates_hash_when_password_changes(monkeypatch):
+async def test_ensure_owner_preserves_rotated_password(monkeypatch):
     from app.models.user import User, UserRole
 
     monkeypatch.setenv("DEFAULT_ADMIN_EMAIL", "owner@example.com")
@@ -82,7 +82,8 @@ async def test_ensure_owner_updates_hash_when_password_changes(monkeypatch):
     session.execute = AsyncMock(return_value=result)
 
     await ensure_owner_from_env(session)
-    assert verify_password("New-Password-2026!", user.password_hash)
+    assert verify_password("Old-Password-2026!", user.password_hash)
+    assert not verify_password("New-Password-2026!", user.password_hash)
     get_settings.cache_clear()
 
 
