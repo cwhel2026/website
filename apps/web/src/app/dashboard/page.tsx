@@ -34,12 +34,6 @@ type Invoice = {
   total_inc_vat_gbp?: number;
   amount_paid_gbp?: number;
 };
-type Job = {
-  id: string;
-  reference?: string;
-  status?: string;
-  appointments?: { scheduled_start?: string | null; status?: string }[];
-};
 type Approval = { id: string; title: string; status: string };
 type Watchdog = { count?: number; issues?: { title: string; severity: string }[] };
 
@@ -52,7 +46,6 @@ export default function DashboardOverviewPage() {
   const [finance, setFinance] = useState<FinanceStatus | null>(null);
   const [marketing, setMarketing] = useState<MarketingOverview | null>(null);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
-  const [jobs, setJobs] = useState<Job[]>([]);
   const [approvals, setApprovals] = useState<Approval[]>([]);
   const [watchdog, setWatchdog] = useState<Watchdog | null>(null);
 
@@ -74,9 +67,9 @@ export default function DashboardOverviewPage() {
     let active = true;
     setLoading(true);
     setErrors([]);
-    setCommand(null);
+    setCommand(null); setAnalytics(null); setFinance(null); setMarketing(null); setWatchdog(null); setQuotes([]); setEnquiries([]); setInvoices([]); setApprovals([]);
     const authToken = getToken();
-    if (!authToken) return;
+    if (!authToken) { setLoading(false); setErrors(['Session unavailable']); return; }
     const token: string = authToken;
 
     async function load<T>(path: string, apply: (v: T) => void, label: string) {
@@ -96,13 +89,6 @@ export default function DashboardOverviewPage() {
       load<FinanceStatus>("/api/v1/finance/status", setFinance, "Finance status"),
       load<MarketingOverview>("/api/v1/marketing/surfacecoat/overview", setMarketing, "Marketing"),
       load<Invoice[]>("/api/v1/finance/invoices", (i) => setInvoices(i), "Invoices"),
-      load<Job[]>("/api/v1/jobs", (j) =>
-        setJobs(
-          j
-            .filter((x) => !['completed', 'cancelled'].includes(x.status ?? '') && nextAppointment(x) !== undefined)
-            .sort((a,b) => Date.parse(nextAppointment(a)!) - Date.parse(nextAppointment(b)!)),
-        ),
-      "Jobs"),
       load<Approval[]>("/api/v1/approvals", (a) => setApprovals(a.filter((x) => x.status === "pending")), "Approvals"),
       load<Watchdog>("/api/v1/finance/insights/watchdog", setWatchdog, "Integration health"),
     ]).then(() => { if (active) { setLoading(false); setUpdated(new Date()); } });
@@ -185,14 +171,14 @@ export default function DashboardOverviewPage() {
         <p role="status" className="mt-2 text-sm">{scanMessage}</p>
       </section>
       <div className="mt-8 grid gap-4 md:grid-cols-2">
-        <ListSection title="Recent quotations" empty="No quotations yet." items={quotes.length}>
+        <ListSection title="Recent quotations" empty={loading ? "Loading…" : errors.includes("Quotations") ? "Unavailable" : "No quotations yet."} items={quotes.length}>
           {quotes.slice(0,5).map((q) => (
             <li key={q.reference} className="rounded-lg border border-white/10 bg-[#1a1a1a]/40 px-3 py-2">
               {q.reference} · {formatGbp(q.total_inc_vat_gbp)} · {q.status}
             </li>
           ))}
         </ListSection>
-        <ListSection title="Recent enquiries" empty="No enquiries yet." items={enquiries.length}>
+        <ListSection title="Recent enquiries" empty={loading ? "Loading…" : errors.includes("Enquiries") ? "Unavailable" : "No enquiries yet."} items={enquiries.length}>
           {enquiries.slice(0,5).map((e) => (
             <li key={e.id} className="rounded-lg border border-white/10 bg-[#1a1a1a]/40 px-3 py-2">
               {e.stage} · {new Date(e.created_at).toLocaleString("en-GB")}
@@ -200,16 +186,9 @@ export default function DashboardOverviewPage() {
           ))}
         </ListSection>
         <ListSection title="Upcoming jobs" empty={command ? "No scheduled jobs." : "Schedule unavailable."} items={command?.upcoming_visits.length ?? 0}>
-          {jobs.slice(0,5).map((j) => (
-            <li key={j.id} className="rounded-lg border border-white/10 bg-[#1a1a1a]/40 px-3 py-2">
-              {j.reference ?? j.id.slice(0, 8)} · {j.status}
-              {nextAppointment(j)
-                ? ` · ${new Date(nextAppointment(j)!).toLocaleDateString("en-GB")}`
-                : ""}
-            </li>
-          ))}
+          {command?.upcoming_visits.map(v => <li key={v.id} className="rounded-lg border border-white/10 p-3"><p className="font-semibold">{v.reference} · {v.type}</p><p>{new Date(v.start).toLocaleString("en-GB",{timeZone:"Europe/London"})}</p><p className="text-xs text-white/70">Recorded weather: {v.weather_suitable == null ? "Not assessed" : v.weather_suitable ? "Suitable" : "Unsuitable"}</p></li>)}
         </ListSection>
-        <ListSection title="Outstanding invoices" empty="No outstanding invoices." items={outstandingInvoices.length}>
+        <ListSection title="Outstanding invoices" empty={loading ? "Loading…" : errors.includes("Invoices") ? "Unavailable" : "No outstanding invoices."} items={outstandingInvoices.length}>
           {outstandingInvoices.slice(0,5).map((inv, i) => (
             <li key={inv.invoice_number ?? i} className="rounded-lg border border-white/10 bg-[#1a1a1a]/40 px-3 py-2">
               {inv.invoice_number ?? "Invoice"} · {inv.status} ·{" "}
@@ -225,7 +204,7 @@ export default function DashboardOverviewPage() {
             </li>
           ))}
         </ListSection>
-        <ListSection title="Pending approvals" empty="Nothing waiting for approval." items={approvals.length}>
+        <ListSection title="Pending approvals" empty={loading ? "Loading…" : errors.includes("Approvals") ? "Unavailable" : "Nothing waiting for approval."} items={approvals.length}>
           {approvals.slice(0,5).map((a) => (
             <li key={a.id} className="rounded-lg border border-white/10 bg-[#1a1a1a]/40 px-3 py-2">
               {a.title}
@@ -276,7 +255,4 @@ function ListSection({
       )}
     </section>
   );
-}
-function nextAppointment(job: Job): string | undefined {
-  return job.appointments?.filter(a => a.status === "confirmed" && a.scheduled_start && Date.parse(a.scheduled_start) > Date.now()).map(a => a.scheduled_start!).sort((a,b) => Date.parse(a)-Date.parse(b))[0];
 }
