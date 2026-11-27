@@ -7,7 +7,7 @@ from decimal import Decimal
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.jobs import Appointment, Job
+from app.models.jobs import Appointment, AppointmentStatus, Job
 from app.services.geo import estimate_drive_minutes, haversine_km
 
 
@@ -17,7 +17,7 @@ class AppointmentClusterHint:
     job_reference: str
     postcode: str | None
     scheduled_start: datetime
-    drive_minutes_from_previous: int
+    drive_minutes_from_previous: int | None
 
 
 async def daily_route_hints(
@@ -31,17 +31,17 @@ async def daily_route_hints(
     result = await db.execute(
         select(Appointment, Job)
         .join(Job)
-        .where(Appointment.scheduled_start >= day_start, Appointment.scheduled_start < day_end)
+        .where(Appointment.scheduled_start >= day_start, Appointment.scheduled_start < day_end, Appointment.status.in_([AppointmentStatus.CONFIRMED, AppointmentStatus.IN_PROGRESS]))
         .order_by(Appointment.scheduled_start)
     )
     items = list(result.all())
     hints: list[AppointmentClusterHint] = []
     prev_lat, prev_lon = base_lat, base_lon
     for appt, job in items:
-        lat = appt.latitude or base_lat
-        lon = appt.longitude or base_lon
-        km = haversine_km(prev_lat, prev_lon, lat, lon)
-        drive = estimate_drive_minutes(km)
+        lat, lon = appt.latitude, appt.longitude
+        drive = None
+        if all(v is not None for v in (prev_lat, prev_lon, lat, lon)):
+            drive = estimate_drive_minutes(haversine_km(float(prev_lat), float(prev_lon), float(lat), float(lon)))
         hints.append(
             AppointmentClusterHint(
                 appointment_id=str(appt.id),
