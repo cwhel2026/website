@@ -1,4 +1,4 @@
-"""Ensure the owner account exists and matches DEFAULT_ADMIN_* from the environment."""
+"""Bootstrap owner credentials without overwriting subsequent password rotation."""
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,7 +12,6 @@ async def ensure_owner_from_env(session: AsyncSession) -> None:
     """Create or update the owner user for DEFAULT_ADMIN_EMAIL / DEFAULT_ADMIN_PASSWORD."""
     settings = get_settings()
     email = settings.default_admin_email.strip().lower()
-    desired_hash = hash_password(settings.default_admin_password)
 
     result = await session.execute(select(User).where(User.email == email))
     user = result.scalar_one_or_none()
@@ -29,7 +28,7 @@ async def ensure_owner_from_env(session: AsyncSession) -> None:
             session.add(
                 User(
                     email=email,
-                    password_hash=desired_hash,
+                    password_hash=hash_password(settings.default_admin_password),
                     full_name="Business Owner",
                     role=UserRole.OWNER,
                     is_active=True,
@@ -37,10 +36,9 @@ async def ensure_owner_from_env(session: AsyncSession) -> None:
             )
             return
 
-    user.role = UserRole.OWNER
-    user.is_active = True
-    if not verify_password(settings.default_admin_password, user.password_hash):
-        user.password_hash = desired_hash
+    if user.role != UserRole.OWNER:
+        raise RuntimeError("Configured owner email belongs to a non-owner account")
+    # Existing owner credentials and activation state are authoritative.
 
 
 AUDITOR_MIN_PASSWORD = 16
@@ -105,11 +103,13 @@ async def rotate_owner_password(session: AsyncSession, *, new_password: str) -> 
         user = User(
             email=email,
             full_name="Business Owner",
+            password_hash=hash_password(new_password),
             role=UserRole.OWNER,
             is_active=True,
         )
         session.add(user)
-        await session.flush()
+    elif user.role != UserRole.OWNER:
+        raise RuntimeError("Configured owner email belongs to a non-owner account")
     user.password_hash = hash_password(new_password)
     user.is_active = True
     user.role = UserRole.OWNER
