@@ -26,6 +26,11 @@ PUBLIC_ROUTES = {
     # Public website writes: the customer quote and enquiry forms (rate limited, idempotent submit)
     ("POST", "/api/v1/quotations/provisional"),
     ("POST", "/api/v1/quotations/submit"),
+    # Driveway photographs: the unguessable token is the access control. No marketing use.
+    ("POST", "/api/v1/quotation-photos"),
+    ("GET", "/api/v1/quotation-photos/{token}"),
+    ("GET", "/api/v1/quotation-photos/{token}/{photo_id}"),
+    ("DELETE", "/api/v1/quotation-photos/{token}/{photo_id}"),
     ("POST", "/api/v1/public/commercial-enquiry"),
     ("POST", "/api/v1/marketing/attribution/track"),
     # Signed / shared-secret webhooks (fail closed when the secret is unset)

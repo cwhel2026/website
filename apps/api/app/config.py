@@ -85,6 +85,7 @@ class Settings(BaseSettings):
     rate_limit_storage_redis: bool = False
     finance_token_encryption_key: str | None = None
     finance_receipts_dir: str | None = None
+    quote_photos_dir: str | None = None
     finance_receipts_backup_dir: str | None = None
     finance_telegram_ingest_key: str | None = None
     finance_receipt_freeagent_attach: bool = False

@@ -42,6 +42,7 @@ from app.routers import (
     health,
     inventory,
     jobs,
+    quotation_photos,
     quotations,
     regional_ops,
     remuneration,
@@ -128,6 +129,7 @@ app.include_router(territories.router, prefix=prefix)
 app.include_router(services.router, prefix=prefix)
 app.include_router(crm.router, prefix=prefix)
 app.include_router(quotations.router, prefix=prefix)
+app.include_router(quotation_photos.router, prefix=prefix)
 app.include_router(jobs.router, prefix=prefix)
 app.include_router(calendar.router, prefix=prefix)
 app.include_router(weather.router, prefix=prefix)

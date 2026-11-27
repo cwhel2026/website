@@ -93,6 +93,10 @@ celery_app.conf.update(
             "task": "rmd.marketing_organic_sync",
             "schedule": crontab(minute=45, hour="*/3"),
         },
+        "purge-quote-photos": {
+            "task": "rmd.purge_quote_photos",
+            "schedule": crontab(minute=10, hour=3),
+        },
     },
     timezone="Europe/London",
 )

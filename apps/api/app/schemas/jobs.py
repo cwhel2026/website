@@ -38,6 +38,7 @@ class JobOut(ORMModel):
     coating_completed_at: datetime | None
     seven_day_at_risk: bool | None = None
     seven_day_message: str | None = None
+    photo_count: int = 0
     appointments: list[AppointmentOut] = []
 
 

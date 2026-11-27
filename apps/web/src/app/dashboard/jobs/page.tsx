@@ -6,7 +6,9 @@ import { getToken } from "@/lib/auth-client";
 
 type Job = {
   reference: string;
+  quotation_id: string | null;
   status: string;
+  photo_count: number;
   seven_day_target_date: string | null;
   seven_day_at_risk: boolean | null;
   seven_day_message: string | null;
@@ -35,6 +37,9 @@ export default function JobsPage() {
             <li key={j.reference} className="rounded-lg border p-4 text-sm">
               <div className="font-semibold">{j.reference}</div>
               <div className="text-slate-600">{j.status}</div>
+              {j.quotation_id && (
+                <div className="text-slate-600">Photographs on the quotation: {j.photo_count ?? 0}</div>
+              )}
               {j.seven_day_target_date && (
                 <div className={j.seven_day_at_risk ? "text-red-700" : "text-slate-500"}>
                   Coat by {j.seven_day_target_date} — {j.seven_day_message}

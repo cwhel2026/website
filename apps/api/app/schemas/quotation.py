@@ -86,6 +86,8 @@ class InstantQuotationRequest(BaseModel):
     campaign: str | None = None
     intention: str = "estimate_requested"
     callback_preferred_time: str | None = None
+    photo_token: str | None = None
+    photo_note: str | None = Field(default=None, max_length=1000)
 
 
 class QuotationSubmitRequest(InstantQuotationRequest):
@@ -131,6 +133,8 @@ class PublicQuotationOut(ORMModel):
     telegram_notified: bool = False
     next_steps: str = ""
     suggested_windows: list[SuggestedWindowOut] = []
+    photos_attached: bool = False
+    photo_later_path: str = ""
 
 
 class QuotationOut(ORMModel):

@@ -104,10 +104,10 @@ Nothing below is marked as working in production. Production still runs `main` (
 | Q6 | Failed requests must not lose customer-entered data | **Done** | Quote wizard persists to `sessionStorage`; errors state details are saved. |
 | Q7 | Quotation independent of marketing/accounting integrations | **Verified** | Provisional path uses only services, territories, pricing profile, postcodes.io. |
 | Q8 | Mobile journey end-to-end test | **In CI** | `public-quote-mobile` Playwright project. |
-| Q9 | Quotation progress bar overflow on mobile | **Fixed** | Step pills use responsive grid (4 cols mobile / 7 desktop) instead of horizontal scroll. |
+| Q9 | Quotation progress bar overflow on mobile | **Fixed** | Step pills use a responsive grid (4 columns on a phone, 8 on a wider screen) instead of horizontal scroll. |
 | Q10 | Replace Revive My Drive → SurfaceCoat (public site) | **Done (web)** | Header, footer, layout metadata, service areas, commercial/privacy/media copy + Telegram-lite web routes updated. API seed emails / legacy domains may remain in backend until Phase 3. |
 | Q11 | Coverage copy: Lancashire, GM, Merseyside, Cheshire, Cumbria, W Yorkshire; Preston as travel base only | **Done** | `public-brand.ts` + service-areas page. |
-| Q12 | **Future (not implemented):** customer photo upload + AI driveway condition assessment | **Recorded** | Enhancement only — no code in this phase. |
+| Q12 | Optional driveway photographs and AI condition assessment | **On branch** | Before the price, the customer can upload photographs or continue straight to the estimate. Assessment does not change the price and does not block it when the provider is unavailable. |
 
 ### Milestones 2.1 and 2.2 (branch `cursor/phase2-milestones-21-22-9428`, not merged)
 
@@ -120,22 +120,24 @@ Nothing below is marked as working in production. Production still runs `main` (
 | P3 | Travel £0.45/mile and £25/hour; both returns; two visits when wash and coat are separate | **Verified (local)** | Replaces the old territory £/km return charge so mileage is not counted twice. |
 | P4 | Round the customer total up to the next £5 | **Verified (integration)** | When VAT is off, the rounded amount is the customer total. When VAT is on, VAT is calculated first and the round-up stays on the gross total. |
 | P5 | Block paving and imprinted concrete configurable, no invented prices | **Verified (integration)** | Existing per-m² rules deactivated, not deleted. Quote returns 422 until a rule is added. |
-| P6 | Do not mark instant quote operational | **Open** | A price is showing in production. VAT presentation is on `main` (PR #59). The booking, callback and email actions are on `cursor/phase2-quote-conversion-9428`. Still needs a full production check on a phone. |
+| P6 | Do not mark instant quote operational | **Open** | A price is showing in production. VAT presentation is on `main` (PR #59). Booking, callback and email are on `main` (PR #60). Photograph upload is on this branch. Still needs a full production check on a phone. |
 | P7 | Public quote showed an internal breakdown and 20% VAT while the company is not VAT registered | **Merged (PR #59)** | VAT is off until Company setup records Registered and an effective date. The customer total is rounded up to £5. Public API no longer returns the costing lines. |
-| C3 | After the price, offer Book me in ASAP, Request a callback, and Email me my estimate | **On branch** | Primary action uses golden yellow. Contact step asks only for the details that action needs. Property postcode is carried forward. Marketing consent stays optional and unchecked. |
-| C4 | Record Ready to book, Callback requested, or Estimate requested on the enquiry | **On branch** | Same quotation idempotency key does not create a second enquiry. Campaign source is kept. Ready to book is high priority and `booking_pending`, which is not a confirmed job. |
-| C5 | Callback task with completion and outcome | **On branch** | Stored on the enquiry. The customers page can mark it complete. No separate task system. |
-| C6 | Email the estimate only when SMTP is connected | **On branch** | Disconnected email is saved and the confirmation says it was not emailed. |
-| C7 | Tell the owner on Telegram only when the bot is connected | **On branch** | `telegram_notified` stays false when the token or chat is missing. The customer page does not claim a notification was sent. |
-| C8 | Suggest diary windows without confirming a booking | **On branch** | Uses the existing scheduler and live weather when both answer within a few seconds. If they do not, the customer still gets the confirmation and nothing is reserved. No job or appointment row is created. Confirming the appointment and creating the job remain L3. |
+| C3 | After the price, offer Book me in ASAP, Request a callback, and Email me my estimate | **Merged (PR #60)** | Primary action uses golden yellow. Contact step asks only for the details that action needs. Property postcode is carried forward. Marketing consent stays optional and unchecked. |
+| C4 | Record Ready to book, Callback requested, or Estimate requested on the enquiry | **Merged (PR #60)** | Same quotation idempotency key does not create a second enquiry. Campaign source is kept. Ready to book is high priority and `booking_pending`, which is not a confirmed job. |
+| C5 | Callback task with completion and outcome | **Merged (PR #60)** | Stored on the enquiry. The customers page can mark it complete. No separate task system. |
+| C6 | Email the estimate only when SMTP is connected | **Merged (PR #60)** | Disconnected email is saved and the confirmation says it was not emailed. |
+| C7 | Tell the owner on Telegram only when the bot is connected | **Merged (PR #60)** | `telegram_notified` stays false when the token or chat is missing. The customer page does not claim a notification was sent. |
+| C8 | Suggest diary windows without confirming a booking | **Merged (PR #60)** | Uses the existing scheduler and live weather when both answer within a few seconds. If they do not, the customer still gets the confirmation and nothing is reserved. No job or appointment row is created. Confirming the appointment and creating the job remain L3. |
+| C9 | Optional photographs before the price, with a later secure link | **On branch** | Photographs are compressed on the phone and upload one at a time with progress. The customer can open the estimate while they are still uploading, and a failed upload can be retried. Photographs stay private, are kept for 24 months, and are not used for marketing. |
+| C10 | AI condition check that does not reprice the quote | **On branch** | The check is a background worker task. Distinguishes wear, edge deterioration, cracks, potholes and unsuitable surfaces. Significant findings are flagged for the owner to price. If the worker or the provider is unavailable, the estimate still returns. |
 
 ### Future enhancements (explicitly not built in Phase 2)
 
 | ID | Idea | Notes |
 |----|------|-------|
-| F1 | Customer driveway photograph uploads | Not built. |
-| F2 | Close-up photographs of damage | Not built. |
-| F3 | AI driveway condition assessments | Not built. Must not auto-book or charge. |
+| F1 | Customer driveway photograph uploads | Built on this branch. See C9. |
+| F2 | Close-up photographs of damage | The upload step asks for a close-up of cracks. See C9. |
+| F3 | AI driveway condition assessments | Built on this branch. It does not change the price or book a visit. See C10. |
 | F4 | AI-generated illustrative restoration previews | Not built. |
 | F5 | Finalised imprinted concrete and block paving prices | Research still open. Engine refuses those surfaces until rules exist. |
 

@@ -3,7 +3,7 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -11,6 +11,7 @@ from app.auth import get_current_admin
 from app.database import get_db
 from app.models.crm import Enquiry
 from app.models.quotation import Quotation, QuotationCalculation
+from app.models.quotation_photo import QuotePhoto, QuotePhotoSet
 from app.models.user import User
 from app.rate_limit import limiter
 from app.schemas.quotation import (
@@ -102,7 +103,7 @@ async def submit_quotation(
     # A quotation request is itself permission to reply about this job.
     # Marketing consent stays optional and is never required.
     body.consent_service_messages = True
-    saved, enquiry, _created = await persist_submitted_quotation(
+    saved, enquiry, _created, photo_token = await persist_submitted_quotation(
         db,
         body,
         input_fingerprint=body.input_fingerprint,
@@ -131,6 +132,15 @@ async def submit_quotation(
             enquiry = await db.get(Enquiry, enquiry_id)
             windows = []
     email_status = enquiry.email_delivery if enquiry is not None else "not_requested"
+    photo_set = await db.scalar(select(QuotePhotoSet).where(QuotePhotoSet.token == photo_token))
+    photos_attached = False
+    repair_review = False
+    if photo_set is not None:
+        photo_count = await db.scalar(
+            select(func.count()).select_from(QuotePhoto).where(QuotePhoto.set_id == photo_set.id)
+        )
+        photos_attached = bool(photo_count)
+        repair_review = bool(photo_set.review_required)
     return PublicQuotationOut(
         id=saved.id,
         reference=saved.reference,
@@ -151,8 +161,18 @@ async def submit_quotation(
         email_sent=email_status == "sent",
         email_status=email_status,
         telegram_notified=bool(enquiry.telegram_notified) if enquiry is not None else False,
-        next_steps=customer_next_steps(enquiry, windows, email=body.email) if enquiry is not None else "",
+        next_steps=customer_next_steps(
+            enquiry,
+            windows,
+            email=body.email,
+            photos_attached=photos_attached,
+            repair_review=repair_review,
+        )
+        if enquiry is not None
+        else "",
         suggested_windows=[SuggestedWindowOut.model_validate(window) for window in windows],
+        photos_attached=photos_attached,
+        photo_later_path=f"/quote/photos/{photo_token}",
     )
 
 

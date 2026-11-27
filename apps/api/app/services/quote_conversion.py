@@ -63,7 +63,14 @@ def apply_customer_intention(enquiry: Enquiry, body) -> None:
         enquiry.callback_status = "not_applicable"
 
 
-def customer_next_steps(enquiry: Enquiry, windows: list[dict], *, email: str) -> str:
+def customer_next_steps(
+    enquiry: Enquiry,
+    windows: list[dict],
+    *,
+    email: str,
+    photos_attached: bool = False,
+    repair_review: bool = False,
+) -> str:
     if enquiry.intention == READY_TO_BOOK:
         text = (
             "We have your request for the earliest visit. "
@@ -73,30 +80,48 @@ def customer_next_steps(enquiry: Enquiry, windows: list[dict], *, email: str) ->
         if windows:
             when = _format_local(windows[0]["starts"])
             text += f" One possible time to check is {when}. Nothing is reserved until we confirm it with you."
-        return text
-    if enquiry.intention == CALLBACK_REQUESTED:
+    elif enquiry.intention == CALLBACK_REQUESTED:
         when = enquiry.callback_preferred_time or "a time that suits you"
-        return (
+        text = (
             f"We will call you around {when}. "
             "Your visit is not booked. "
             "We will agree any appointment with you on the call."
         )
-    if enquiry.email_delivery == "sent":
-        return (
+    elif enquiry.email_delivery == "sent":
+        text = (
             f"We have emailed your estimate to {email}. "
             "We have also saved it. This is not a confirmed booking."
         )
-    if enquiry.email_delivery == "failed":
-        return (
+    elif enquiry.email_delivery == "failed":
+        text = (
             "We have saved your estimate. "
             "The email could not be sent. "
             "We still have your details and this is not a confirmed booking."
         )
-    return (
-        "We have saved your estimate. "
-        "We could not email it because email sending is not connected. "
-        "We still have your details. This is not a confirmed booking."
-    )
+    else:
+        text = (
+            "We have saved your estimate. "
+            "We could not email it because email sending is not connected. "
+            "We still have your details. This is not a confirmed booking."
+        )
+    return text + _photo_follow_up(enquiry, photos_attached=photos_attached, repair_review=repair_review)
+
+
+def _photo_follow_up(enquiry: Enquiry, *, photos_attached: bool, repair_review: bool) -> str:
+    extra = ""
+    if photos_attached:
+        extra += " Your photographs are saved with this estimate and do not change the price."
+    elif enquiry.intention == READY_TO_BOOK:
+        extra += (
+            " You can add a photograph later. We may need one before the visit is confirmed. "
+            "We will not arrange an inspection visit for a straightforward restoration."
+        )
+    if repair_review:
+        extra += (
+            " Any repair is priced only after we review the photographs and agree it with you. "
+            "The estimate above is unchanged."
+        )
+    return extra
 
 
 def _format_local(value: datetime) -> str:
