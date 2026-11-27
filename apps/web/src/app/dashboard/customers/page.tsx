@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { apiGet, apiPatch } from "@/lib/api";
 import { getToken } from "@/lib/auth-client";
 
+type FollowUp = { id: string; kind: string; title: string; due_at: string | null; customer_name: string; draft: string | null; service_messages_allowed: boolean; requires_owner_review: boolean };
+
 type Customer = {
   id: string;
   full_name: string;
@@ -32,6 +34,16 @@ const INTENTION_LABELS: Record<string, string> = {
 };
 
 export default function CustomersPage() {
+  const [followups, setFollowups] = useState<FollowUp[] | null>(null);
+  const [followupError, setFollowupError] = useState(false);
+  async function refreshFollowups() {
+    try {
+      setFollowups(await apiGet<FollowUp[]>("/api/v1/crm/follow-ups", getToken() ?? undefined));
+      setFollowupError(false);
+    } catch {
+      setFollowupError(true);
+    }
+  }
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [enquiries, setEnquiries] = useState<Enquiry[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -40,6 +52,7 @@ export default function CustomersPage() {
   useEffect(() => {
     const token = getToken();
     if (!token) return;
+    void refreshFollowups();
     apiGet<Customer[]>("/api/v1/crm/customers", token)
       .then(setCustomers)
       .catch(() => setError("Could not load customers."));
@@ -58,6 +71,7 @@ export default function CustomersPage() {
       completed,
       outcome: note,
     });
+    void refreshFollowups();
     setEnquiries((rows) => rows.map((row) => (row.id === updated.id ? { ...row, ...updated } : row)));
   }
 
@@ -66,6 +80,20 @@ export default function CustomersPage() {
       <h1 className="text-2xl font-semibold text-emerald-950">Customers</h1>
       <p className="mt-2 text-sm text-slate-600">CRM records with deduplication by email.</p>
       {error && <p className="mt-4 text-sm text-amber-700">{error}</p>}
+      <section className="mt-6 rounded-2xl border bg-white p-4 text-slate-900">
+        <h2 className="text-lg font-semibold">Customer follow-up queue</h2>
+        <p className="mt-1 text-sm text-slate-600">Review drafts before contacting customers. Nothing is sent automatically.</p>
+        {followupError ? <p role="alert" className="mt-3 text-sm text-red-700">Could not load follow-ups. <button onClick={() => void refreshFollowups()} className="underline">Retry</button></p> : followups === null ? <p className="mt-3 text-sm">Loading follow-ups…</p> : followups.length === 0 ? <p className="mt-3 text-sm">No open follow-ups.</p> : (
+          <ul className="mt-4 grid gap-3 md:grid-cols-2">
+            {followups.map((task) => <li key={task.id} className="min-w-0 rounded-xl border p-3">
+              <p className="font-semibold">{task.customer_name}</p>
+              <p className="text-sm">{task.title}</p>
+              <p className="mt-1 text-xs text-slate-600">{task.due_at ? new Date(task.due_at).toLocaleString("en-GB", { timeZone: "Europe/London" }) : "No deadline recorded"}</p>
+              {task.draft ? <p className="mt-3 rounded-lg bg-slate-50 p-3 text-sm">{task.draft}</p> : <p className="mt-3 text-sm text-amber-800">Service messaging permission not recorded.</p>}
+            </li>)}
+          </ul>
+        )}
+      </section>
       {customers.length === 0 ? (
         <p className="mt-8 text-sm text-slate-500">No customers yet.</p>
       ) : (
