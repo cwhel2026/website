@@ -45,11 +45,16 @@ async def send_message(
 
     url = f"{TELEGRAM_API}/bot{token}/sendMessage"
     async with httpx.AsyncClient(timeout=30.0) as client:
-        response = await client.post(url, json=body)
-        data = response.json()
+        try:
+            response = await client.post(url, json=body)
+            data = response.json()
+        except (httpx.RequestError, ValueError):
+            raise TelegramApiError("Telegram transport or response failure") from None
+        if not isinstance(data, dict):
+            raise TelegramApiError("Invalid Telegram response")
         if response.status_code >= 400 or not data.get("ok"):
             raise TelegramApiError(
-                data.get("description") or "Telegram sendMessage failed",
+                "Telegram sendMessage rejected",
                 status_code=response.status_code,
                 payload=data,
             )
