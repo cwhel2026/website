@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { apiGet } from "@/lib/api";
+import { apiGet, apiPost } from "@/lib/api";
 import { getToken } from "@/lib/auth-client";
 import { PortalError, PortalKpi, PortalPageTitle } from "@/components/portal-ui";
 
@@ -37,7 +37,7 @@ type Job = {
   id: string;
   reference?: string;
   status?: string;
-  appointments?: { scheduled_start?: string | null }[];
+  appointments?: { scheduled_start?: string | null; status?: string }[];
 };
 type Approval = { id: string; title: string; status: string };
 type DirectorTask = { id: string; title: string; priority?: string };
@@ -56,7 +56,24 @@ export default function DashboardOverviewPage() {
   const [tasks, setTasks] = useState<DirectorTask[]>([]);
   const [watchdog, setWatchdog] = useState<Watchdog | null>(null);
 
+  const [scanning, setScanning] = useState(false);
+  const [scanMessage, setScanMessage] = useState("");
+  async function scanDirector() {
+    setScanning(true); setScanMessage("");
+    try {
+      const result = await apiPost<{tasks_created: number}>("/api/v1/business-director/scan", {});
+      setScanMessage(`${result.tasks_created} new recommendations`);
+      setRefresh(n => n + 1);
+    } catch { setScanMessage("Director scan unavailable. Check system health."); }
+    finally { setScanning(false); }
+  }
+  const [loading, setLoading] = useState(true);
+  const [refresh, setRefresh] = useState(0);
+  const [updated, setUpdated] = useState<Date | null>(null);
   useEffect(() => {
+    let active = true;
+    setLoading(true);
+    setErrors([]);
     const authToken = getToken();
     if (!authToken) return;
     const token: string = authToken;
@@ -64,31 +81,32 @@ export default function DashboardOverviewPage() {
     async function load<T>(path: string, apply: (v: T) => void, label: string) {
       try {
         const data = await apiGet<T>(path, token);
-        apply(data);
+        if (active) apply(data);
       } catch {
-        setErrors((e) => [...e, label]);
+        if (active) setErrors((e) => [...e, label]);
       }
     }
 
     void Promise.all([
-      load<Quotation[]>("/api/v1/quotations", (q) => setQuotes(q.slice(0, 5)), "Quotations"),
-      load<Enquiry[]>("/api/v1/crm/enquiries", (e) => setEnquiries(e.slice(0, 5)), "Enquiries"),
+      load<Quotation[]>("/api/v1/quotations", (q) => setQuotes(q), "Quotations"),
+      load<Enquiry[]>("/api/v1/crm/enquiries", (e) => setEnquiries(e), "Enquiries"),
       load<Analytics>("/api/v1/analytics/overview", setAnalytics, "Analytics"),
       load<FinanceStatus>("/api/v1/finance/status", setFinance, "Finance status"),
       load<MarketingOverview>("/api/v1/marketing/surfacecoat/overview", setMarketing, "Marketing"),
-      load<Invoice[]>("/api/v1/finance/invoices", (i) => setInvoices(i.slice(0, 5)), "Invoices"),
+      load<Invoice[]>("/api/v1/finance/invoices", (i) => setInvoices(i), "Invoices"),
       load<Job[]>("/api/v1/jobs", (j) =>
         setJobs(
           j
-            .filter((x) => x.appointments?.some((a) => a.scheduled_start))
-            .slice(0, 5),
+            .filter((x) => !['completed', 'cancelled'].includes(x.status ?? '') && nextAppointment(x) !== undefined)
+            .sort((a,b) => Date.parse(nextAppointment(a)!) - Date.parse(nextAppointment(b)!)),
         ),
       "Jobs"),
-      load<Approval[]>("/api/v1/approvals", (a) => setApprovals(a.filter((x) => x.status === "pending").slice(0, 5)), "Approvals"),
+      load<Approval[]>("/api/v1/approvals", (a) => setApprovals(a.filter((x) => x.status === "pending")), "Approvals"),
       load<DirectorTask[]>("/api/v1/business-director/tasks", (t) => setTasks(t.slice(0, 5)), "AI tasks"),
       load<Watchdog>("/api/v1/finance/insights/watchdog", setWatchdog, "Integration health"),
-    ]);
-  }, []);
+    ]).then(() => { if (active) { setLoading(false); setUpdated(new Date()); } });
+    return () => { active = false; };
+  }, [refresh]);
 
   const revenue = formatGbp(analytics?.revenue_collected_gbp);
   const growthBal = marketing?.growth_fund?.virtual_reserve_balance_gbp;
@@ -104,11 +122,11 @@ export default function DashboardOverviewPage() {
         : faState
           ? faState.replaceAll("_", " ")
           : "Unknown";
-  const openQuotes = quotes.filter((q) => !["accepted", "declined", "expired"].includes(q.status.toLowerCase()));
+  const openQuotes = quotes.filter((q) => !["accepted", "declined", "rejected", "expired"].includes(q.status.toLowerCase()));
   const outstandingInvoices = invoices.filter((i) => {
     const total = i.total_inc_vat_gbp ?? 0;
     const paid = i.amount_paid_gbp ?? 0;
-    return total - paid > 0.01 || i.status === "sent";
+    return !['draft','void','paid'].includes(i.status ?? '') && total - paid > 0.01;
   });
 
   return (
@@ -118,6 +136,10 @@ export default function DashboardOverviewPage() {
         subtitle="Live data from your connected services — empty when nothing is recorded yet."
       />
 
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+        <p role="status" className="text-xs text-white/70">{loading ? "Refreshing business data…" : errors.length ? "Partial data — some services unavailable" : updated ? "Updated " + updated.toLocaleTimeString("en-GB") : "Not loaded"}</p>
+        <button disabled={loading} onClick={() => setRefresh(n => n+1)} className="min-h-11 rounded-lg border border-white/20 px-4 text-sm disabled:opacity-50">Refresh</button>
+      </div>
       {errors.length > 0 && (
         <PortalError
           message={`Some sections could not load: ${errors.join(", ")}.`}
@@ -130,15 +152,15 @@ export default function DashboardOverviewPage() {
         <PortalKpi label="FreeAgent" value={faLabel} hint={finance?.freeagent?.message} />
         <PortalKpi label="Growth fund" value={growthBal != null ? formatGbp(growthBal) : "—"} />
         <PortalKpi label="Meta spend (7d)" value={metaSpend} hint={metaHint} />
-        <PortalKpi label="New enquiries" value={String(analytics?.enquiries ?? enquiries.length)} />
+        <PortalKpi label="New enquiries" value={String(analytics?.enquiries ?? '—')} />
         <PortalKpi
           label="Open quotes"
-          value={String(openQuotes.length > 0 ? openQuotes.length : (analytics?.quotations ?? "—"))}
+          value={loading || errors.includes("Quotations") ? "—" : String(openQuotes.length)}
         />
-        <PortalKpi label="Pending approvals" value={String(approvals.length)} />
+        <PortalKpi label="Pending approvals" value={loading || errors.includes("Approvals") ? "—" : String(approvals.length)} />
         <PortalKpi
           label="Finance alerts"
-          value={String(watchdog?.count ?? watchdog?.issues?.length ?? 0)}
+          value={String(watchdog?.count ?? watchdog?.issues?.length ?? "—")}
         />
       </div>
 
@@ -151,33 +173,39 @@ export default function DashboardOverviewPage() {
         <QuickLink href="/dashboard/assistant" label="AI assistant" />
       </div>
 
+      <section className="mt-5 rounded-xl border border-white/15 p-3">
+        <h2 className="font-semibold text-[#eab308]">Business director</h2>
+        <p className="mt-1 text-sm text-white/70">Review approvals, coating priorities, stock and overdue invoices.</p>
+        <button onClick={() => void scanDirector()} disabled={scanning || loading} className="mt-3 min-h-11 rounded-lg bg-[#eab308] px-4 font-semibold text-black disabled:opacity-50">{scanning ? "Scanning…" : "Scan business"}</button>
+        <p role="status" className="mt-2 text-sm">{scanMessage}</p>
+      </section>
       <div className="mt-8 grid gap-4 md:grid-cols-2">
         <ListSection title="Recent quotations" empty="No quotations yet." items={quotes.length}>
-          {quotes.map((q) => (
+          {quotes.slice(0,5).map((q) => (
             <li key={q.reference} className="rounded-lg border border-white/10 bg-[#1a1a1a]/40 px-3 py-2">
               {q.reference} · {formatGbp(q.total_inc_vat_gbp)} · {q.status}
             </li>
           ))}
         </ListSection>
         <ListSection title="Recent enquiries" empty="No enquiries yet." items={enquiries.length}>
-          {enquiries.map((e) => (
+          {enquiries.slice(0,5).map((e) => (
             <li key={e.id} className="rounded-lg border border-white/10 bg-[#1a1a1a]/40 px-3 py-2">
               {e.stage} · {new Date(e.created_at).toLocaleString("en-GB")}
             </li>
           ))}
         </ListSection>
         <ListSection title="Upcoming jobs" empty="No scheduled jobs." items={jobs.length}>
-          {jobs.map((j) => (
+          {jobs.slice(0,5).map((j) => (
             <li key={j.id} className="rounded-lg border border-white/10 bg-[#1a1a1a]/40 px-3 py-2">
               {j.reference ?? j.id.slice(0, 8)} · {j.status}
-              {j.appointments?.[0]?.scheduled_start
-                ? ` · ${new Date(j.appointments[0].scheduled_start!).toLocaleDateString("en-GB")}`
+              {nextAppointment(j)
+                ? ` · ${new Date(nextAppointment(j)!).toLocaleDateString("en-GB")}`
                 : ""}
             </li>
           ))}
         </ListSection>
         <ListSection title="Outstanding invoices" empty="No outstanding invoices." items={outstandingInvoices.length}>
-          {outstandingInvoices.map((inv, i) => (
+          {outstandingInvoices.slice(0,5).map((inv, i) => (
             <li key={inv.invoice_number ?? i} className="rounded-lg border border-white/10 bg-[#1a1a1a]/40 px-3 py-2">
               {inv.invoice_number ?? "Invoice"} · {inv.status} ·{" "}
               {formatGbp((inv.total_inc_vat_gbp ?? 0) - (inv.amount_paid_gbp ?? 0))}
@@ -193,7 +221,7 @@ export default function DashboardOverviewPage() {
           ))}
         </ListSection>
         <ListSection title="Pending approvals" empty="Nothing waiting for approval." items={approvals.length}>
-          {approvals.map((a) => (
+          {approvals.slice(0,5).map((a) => (
             <li key={a.id} className="rounded-lg border border-white/10 bg-[#1a1a1a]/40 px-3 py-2">
               {a.title}
             </li>
@@ -215,7 +243,7 @@ function QuickLink({ href, label }: { href: string; label: string }) {
   return (
     <Link
       href={href}
-      className="rounded-full border border-[#eab308]/40 bg-[#eab308]/15 px-4 py-2 text-xs font-semibold text-[#eab308]"
+      className="rounded-full border border-[#eab308]/40 bg-[#eab308]/15 inline-flex min-h-11 items-center px-4 py-2 text-xs font-semibold text-[#eab308]"
     >
       {label}
     </Link>
@@ -243,4 +271,7 @@ function ListSection({
       )}
     </section>
   );
+}
+function nextAppointment(job: Job): string | undefined {
+  return job.appointments?.filter(a => a.status === "confirmed" && a.scheduled_start && Date.parse(a.scheduled_start) > Date.now()).map(a => a.scheduled_start!).sort((a,b) => Date.parse(a)-Date.parse(b))[0];
 }

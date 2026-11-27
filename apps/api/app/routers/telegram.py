@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/telegram", tags=["telegram"])
 
 START_MESSAGE = (
-    "Revive My Drive assistant is connected.\n\n"
+    "SurfaceCoat assistant is connected.\n\n"
     "Ask about jobs, weather, quotations, marketing, or finance.\n"
     "Photograph a receipt and send it here for automatic processing (when OCR is configured)."
 )
@@ -61,12 +61,7 @@ def _authorised_chat(chat_id: int | None, user_id: int | None) -> bool:
     admins = cfg.telegram_admin_id_list
     if not admins:
         return False
-    if user_id is not None and user_id in admins:
-        return True
-    owner_chat = cfg.telegram_owner_chat_id
-    if owner_chat is not None and chat_id == owner_chat:
-        return True
-    return False
+    return user_id is not None and user_id in admins and chat_id == user_id
 
 
 def _reply_chat_id(message: dict[str, Any] | None) -> int | None:
@@ -151,7 +146,9 @@ async def telegram_webhook(
     if not cfg.telegram_bot_token:
         raise HTTPException(503, "Telegram not configured")
     expected = normalise_telegram_webhook_secret(cfg.telegram_webhook_secret or "")
-    if expected and secret != expected:
+    if not expected:
+        raise HTTPException(503, "Telegram webhook secret not configured")
+    if not secret or not hmac.compare_digest(secret, expected):
         raise HTTPException(401, "Invalid Telegram webhook secret")
 
     message = _extract_message(update)
@@ -167,14 +164,14 @@ async def telegram_webhook(
     from_user = message.get("from") or {}
     user_id = from_user.get("id")
     chat_id = _reply_chat_id(message)
-    text = (message.get("text") or "").strip()
+    text = (message.get("text") or "").strip()[:4000]
 
     if chat_id is None:
         return JSONResponse({"status": "ignored", "reason": "no_chat_id"})
 
     if not _authorised_chat(chat_id, user_id):
         hint = (
-            "This bot is private (Revive My Drive owner assistant).\n\n"
+            "This bot is private (SurfaceCoat owner assistant).\n\n"
             f"Your Telegram user ID is: {user_id}\n\n"
             "Ask the account owner to add this number to TELEGRAM_ADMIN_IDS on the API service, "
             "then try again."
@@ -202,6 +199,7 @@ async def telegram_webhook(
             )
         )
         try:
+            await db.flush()
             data, fname = await download_telegram_file(photo_id)
             is_before = "before" in caption.lower()
             asset = await ingest_marketing_photo(
@@ -211,7 +209,7 @@ async def telegram_webhook(
                 job_id=None,
                 telegram_file_id=photo_id,
                 is_before=is_before,
-                customer_permission="permission" in caption.lower(),
+                customer_permission="#permission_granted" in caption.lower().split(),
             )
             from app.services.marketing.job_media_telegram import parse_job_reference, stage_telegram_photo
 
@@ -224,13 +222,16 @@ async def telegram_webhook(
                 msg += f" Job ref: {ref} ({'matched' if staged.get('job_found') else 'not found'})."
             if staged.get("before_after_package", {}).get("ok"):
                 msg += " Before/after package queued for approval."
-            elif phase == "after" and not ("permission" in caption.lower()):
-                msg += " Add 'permission' in caption when customer has agreed to marketing use."
+            elif phase == "after" and not ("#permission_granted" in caption.lower().split()):
+                msg += " Add '#permission_granted' in caption when customer has agreed to marketing use."
             await _safe_send(chat_id, msg)
             return JSONResponse({"status": "marketing_media_ok", "asset_id": str(asset.id)})
+        except IntegrityError:
+            await db.rollback()
+            return JSONResponse({"status": "duplicate"})
         except Exception as exc:
             await db.rollback()
-            await _safe_send(chat_id, f"Could not store marketing photo: {str(exc)[:120]}")
+            await _safe_send(chat_id, "Could not store marketing photo. Check integration health.")
             return JSONResponse({"status": "marketing_media_failed"})
 
     if photo_id and not text:
@@ -247,11 +248,15 @@ async def telegram_webhook(
             )
         )
         try:
+            await db.flush()
             receipt, detail = await ingest_telegram_receipt(db, photo_id)
             outbound_text = summarise_receipt_reply(receipt, detail)
             await db.commit()
             await _safe_send(chat_id, outbound_text)
             return JSONResponse({"status": "receipt_ok", "receipt_id": str(receipt.id)})
+        except IntegrityError:
+            await db.rollback()
+            return JSONResponse({"status": "duplicate"})
         except Exception as exc:
             logger.exception("Receipt ingest failed")
             await db.rollback()
@@ -259,7 +264,7 @@ async def telegram_webhook(
                 chat_id,
                 "Could not process that receipt — try a clearer photo or check API logs.",
             )
-            return JSONResponse({"status": "receipt_failed", "error": str(exc)[:200]})
+            return JSONResponse({"status": "receipt_failed"})
 
     if not text:
         await _safe_send(chat_id, "Send text, a receipt photo, or /start")
@@ -300,16 +305,17 @@ async def telegram_webhook(
                 "I could not process that request right now. "
                 "Check API logs and OPENAI_API_KEY on Railway."
             )
-            reply_meta = {"error": str(exc)[:200]}
+            reply_meta = {"error": "assistant_unavailable"}
 
     telegram_message_id = await _safe_send(chat_id, outbound_text)
     if telegram_message_id is None:
         await enqueue_notification(
             db,
             channel="telegram",
-            title="Telegram reply failed",
-            body=outbound_text[:500],
-            category="integration_failure",
+            title="",
+            body=outbound_text[:4096],
+            category="assistant_reply",
+            payload={"reply_chat_id": chat_id},
             dedupe_key=f"telegram-reply-fail:{update.update_id}",
         )
         await db.commit()

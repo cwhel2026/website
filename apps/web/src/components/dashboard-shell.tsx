@@ -16,11 +16,21 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const [ready, setReady] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [navSearch, setNavSearch] = useState("");
+  useEffect(() => {
+    if (!drawerOpen) return;
+    const close = (e: KeyboardEvent) => { if (e.key === 'Escape') setDrawerOpen(false); };
+    document.addEventListener('keydown', close);
+    const old = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.removeEventListener('keydown', close); document.body.style.overflow = old; };
+  }, [drawerOpen]);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [loadErrors, setLoadErrors] = useState<LoadErrorEvent[]>([]);
 
   useEffect(() => {
     setDrawerOpen(false);
+    setNavSearch("");
     setLoadErrors([]);
   }, [pathname]);
 
@@ -146,7 +156,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
           </nav>
         </aside>
 
-        <main className="min-w-0 flex-1 px-4 py-4 pb-[calc(5rem+env(safe-area-inset-bottom))] md:pb-6">
+        <main className="min-w-0 flex-1 px-2 sm:px-4 py-4 pb-[calc(5rem+env(safe-area-inset-bottom))] md:pb-6">
           <div
             className={`mx-auto max-w-full ${
               inMarketing
@@ -205,6 +215,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
                 <li key="more">
                   <button
                     type="button"
+                    aria-expanded={drawerOpen}
                     onClick={() => setDrawerOpen(true)}
                     className="flex min-h-[48px] min-w-[56px] flex-col items-center justify-center gap-0.5 px-2 text-[10px] text-white/70"
                   >
@@ -253,13 +264,14 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
                 <X className="h-5 w-5" />
               </button>
             </div>
-            {NAV_SECTIONS.map((section) => (
-              <details key={section.id} className="border-b border-white/10 py-2" open={section.id === "overview"}>
+            <input aria-label="Find a department" placeholder="Find a department…" value={navSearch} onChange={e => setNavSearch(e.target.value)} className="mb-3 w-full rounded-lg border border-white/20 bg-black/20 p-3 text-base text-white" />
+            {NAV_SECTIONS.filter(section => section.items.some(item => item.label.toLowerCase().includes(navSearch.toLowerCase()))).map((section) => (
+              <details key={section.id} className="border-b border-white/10 py-2" open={!!navSearch || section.id === "overview"}>
                 <summary className="cursor-pointer list-none py-2 text-sm font-medium text-[#eab308]">
                   {section.title}
                 </summary>
                 <ul className="pb-2 pl-1">
-                  {section.items.map((item) => (
+                  {section.items.filter(item => item.label.toLowerCase().includes(navSearch.toLowerCase())).map((item) => (
                     <li key={item.href}>
                       <Link
                         href={item.href}
