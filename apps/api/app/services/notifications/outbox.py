@@ -75,6 +75,13 @@ def _chat_ids() -> list[int]:
     return get_settings().telegram_alert_chat_ids
 
 
+def telegram_recipients(category: str, payload: dict, settings) -> list[int]:
+    if category == "assistant_reply":
+        target = payload.get("reply_chat_id")
+        return [target] if type(target) is int and target in settings.telegram_admin_id_list else []
+    return list(dict.fromkeys(settings.telegram_alert_chat_ids))
+
+
 async def deliver_telegram_outbox_item(db: AsyncSession, item: NotificationOutbox) -> bool:
     # Refresh under a row lock: immediate sends and background workers share this gate.
     await db.refresh(item, with_for_update=True)
@@ -84,10 +91,12 @@ async def deliver_telegram_outbox_item(db: AsyncSession, item: NotificationOutbo
         return False
     settings = get_settings()
     payload = json.loads(item.payload_json or "{}")
-    chats = list(dict.fromkeys(_chat_ids()))
-    if item.category == "assistant_reply":
-        target = payload.get("reply_chat_id")
-        chats = [target] if isinstance(target, int) and target in settings.telegram_admin_id_list else []
+    chats = telegram_recipients(item.category, payload, settings)
+    if item.category == "assistant_reply" and not chats:
+        item.status = OutboxStatus.CANCELLED
+        item.last_error = "Private reply recipient no longer authorised"
+        await db.flush()
+        return False
     if not settings.telegram_bot_token or not chats:
         item.last_error = "Telegram not configured (TELEGRAM_BOT_TOKEN or admin/owner chat id missing)"
         item.status = OutboxStatus.PENDING
