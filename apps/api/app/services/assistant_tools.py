@@ -243,6 +243,40 @@ async def tool_new_enquiries_count(db: AsyncSession) -> dict[str, Any]:
     return {"last_7_days_new_enquiries": count}
 
 
+async def tool_schedule_proposals(db: AsyncSession) -> dict[str, Any]:
+    from app.models.crm import CustomerProperty
+    from app.models.weather import ProductProfile
+    from app.services.scheduling_engine import propose_two_stage_slots
+
+    result = await db.execute(
+        select(Job, CustomerProperty)
+        .outerjoin(CustomerProperty, (CustomerProperty.id == Job.property_id) & (CustomerProperty.customer_id == Job.customer_id))
+        .options(selectinload(Job.appointments))
+        .where(Job.status.in_([JobStatus.RESTORATION_PENDING, JobStatus.PREPARATION_COMPLETED]))
+        .order_by(Job.seven_day_target_date.asc().nulls_last())
+        .limit(5)
+    )
+    profile = (await db.execute(select(ProductProfile).where(ProductProfile.is_active.is_(True)).limit(1))).scalar_one_or_none()
+    items = []
+    for job, prop in result.all():
+        item = {"reference": job.reference, "deadline": job.seven_day_target_date.isoformat() if job.seven_day_target_date else None}
+        if any(a.appointment_type == AppointmentType.COATING and a.status in (AppointmentStatus.CONFIRMED, AppointmentStatus.PROVISIONAL, AppointmentStatus.IN_PROGRESS) for a in job.appointments):
+            item["proposal"] = "Coating already scheduled"
+        elif not profile or prop is None or prop.latitude is None or prop.longitude is None:
+            item["proposal"] = "Missing product profile or property coordinates"
+        else:
+            try:
+                _, slots = await propose_two_stage_slots(db, job=job, lat=float(prop.latitude), lon=float(prop.longitude), product_profile=profile, max_prep_slots=1)
+                item["proposal"] = slots[0].start.astimezone(uk_now().tzinfo).isoformat() if slots else "No safe window found"
+                if slots:
+                    item["estimated_travel_minutes"] = slots[0].travel_minutes
+                    item["weather_score"] = slots[0].weather_score
+            except (ValueError, RuntimeError):
+                item["proposal"] = "Scheduling or forecast unavailable"
+        items.append(item)
+    return {"proposals": items, "note": "Up to five priority jobs. Suggestions are independent, not reserved; recheck conflicts and live weather before confirming."}
+
+
 TOOL_HANDLERS = {
     "jobs_today": tool_jobs_today,
     "jobs_tomorrow": tool_jobs_tomorrow,
