@@ -11,6 +11,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import Settings, get_settings
 from app.models.finance import FreeAgentConnection, FreeAgentConnectionState, Invoice, InvoiceStatus
+from app.models.crm import Enquiry, PipelineStage
+from app.models.quotation import Quotation
 from app.services.finance import freeagent_client
 from app.services.finance.token_vault import (
     decrypt_token,
@@ -235,6 +237,12 @@ async def sync_invoices_from_freeagent(db: AsyncSession) -> dict:
         if not apply_remote_invoice_balance(inv, item):
             continue
         inv.freeagent_url = fa_url
+        if inv.quotation_id and inv.status != InvoiceStatus.DRAFT:
+            quote = await db.get(Quotation, inv.quotation_id)
+            if quote and not quote.is_test and quote.enquiry_id:
+                enquiry = await db.get(Enquiry, quote.enquiry_id, with_for_update=True)
+                if enquiry and enquiry.stage in (PipelineStage.JOB_COMPLETED, PipelineStage.INVOICED, PipelineStage.PAID):
+                    enquiry.stage = PipelineStage.PAID if inv.status == InvoiceStatus.PAID else PipelineStage.INVOICED
         updated += 1
 
     row.last_sync_at = datetime.now(UTC)
