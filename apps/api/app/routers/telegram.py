@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/telegram", tags=["telegram"])
 
 START_MESSAGE = (
-    "🟡 SURFACECOAT | COMMAND CENTRE\n"
+    "🟡 SurfaceCoat | COMMAND CENTRE\n"
     "Private owner assistant\n\n"
     "📅 /today — today’s jobs\n"
     "🗓 /diary — upcoming appointments\n"
