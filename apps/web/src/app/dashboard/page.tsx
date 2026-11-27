@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { apiGet } from "@/lib/api";
+import { apiGet, apiPost } from "@/lib/api";
 import { getToken } from "@/lib/auth-client";
 import { PortalError, PortalKpi, PortalPageTitle } from "@/components/portal-ui";
 
@@ -56,6 +56,17 @@ export default function DashboardOverviewPage() {
   const [tasks, setTasks] = useState<DirectorTask[]>([]);
   const [watchdog, setWatchdog] = useState<Watchdog | null>(null);
 
+  const [scanning, setScanning] = useState(false);
+  const [scanMessage, setScanMessage] = useState("");
+  async function scanDirector() {
+    setScanning(true); setScanMessage("");
+    try {
+      const result = await apiPost<{tasks_created: number}>("/api/v1/business-director/scan", {});
+      setScanMessage(`${result.tasks_created} new recommendations`);
+      setRefresh(n => n + 1);
+    } catch { setScanMessage("Director scan unavailable. Check system health."); }
+    finally { setScanning(false); }
+  }
   const [loading, setLoading] = useState(true);
   const [refresh, setRefresh] = useState(0);
   const [updated, setUpdated] = useState<Date | null>(null);
@@ -162,6 +173,12 @@ export default function DashboardOverviewPage() {
         <QuickLink href="/dashboard/assistant" label="AI assistant" />
       </div>
 
+      <section className="mt-5 rounded-xl border border-white/15 p-3">
+        <h2 className="font-semibold text-[#eab308]">Business director</h2>
+        <p className="mt-1 text-sm text-white/70">Review approvals, coating priorities, stock and overdue invoices.</p>
+        <button onClick={() => void scanDirector()} disabled={scanning || loading} className="mt-3 min-h-11 rounded-lg bg-[#eab308] px-4 font-semibold text-black disabled:opacity-50">{scanning ? "Scanning…" : "Scan business"}</button>
+        <p role="status" className="mt-2 text-sm">{scanMessage}</p>
+      </section>
       <div className="mt-8 grid gap-4 md:grid-cols-2">
         <ListSection title="Recent quotations" empty="No quotations yet." items={quotes.length}>
           {quotes.slice(0,5).map((q) => (
