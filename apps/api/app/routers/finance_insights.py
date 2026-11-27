@@ -20,7 +20,9 @@ from app.services.finance.financial_reports import (
 from app.services.finance.freeagent_reports import distributable_profit_from_freeagent, sync_accounting_reports
 from app.services.finance.payroll_freeagent import payroll_guidance, sync_payroll_status
 from app.services.finance.watchdog import run_financial_watchdog
-from sqlalchemy import select
+from sqlalchemy import select, func
+from app.models.finance import BankTransaction, Receipt
+from app.models.bookkeeping import BookkeepingReviewItem, ReviewItemStatus
 from app.models.freeagent_cache import FinancialReportRecord
 from app.services.notifications.outbox import enqueue_notification
 
@@ -188,3 +190,21 @@ async def finance_security_audit(
     _: Annotated[User, Depends(get_current_admin)],
 ) -> dict:
     return await run_finance_security_audit(db)
+
+@router.get("/reconciliation")
+async def reconciliation_overview(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[User, Depends(get_current_admin)],
+) -> dict:
+    async def count(model, *conditions):
+        return int(await db.scalar(select(func.count()).select_from(model).where(*conditions)) or 0)
+
+    return {
+        "imported_bank_lines": await count(BankTransaction),
+        "reconciled_bank_lines": await count(BankTransaction, BankTransaction.is_reconciled.is_(True), BankTransaction.is_duplicate.is_(False)),
+        "unreconciled_bank_lines": await count(BankTransaction, BankTransaction.is_reconciled.is_(False), BankTransaction.is_duplicate.is_(False)),
+        "flagged_duplicates": await count(BankTransaction, BankTransaction.is_duplicate.is_(True)),
+        "receipts_without_bank_match": await count(Receipt, Receipt.matched_bank_transaction_id.is_(None)),
+        "pending_reviews": await count(BookkeepingReviewItem, BookkeepingReviewItem.status == ReviewItemStatus.PENDING),
+        "basis": "Local imported records only; not a verified bank balance or complete FreeAgent ledger.",
+    }
