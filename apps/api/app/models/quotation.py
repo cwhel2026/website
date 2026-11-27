@@ -51,6 +51,9 @@ class Quotation(Base):
     enquiry_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("enquiries.id"), nullable=True
     )
+    property_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("customer_properties.id"), nullable=True, index=True
+    )
     service_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("services.id"), nullable=True
     )

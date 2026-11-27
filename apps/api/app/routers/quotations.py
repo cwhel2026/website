@@ -51,9 +51,12 @@ async def calculate_provisional_quotation(
             customer_washed_already=body.customer_washed_already,
             postcode=body.postcode,
             town=body.town,
+            pricing_tier=body.pricing_tier,
         )
     except ValueError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        message = str(exc)
+        status = 422 if "not configured" in message else 503
+        raise HTTPException(status_code=status, detail=message) from exc
     out = ProvisionalQuotationOut(
         input_fingerprint=fingerprint,
         priced_at=priced_at_now(),

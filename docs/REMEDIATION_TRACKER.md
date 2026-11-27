@@ -109,12 +109,28 @@ Nothing below is marked as working in production. Production still runs `main` (
 | Q11 | Coverage copy: Lancashire, GM, Merseyside, Cheshire, Cumbria, W Yorkshire; Preston as travel base only | **Done** | `public-brand.ts` + service-areas page. |
 | Q12 | **Future (not implemented):** customer photo upload + AI driveway condition assessment | **Recorded** | Enhancement only — no code in this phase. |
 
+### Milestones 2.1 and 2.2 (branch `cursor/phase2-milestones-21-22-9428`, not merged)
+
+| ID | Requirement | Status | Notes |
+|----|-------------|--------|-------|
+| C1 | One customer per email; one property per customer + address | **Verified (local)** | `customer_records.ensure_property` reuses the row. Quotations and enquiries store `property_id`. |
+| C2 | Attribution keys on the enquiry | **Verified (local)** | `utm_source` / `utm_campaign` copied from the quote. Medium column exists for later capture. |
+| P1 | Tarmac launch £10/m² and standard £12/m² | **Verified (local + integration)** | New profile `surfacecoat-tarmac`. Previous profile deactivated, not deleted. Public default tier is launch. |
+| P2 | Minimum £350, applied before travel | **Verified (local)** | Formula unchanged: works are raised to max(rule, territory minimum), then travel is added. Amount is now £350. |
+| P3 | Travel £0.45/mile and £25/hour; both returns; two visits when wash and coat are separate | **Verified (local)** | Replaces the old territory £/km return charge so mileage is not counted twice. |
+| P4 | Round the VAT-inclusive total up to the next £5 | **Verified (integration)** | Uplift is split back into ex-VAT and VAT so the two still add up to the rounded total. |
+| P5 | Block paving and imprinted concrete configurable, no invented prices | **Verified (integration)** | Existing per-m² rules deactivated, not deleted. Quote returns 422 until a rule is added. |
+| P6 | Do not mark instant quote operational | **Open** | Production still needs an approved deploy and a full iPhone quotation. This branch is not deployed. |
+
 ### Future enhancements (explicitly not built in Phase 2)
 
 | ID | Idea | Notes |
 |----|------|-------|
-| F1 | Photo upload on quote flow | Owner-supplied images stored securely; no AI spend. |
-| F2 | AI-assisted condition grading from photos | Feeds *provisional* estimate hints only; must not auto-book or charge; needs consent + cost cap. |
+| F1 | Customer driveway photograph uploads | Not built. |
+| F2 | Close-up photographs of damage | Not built. |
+| F3 | AI driveway condition assessments | Not built. Must not auto-book or charge. |
+| F4 | AI-generated illustrative restoration previews | Not built. |
+| F5 | Finalised imprinted concrete and block paving prices | Research still open. Engine refuses those surfaces until rules exist. |
 
 ---
 

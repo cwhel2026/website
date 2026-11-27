@@ -10,7 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.models.crm import CustomerProperty, Enquiry, PipelineStage
+from app.models.crm import Enquiry, PipelineStage
 from app.models.quotation import (
     Quotation,
     QuotationCalculation,
@@ -19,7 +19,8 @@ from app.models.quotation import (
 )
 from app.models.quotation_idempotency import QuotationSubmissionIdempotency
 from app.models.service import Service
-from app.routers.crm import upsert_customer
+from app.services.customer_records import ensure_property, upsert_customer
+from app.services.geocode import geocode_postcode
 from app.schemas.quotation import InstantQuotationRequest, QuotationOut, QuotationSectionIn
 from app.services.approval_service import ensure_quotation_approval
 from app.services.service_aliases import resolve_service_slug
@@ -33,7 +34,7 @@ from app.services.quotation_workflow import (
 def _reference() -> str:
     stamp = datetime.now(UTC).strftime("%Y%m%d")
     suffix = secrets.token_hex(2).upper()
-    return f"RMD-{stamp}-{suffix}"
+    return f"SC-{stamp}-{suffix}"
 
 
 async def load_active_service(db: AsyncSession, slug: str) -> Service:
@@ -116,21 +117,32 @@ async def persist_submitted_quotation(
         source=body.source,
         campaign=body.campaign,
     )
-    prop = CustomerProperty(
-        customer_id=customer.id,
+    latitude = longitude = None
+    try:
+        point = await geocode_postcode(body.postcode)
+        latitude, longitude = point.latitude, point.longitude
+    except HTTPException:
+        latitude = longitude = None
+    prop = await ensure_property(
+        db,
+        customer=customer,
         address_line1=body.address_line1,
         address_line2=body.address_line2,
         town=body.town,
-        postcode=body.postcode.upper(),
+        postcode=body.postcode,
         territory_id=territory.id if territory else None,
+        latitude=latitude,
+        longitude=longitude,
     )
-    db.add(prop)
 
     enquiry = Enquiry(
         customer_id=customer.id,
+        property_id=prop.id,
         surface_type=body.surface_type,
         message=body.visible_damage,
         stage=PipelineStage.QUOTE_GENERATED,
+        utm_source=body.source,
+        utm_campaign=body.campaign,
     )
     db.add(enquiry)
     await db.flush()
@@ -146,6 +158,7 @@ async def persist_submitted_quotation(
         reference=_reference(),
         customer_id=customer.id,
         enquiry_id=enquiry.id,
+        property_id=prop.id,
         service_id=service.id,
         territory_id=territory.id if territory else None,
         status=status,

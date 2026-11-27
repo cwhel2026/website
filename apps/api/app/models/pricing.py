@@ -80,6 +80,8 @@ class PricingRule(Base):
     )
     amount_gbp: Mapped[Decimal] = mapped_column(Numeric(12, 4), default=Decimal("0"))
     percentage: Mapped[Decimal | None] = mapped_column(Numeric(8, 4), nullable=True)
+    # Distinguishes launch vs standard per-m² rates. Null means the rule applies to every tier.
+    label: Mapped[str | None] = mapped_column(String(40), nullable=True)
     is_active: Mapped[bool] = mapped_column(default=True)
 
     profile: Mapped["PricingProfile"] = relationship(back_populates="rules")
