@@ -41,7 +41,6 @@ type Job = {
   appointments?: { scheduled_start?: string | null; status?: string }[];
 };
 type Approval = { id: string; title: string; status: string };
-type DirectorTask = { id: string; title: string; priority?: string };
 type Watchdog = { count?: number; issues?: { title: string; severity: string }[] };
 
 export default function DashboardOverviewPage() {
@@ -55,7 +54,6 @@ export default function DashboardOverviewPage() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [jobs, setJobs] = useState<Job[]>([]);
   const [approvals, setApprovals] = useState<Approval[]>([]);
-  const [tasks, setTasks] = useState<DirectorTask[]>([]);
   const [watchdog, setWatchdog] = useState<Watchdog | null>(null);
 
   const [scanning, setScanning] = useState(false);
@@ -106,7 +104,6 @@ export default function DashboardOverviewPage() {
         ),
       "Jobs"),
       load<Approval[]>("/api/v1/approvals", (a) => setApprovals(a.filter((x) => x.status === "pending")), "Approvals"),
-      load<DirectorTask[]>("/api/v1/business-director/tasks", (t) => setTasks(t.slice(0, 5)), "AI tasks"),
       load<Watchdog>("/api/v1/finance/insights/watchdog", setWatchdog, "Integration health"),
     ]).then(() => { if (active) { setLoading(false); setUpdated(new Date()); } });
     return () => { active = false; };
@@ -126,7 +123,6 @@ export default function DashboardOverviewPage() {
         : faState
           ? faState.replaceAll("_", " ")
           : "Unknown";
-  const openQuotes = quotes.filter((q) => !["accepted", "declined", "rejected", "expired"].includes(q.status.toLowerCase()));
   const outstandingInvoices = invoices.filter((i) => {
     const total = i.total_inc_vat_gbp ?? 0;
     const paid = i.amount_paid_gbp ?? 0;
