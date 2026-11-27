@@ -1,4 +1,5 @@
 from typing import Annotated
+from datetime import UTC, datetime
 
 from uuid import UUID
 
@@ -8,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_admin
 from app.database import get_db
-from app.models.crm import Customer, Enquiry, PipelineStage
+from app.models.crm import Customer, Enquiry, OwnerFollowUp, PipelineStage
 from app.models.user import User
 from app.schemas.crm import CallbackOutcomeIn, CustomerOut, EnquiryCreate, EnquiryOut
 from app.services.customer_records import ensure_property, upsert_customer
@@ -85,11 +86,15 @@ async def record_callback_outcome(
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[User, Depends(get_current_admin)],
 ) -> Enquiry:
-    enquiry = await db.get(Enquiry, enquiry_id)
+    enquiry = await db.get(Enquiry, enquiry_id, with_for_update=True)
     if enquiry is None or enquiry.intention != "callback_requested":
         raise HTTPException(status_code=404, detail="Callback request not found")
     enquiry.callback_status = "completed" if body.completed else "open"
     enquiry.callback_outcome = body.outcome.strip()
+    tasks = (await db.execute(select(OwnerFollowUp).where(OwnerFollowUp.enquiry_id == enquiry.id, OwnerFollowUp.kind == "callback_requested").with_for_update())).scalars().all()
+    for task in tasks:
+        task.status = "completed" if body.completed else "open"
+        task.completed_at = datetime.now(UTC) if body.completed else None
     await db.commit()
     await db.refresh(enquiry)
     return enquiry
