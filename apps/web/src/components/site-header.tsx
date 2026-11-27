@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { publicBrand } from "@/lib/public-brand";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 
@@ -25,14 +26,14 @@ export function SiteHeader() {
             className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-asphalt font-display text-lg font-semibold text-white shadow-sm"
             aria-hidden
           >
-            R
+            S
           </span>
           <span>
             <span className="block font-display text-lg font-semibold tracking-tight text-asphalt md:text-xl">
-              Revive My Drive
+              {publicBrand.tradingName}
             </span>
             <span className="mt-0.5 block text-[10px] font-semibold uppercase tracking-[0.22em] text-asphalt/55">
-              Surface restoration · North West
+              {publicBrand.legalName}
             </span>
           </span>
         </Link>

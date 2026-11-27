@@ -34,7 +34,7 @@ export default function CommercialPage() {
   return (
     <div className="site-container py-16 md:py-24">
       <p className="section-eyebrow">Commercial restoration</p>
-      <h1 className="mt-2 font-display text-4xl font-semibold text-asphalt">Partner with Revive My Drive</h1>
+      <h1 className="mt-2 font-display text-4xl font-semibold text-asphalt">Partner with SurfaceCoat</h1>
       <p className="mt-4 max-w-2xl text-lg leading-relaxed text-asphalt/75">
         Car parks, forecourts, retail parks, industrial estates, hotels and managing agents — surface
         restoration and maintenance enquiries routed to your commercial CRM pipeline.
@@ -43,7 +43,7 @@ export default function CommercialPage() {
       <div className="mt-8 overflow-hidden rounded-lg border border-stone-line shadow-sm">
         <StockImage asset={MEDIA.services["commercial-car-parks"]} aspect="aspect-[21/9]" sizes="100vw" />
         <p className="border-t border-stone-line bg-stone-wash px-4 py-2 text-xs text-asphalt/60">
-          Licensed UK reference photo — not a completed Revive My Drive commercial project.
+          Licensed UK reference photo — not a completed SurfaceCoat commercial project.
         </p>
       </div>
 

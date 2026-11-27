@@ -65,7 +65,7 @@ export async function POST(request: NextRequest) {
     const hint =
       admins.length === 0
         ? `Telegram is not fully configured: TELEGRAM_ADMIN_IDS is empty.\n\nYour Telegram user ID is: ${userId}\n\nAdd it on Railway and redeploy.`
-        : `This bot is private (Revive My Drive).\n\nYour Telegram user ID is: ${userId}\n\nAdd it to TELEGRAM_ADMIN_IDS on Railway and redeploy.`;
+        : `This bot is private (SurfaceCoat).\n\nYour Telegram user ID is: ${userId}\n\nAdd it to TELEGRAM_ADMIN_IDS on Railway and redeploy.`;
     await telegramSendMessage(chatId, hint);
     return NextResponse.json({ status: "unauthorised", hint_sent: true });
   }

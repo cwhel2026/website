@@ -15,8 +15,14 @@ export default defineConfig({
     trace: "on-first-retry",
   },
   projects: [
-    { name: "mobile", testIgnore: /authenticated\//, use: { ...devices["iPhone 13"] } },
-    { name: "desktop", testIgnore: /authenticated\//, use: { ...devices["Desktop Chrome"] } },
+    { name: "mobile", testIgnore: /authenticated\/|public-quote-real/, use: { ...devices["iPhone 13"] } },
+    { name: "desktop", testIgnore: /authenticated\/|public-quote-real/, use: { ...devices["Desktop Chrome"] } },
+    {
+      name: "public-quote-mobile",
+      testMatch: /public-quote-real\.spec\.ts/,
+      // iPhone 13 device profile + Chromium (CI installs chromium only; still mobile viewport/touch).
+      use: { ...devices["iPhone 13"], browserName: "chromium" },
+    },
     ...(authenticated
       ? [
           { name: "auth-setup", testMatch: /authenticated\/auth\.setup\.ts/ },

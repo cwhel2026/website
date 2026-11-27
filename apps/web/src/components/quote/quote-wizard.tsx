@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { ApiError } from "@/lib/api";
 import { apiGet, apiPost } from "@/lib/api";
 import { trackFunnel, getStoredUtm } from "@/lib/analytics";
 
@@ -235,7 +236,15 @@ export function QuoteWizard() {
       setProvisional(data);
       void trackFunnel("quote_estimate", 5);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Quotation could not be calculated.");
+      if (err instanceof ApiError) {
+        setError(
+          err.status >= 500
+            ? "We could not calculate a price right now. Your details are still saved — try again shortly."
+            : err.message,
+        );
+      } else {
+        setError("Quotation could not be calculated. Your details are still saved.");
+      }
     } finally {
       setLoading(false);
     }
@@ -304,11 +313,14 @@ export function QuoteWizard() {
           Your provisional price in minutes
         </h1>
 
-        <ol className="mt-8 flex gap-1 overflow-x-auto text-xs sm:text-sm" aria-label="Progress">
+        <ol
+          className="mt-8 grid grid-cols-4 gap-2 text-[10px] sm:grid-cols-7 sm:text-xs"
+          aria-label="Progress"
+        >
           {STEPS.map((label, i) => (
             <li
               key={label}
-              className={`whitespace-nowrap rounded-full px-3 py-1.5 ${
+              className={`rounded-full px-2 py-1.5 text-center leading-tight ${
                 i === step ? "bg-asphalt text-white" : i < step ? "bg-restore-muted text-restore-dark" : "bg-white text-asphalt/50"
               }`}
             >

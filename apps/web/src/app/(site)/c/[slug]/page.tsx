@@ -20,7 +20,7 @@ export default function CampaignLandingPage() {
 
   return (
     <div className="mx-auto max-w-xl px-4 py-16 text-center">
-      <h1 className="text-2xl font-semibold text-emerald-950">Revive My Drive</h1>
+      <h1 className="text-2xl font-semibold text-emerald-950">SurfaceCoat</h1>
       <p className="mt-4 text-emerald-900/80">
         You scanned a regional flyer (campaign ref: {slug}). Get a provisional quote for your driveway or car park
         restoration.

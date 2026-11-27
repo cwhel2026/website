@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { publicBrand } from "@/lib/public-brand";
 
 const regionalPages = [
   { href: "/areas/tarmac-restoration-blackpool", label: "Tarmac restoration Blackpool" },
@@ -9,15 +10,13 @@ const regionalPages = [
 ];
 
 const territories = [
-  "West Lancashire (Burscough, Ormskirk, Skelmersdale)",
-  "Sefton and Southport",
-  "Liverpool and Merseyside",
-  "Preston and Central Lancashire",
-  "Blackpool and Fylde Coast",
-  "Chorley and Wigan",
-  "Blackburn and East Lancashire",
-  "Bolton and Greater Manchester",
-  "Warrington and surrounding areas",
+  "Lancashire (West Lancashire, Central Lancashire, East Lancashire, Fylde Coast)",
+  "Greater Manchester",
+  "Merseyside",
+  "Cheshire and Warrington",
+  "Cumbria (south)",
+  "West Yorkshire (border areas)",
+  "Surrounding North West postcodes where travel remains efficient",
 ];
 
 export const metadata = { title: "Service areas" };
@@ -27,8 +26,9 @@ export default function ServiceAreasPage() {
     <div className="mx-auto max-w-6xl px-4 py-12">
       <h1 className="text-3xl font-semibold text-emerald-950">Where we work</h1>
       <p className="mt-3 max-w-3xl text-emerald-900/80">
-        Revive My Drive operates across configurable territories in North West England. Travel,
-        minimum job values and availability vary by region to keep work profitable and efficient.
+        {publicBrand.tradingName} serves customers across {publicBrand.coverageAreas}. Online quotes check
+        postcode coverage and travel from our operational scheduling base in Central Lancashire — we do not
+        advertise Preston as our public office location. Minimum job values and availability vary by region.
       </p>
       <ul className="mt-8 grid gap-3 md:grid-cols-2">
         {territories.map((t) => (

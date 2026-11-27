@@ -5,6 +5,7 @@ from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.models.pricing import PricingProfile, PricingRule, PricingRuleType
 from app.models.quotation import SurfaceCondition
@@ -79,6 +80,7 @@ DEFAULT_LABOUR_RATE = Decimal("42.00")
 async def get_active_pricing_profile(db: AsyncSession) -> PricingProfile:
     result = await db.execute(
         select(PricingProfile)
+        .options(selectinload(PricingProfile.rules))
         .where(PricingProfile.is_active.is_(True))
         .order_by(PricingProfile.version.desc())
         .limit(1)

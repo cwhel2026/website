@@ -71,7 +71,7 @@ export async function registerTelegramWebhook(): Promise<{
 }
 
 export const TELEGRAM_START_MESSAGE =
-  "Revive My Drive assistant is connected.\n\n" +
+  "SurfaceCoat assistant is connected.\n\n" +
   "Ask about today's jobs, weather, quotations, or marketing — private owner access only.";
 
 const seenUpdates = new Set<number>();

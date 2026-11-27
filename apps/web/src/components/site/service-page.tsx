@@ -27,8 +27,8 @@ export function ServicePage({
           <p className="border-t border-stone-line bg-stone-wash px-4 py-2 text-xs text-asphalt/60">
             {media.caption ??
               (media.kind === "owned_project"
-                ? "Completed Revive My Drive project imagery."
-                : `Licensed reference photo (${media.credit}) — not a completed Revive My Drive project.`)}
+                ? "Completed SurfaceCoat project imagery."
+                : `Licensed reference photo (${media.credit}) — not a completed SurfaceCoat project.`)}
           </p>
         </div>
       ) : (

@@ -83,6 +83,41 @@ Nothing below is marked as working in production. Production still runs `main` (
 
 ---
 
+## Phase 2: Public quotation & customer journey
+
+**Operational rule:** Do **not** mark the instant quotation system as operational until a full customer quote (provisional price + submit) is verified on production mobile after deploy.
+
+### Critical (customer-facing)
+
+| ID | Issue | Priority | Status | Verification |
+|----|-------|----------|--------|--------------|
+| Q1 | Instant quote shows **Internal Server Error** on Calculate estimate (iPhone, production) | **P0 CRITICAL** | **Root cause found · fix in branch** | Reproduced: `POST /api/v1/quotations/provisional` → HTTP 500 (production). Local traceback: `sqlalchemy.exc.MissingGreenlet` when `pricing_engine.calculate_quotation` lazy-loads `PricingProfile.rules` in async SQLAlchemy. **Not** caused by FreeAgent/Meta integrations. |
+| Q2 | Marketing slug vs catalogue slug (Service not found) | P0 | Verified (CI) · Awaiting deploy | Fixed on `main` via service alias map (`tarmac-restoration` → `tarmac-driveway-restoration`). |
+
+### Phase 2 workstream (in progress)
+
+| ID | Requirement | Status |
+|----|-------------|--------|
+| Q3 | Reproduce full public workflow; identify endpoint + exception | **Done (local)** | Endpoint: `POST /api/v1/quotations/provisional`. Exception: `MissingGreenlet` on pricing rules load. |
+| Q4 | Migrations, pricing profile/rules, postcode lookup, travel distance | **Checked** | Schema at head; seeds provide pricing profile + rules. Travel uses postcodes.io + Preston base coords from `scheduling_settings` (operational, not advertised as HQ). Geocode errors now return 503 JSON instead of opaque 500. |
+| Q5 | Genuine backend calculations in tests (no mocked totals) | **In CI** | `test_quotation_provisional_integration.py` + Playwright `e2e/public-quote-real.spec.ts` (mobile). |
+| Q6 | Failed requests must not lose customer-entered data | **Done** | Quote wizard persists to `sessionStorage`; errors state details are saved. |
+| Q7 | Quotation independent of marketing/accounting integrations | **Verified** | Provisional path uses only services, territories, pricing profile, postcodes.io. |
+| Q8 | Mobile journey end-to-end test | **In CI** | `public-quote-mobile` Playwright project. |
+| Q9 | Quotation progress bar overflow on mobile | **Fixed** | Step pills use responsive grid (4 cols mobile / 7 desktop) instead of horizontal scroll. |
+| Q10 | Replace Revive My Drive → SurfaceCoat (public site) | **Done (web)** | Header, footer, layout metadata, service areas, commercial/privacy/media copy + Telegram-lite web routes updated. API seed emails / legacy domains may remain in backend until Phase 3. |
+| Q11 | Coverage copy: Lancashire, GM, Merseyside, Cheshire, Cumbria, W Yorkshire; Preston as travel base only | **Done** | `public-brand.ts` + service-areas page. |
+| Q12 | **Future (not implemented):** customer photo upload + AI driveway condition assessment | **Recorded** | Enhancement only — no code in this phase. |
+
+### Future enhancements (explicitly not built in Phase 2)
+
+| ID | Idea | Notes |
+|----|------|-------|
+| F1 | Photo upload on quote flow | Owner-supplied images stored securely; no AI spend. |
+| F2 | AI-assisted condition grading from photos | Feeds *provisional* estimate hints only; must not auto-book or charge; needs consent + cost cap. |
+
+---
+
 ## Later phases (not started; listed for dependency tracking)
 
 | ID | Issue (audit ref) | Phase | Depends on |

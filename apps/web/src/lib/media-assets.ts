@@ -57,7 +57,7 @@ export const MEDIA = {
     "Phil Catterall / Geograph 409433",
     "https://www.geograph.org.uk/photo/409433",
     "reference",
-    "Licensed reference photo — not a completed Revive My Drive project.",
+    "Licensed reference photo — not a completed SurfaceCoat project.",
   ),
   beforeAfter: {
     before: asset(
@@ -77,7 +77,7 @@ export const MEDIA = {
       "illustrative_derivative",
     ),
     caption:
-      "Illustrative comparison using one UK reference photograph. The “after” side is a colour/contrast treatment on the same frame — not a real Revive My Drive job. Authentic project pairs will replace this when approved.",
+      "Illustrative comparison using one UK reference photograph. The “after” side is a colour/contrast treatment on the same frame — not a real SurfaceCoat job. Authentic project pairs will replace this when approved.",
   },
   services: {
     "tarmac-restoration": asset(
