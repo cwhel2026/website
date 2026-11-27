@@ -6,7 +6,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.finance import Expense
-from app.models.jobs import Job
+from app.models.jobs import Job, JobStatus
 from app.models.quotation import Quotation
 from app.models.territory import Territory
 
@@ -37,7 +37,7 @@ async def job_profitability(db: AsyncSession, job_id: UUID) -> JobProfitability 
     contribution = Decimal("0")
     if job.quotation_id:
         q = await db.get(Quotation, job.quotation_id)
-        if q:
+        if q and not q.is_test:
             quote_revenue = q.total_inc_vat_gbp
             contribution = q.estimated_contribution_gbp
     exp_result = await db.execute(
@@ -60,7 +60,9 @@ async def territory_profitability(db: AsyncSession) -> list[TerritoryProfitabili
     for t in territories:
         quote_sum = await db.execute(
             select(func.coalesce(func.sum(Quotation.total_inc_vat_gbp), 0)).where(
-                Quotation.territory_id == t.id
+                Quotation.territory_id == t.id,
+                Quotation.is_test.is_(False),
+                Quotation.id.in_(select(Job.quotation_id).where(Job.status == JobStatus.COMPLETED))
             )
         )
         exp_sum = await db.execute(
