@@ -16,9 +16,10 @@ def test_authorised_when_user_in_list(monkeypatch):
     get_settings.cache_clear()
     monkeypatch.setenv("TELEGRAM_ADMIN_IDS", "999888,111222")
     get_settings.cache_clear()
-    assert _authorised_chat(123, 999888)
+    assert _authorised_chat(999888, 999888)
+    assert not _authorised_chat(123, 999888)
     assert not _authorised_chat(123, 555)
 
 
 def test_start_message_defined():
-    assert "Revive My Drive" in START_MESSAGE
+    assert "SurfaceCoat" in START_MESSAGE
