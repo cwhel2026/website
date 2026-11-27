@@ -5,7 +5,7 @@ from __future__ import annotations
 import secrets
 from datetime import UTC, datetime, timedelta
 from typing import Any
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlsplit
 
 import httpx
 
@@ -117,11 +117,7 @@ async def api_get(settings: Settings, access_token: str, path: str) -> dict[str,
 
 
 async def fetch_invoices(settings: Settings, access_token: str) -> list[dict[str, Any]]:
-    payload = await api_get(settings, access_token, "/v2/invoices")
-    invoices = payload.get("invoices") or []
-    if not isinstance(invoices, list):
-        return []
-    return invoices
+    return await fetch_paginated_list(settings, access_token, "/v2/invoices", "invoices")
 
 
 async def fetch_bank_accounts(settings: Settings, access_token: str) -> list[dict[str, Any]]:
@@ -139,7 +135,14 @@ async def fetch_bank_transactions(
     per_page: int = 50,
 ) -> tuple[list[dict[str, Any]], int | None]:
     """bank_account_path is the URL suffix from FreeAgent, e.g. /v2/bank_accounts/123."""
-    path = f"{bank_account_path}/bank_transactions?page={page}&per_page={per_page}"
+    account = urlsplit(bank_account_path)
+    base = urlsplit(settings.freeagent_api_base)
+    if account.netloc and (account.scheme, account.netloc) != (base.scheme, base.netloc):
+        raise ValueError("Unexpected bank account origin")
+    import re
+    if not re.fullmatch(r"/v2/bank_accounts/[0-9]+", account.path) or account.query or account.fragment:
+        raise ValueError("Invalid bank account resource")
+    path = f"/v2/bank_transactions?{urlencode({'bank_account': settings.freeagent_api_base.rstrip('/') + account.path, 'page': page, 'per_page': per_page})}"
     payload = await api_get(settings, access_token, path)
     txns = payload.get("bank_transactions") or []
     if not isinstance(txns, list):
@@ -164,16 +167,18 @@ async def fetch_paginated_list(
     for page in range(1, max_pages + 1):
         sep = "&" if "?" in path else "?"
         payload = await api_get(settings, access_token, f"{path}{sep}page={page}&per_page=50")
-        batch = payload.get(list_key) or []
-        if not isinstance(batch, list) or not batch:
-            break
+        batch = payload.get(list_key)
+        if not isinstance(batch, list):
+            raise ValueError("Invalid paginated response")
+        if not batch:
+            return items
         items.extend(batch)
         total = payload.get("total")
         if total is not None and page * 50 >= int(total):
-            break
+            return items
         if len(batch) < 50:
-            break
-    return items
+            return items
+    raise ValueError("Pagination limit reached; incomplete import")
 
 
 async def fetch_bills(settings: Settings, access_token: str) -> list[dict[str, Any]]:

@@ -8,7 +8,7 @@ from decimal import Decimal, ROUND_HALF_UP
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.finance import BankTransaction, Invoice
+from app.models.finance import BankTransaction, Invoice, InvoiceStatus
 from app.models.marketing import CampaignStatus, RegionalCampaign
 from app.models.marketing_growth_fund import (
     GrowthFundEntryType,
@@ -151,6 +151,9 @@ async def process_revenue_allocations(db: AsyncSession, *, notify: bool = True) 
     if not settings.enabled:
         return {"processed": 0, "message": "Growth fund disabled"}
 
+    await db.refresh(settings, with_for_update=True)
+    if not Decimal('0') <= settings.allocation_pct <= Decimal('100'):
+        return {"processed": 0, "message": "Invalid allocation percentage"}
     pct = settings.allocation_pct / Decimal("100")
     existing_keys = {
         x
@@ -206,7 +209,7 @@ async def process_revenue_allocations(db: AsyncSession, *, notify: bool = True) 
                 bank_transaction_id=txn.id,
                 invoice_id=invoice.id if invoice else None,
                 dedupe_key=dedupe,
-                description=f"5% of eligible revenue from «{txn.description[:80]}»",
+                description=f"{settings.allocation_pct}% of eligible revenue from «{txn.description[:80]}»",
                 metadata_json={"source": "freeagent_bank", "reconciled": txn.is_reconciled},
             )
         )
@@ -218,7 +221,7 @@ async def process_revenue_allocations(db: AsyncSession, *, notify: bool = True) 
                 {
                     "payment_gbp": float(txn.amount_gbp),
                     "allocation_gbp": float(allocation),
-                    "available_gbp": float(balance + allocation),
+                    "available_gbp": float(balance),
                 }
             )
 
@@ -255,6 +258,8 @@ async def _process_refund_reversals(db: AsyncSession, existing_keys: set[str], a
         await db.execute(
             select(BankTransaction).where(
                 BankTransaction.amount_gbp < 0,
+                BankTransaction.matched_invoice_id.is_not(None),
+                BankTransaction.matched_expense_id.is_(None),
                 BankTransaction.is_reconciled.is_(True),
                 BankTransaction.is_duplicate.is_(False),
             )
@@ -265,11 +270,18 @@ async def _process_refund_reversals(db: AsyncSession, existing_keys: set[str], a
         dedupe = f"refund:bank:{txn.external_id or txn.id}"
         if dedupe in existing_keys:
             continue
-        eligible = abs(txn.amount_gbp).quantize(Decimal("0.01"))
-        reversal = _q(-(eligible * pct))
+        invoice = await db.get(Invoice, txn.matched_invoice_id)
+        if not invoice or invoice.total_inc_vat_gbp <= 0:
+            continue
+        allocated = await db.scalar(select(func.coalesce(func.sum(MarketingGrowthFundLedger.amount_gbp), 0)).where(MarketingGrowthFundLedger.invoice_id == invoice.id, MarketingGrowthFundLedger.entry_type.in_((GrowthFundEntryType.REVENUE_ALLOCATION, GrowthFundEntryType.REFUND_ADJUSTMENT))))
+        eligible = _q(abs(txn.amount_gbp) * invoice.subtotal_ex_vat_gbp / invoice.total_inc_vat_gbp)
+        reversal = -min(_q(eligible * pct), max(Decimal('0'), Decimal(str(allocated or 0))))
+        if reversal == 0:
+            continue
         db.add(
             MarketingGrowthFundLedger(
                 entry_type=GrowthFundEntryType.REFUND_ADJUSTMENT,
+                invoice_id=invoice.id,
                 amount_gbp=reversal,
                 eligible_revenue_gbp=eligible,
                 allocation_pct=allocation_pct,

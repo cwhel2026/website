@@ -21,7 +21,7 @@ async def marketing_funnel_attribution(db: AsyncSession, *, days: int = 90) -> d
         select(func.count()).select_from(AttributionEvent).where(AttributionEvent.landed_at >= since)
     )
     linked_enquiries = await db.scalar(
-        select(func.count())
+        select(func.count(func.distinct(AttributionEvent.enquiry_id)))
         .select_from(AttributionEvent)
         .where(AttributionEvent.landed_at >= since, AttributionEvent.enquiry_id.isnot(None))
     )
@@ -49,12 +49,12 @@ async def marketing_funnel_attribution(db: AsyncSession, *, days: int = 90) -> d
     )
     invoiced = await db.scalar(
         select(func.coalesce(func.sum(Invoice.total_inc_vat_gbp), 0)).where(
-            Invoice.created_at >= since, Invoice.status != InvoiceStatus.VOID
+            Invoice.created_at >= since, Invoice.status.notin((InvoiceStatus.VOID, InvoiceStatus.DRAFT))
         )
     )
     paid = await db.scalar(
-        select(func.coalesce(func.sum(Invoice.total_inc_vat_gbp), 0)).where(
-            Invoice.created_at >= since, Invoice.status == InvoiceStatus.PAID
+        select(func.coalesce(func.sum(Invoice.amount_paid_gbp), 0)).where(
+            Invoice.created_at >= since, Invoice.status.notin((InvoiceStatus.VOID, InvoiceStatus.DRAFT))
         )
     )
     spend = await db.scalar(
@@ -70,7 +70,7 @@ async def marketing_funnel_attribution(db: AsyncSession, *, days: int = 90) -> d
         "attribution_touches": int(touches or 0),
         "attribution_linked_enquiries": int(linked_enquiries or 0),
         "enquiries_total": int(
-            await db.scalar(select(func.count()).select_from(Enquiry).where(Enquiry.created_at >= since)) or 0
+            await db.scalar(select(func.count()).select_from(Enquiry).where(Enquiry.created_at >= since, Enquiry.is_test.is_(False))) or 0
         ),
         "quotations": int(quotes or 0),
         "quotations_accepted": int(accepted or 0),
@@ -79,9 +79,9 @@ async def marketing_funnel_attribution(db: AsyncSession, *, days: int = 90) -> d
         "invoiced_gbp": float(invoiced or 0),
         "collected_revenue_gbp": float(paid_d),
         "advertising_spend_gbp": float(spend_d),
-        "cost_per_enquiry_gbp": float(spend_d / touches) if touches else None,
-        "cost_per_accepted_quote_gbp": float(spend_d / accepted) if accepted else None,
-        "roas_collected": float(paid_d / spend_d) if spend_d > 0 else None,
+        "cost_per_enquiry_gbp": None,
+        "cost_per_accepted_quote_gbp": None,
+        "roas_collected": None,
         "revenue_quality": "collected_only — quotations not counted as revenue",
-        "attribution_uncertainty": "Cross-channel dedupe and campaign→job link incomplete",
+        "attribution_uncertainty": "Campaign-level revenue and period spend are not verified; ROI and acquisition costs withheld",
     }
