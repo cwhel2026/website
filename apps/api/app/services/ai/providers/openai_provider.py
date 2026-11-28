@@ -56,6 +56,9 @@ async def chat_with_openai(
 
     async with httpx.AsyncClient(timeout=60.0) as client:
         for _ in range(4):
+            ok, msg = await check_spend_allowed(db)
+            if not ok:
+                raise RuntimeError(msg)
             response = await client.post(
                 "https://api.openai.com/v1/chat/completions",
                 headers={"Authorization": f"Bearer {settings.openai_api_key}"},
@@ -64,7 +67,7 @@ async def chat_with_openai(
                     "messages": messages,
                     "tools": [spec for spec in OPENAI_TOOL_SPECS if allowed_tool(agent_slug, spec.get("function", {}).get("name"))] + ([consultation_spec] if allow_consultation and not consulted else []),
                     "tool_choice": "auto",
-                    "temperature": 0.2,
+                    **({"temperature": 0.2} if model.startswith("gpt-4o") else {}),
                 },
             )
             response.raise_for_status()
@@ -72,20 +75,12 @@ async def chat_with_openai(
             usage = payload.get("usage") or {}
             total_prompt += int(usage.get("prompt_tokens", 0))
             total_completion += int(usage.get("completion_tokens", 0))
+            await record_usage(db, provider="openai", model=model, agent_slug=agent_slug, prompt_tokens=int(usage.get("prompt_tokens", 0)), completion_tokens=int(usage.get("completion_tokens", 0)), estimated_cost_gbp=estimate_openai_cost_gbp(int(usage.get("prompt_tokens", 0)), int(usage.get("completion_tokens", 0)), model))
+            await db.flush()
             choice = payload["choices"][0]["message"]
             tool_calls = choice.get("tool_calls") or []
             if not tool_calls:
                 reply = choice.get("content") or "No response."
-                cost = estimate_openai_cost_gbp(total_prompt, total_completion, model)
-                await record_usage(
-                    db,
-                    provider="openai",
-                    model=model,
-                    agent_slug=agent_slug,
-                    prompt_tokens=total_prompt,
-                    completion_tokens=total_completion,
-                    estimated_cost_gbp=cost,
-                )
                 return reply.strip(), tool_data, "openai"
 
             messages.append(choice)
@@ -108,6 +103,8 @@ async def chat_with_openai(
                                 raise ValueError("Department unavailable")
                             async with db.begin_nested():
                                 assessment, _, provider = await chat_with_openai(db, "Read-only internal consultation: " + question_for_colleague[:2000], agent_slug=department, allow_consultation=False)
+                            from app.services.audit import record_audit
+                            await record_audit(db, actor_type="ai_employee", actor_id=agent_slug, action="employee_consultation", entity_type="ai_employee", detail={"department": department, "question": question_for_colleague[:2000], "assessment": assessment[:3500], "provider": provider})
                             result = {"colleague": EMPLOYEES[department][0], "assessment": assessment, "provider": provider}
                         except Exception:
                             result = {"error": "Colleague assessment unavailable; do not claim consultation succeeded."}
