@@ -637,20 +637,16 @@ async def send_outreach(
     db: Annotated[AsyncSession, Depends(get_db)],
     user: Annotated[User, Depends(get_current_admin_writer)],
 ) -> dict:
-    msg = await db.get(OutreachMessage, message_id)
-    if msg is None:
-        raise HTTPException(404)
-    prospect = await db.get(CommercialProspect, msg.prospect_id)
-    if prospect is None:
-        raise HTTPException(404)
-    msg.status = OutreachMessageStatus.APPROVED
-    msg.approved_by = str(user.id)
-    result = await approve_and_send(db, msg, prospect)
-    await record_audit(db, actor_type="user", actor_id=str(user.id), action="marketing.outreach_send", entity_id=msg.id)
-    await db.commit()
-    if not result.get("ok"):
-        raise HTTPException(400, result.get("message"))
-    return result
+    raise HTTPException(409, "External outreach delivery is not verified; use draft review.")
+
+
+@router.get("/outreach/review")
+async def outreach_review(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[User, Depends(get_current_admin)],
+) -> list[dict]:
+    rows = (await db.execute(select(OutreachMessage, CommercialProspect).join(CommercialProspect, OutreachMessage.prospect_id == CommercialProspect.id).where(OutreachMessage.status.in_([OutreachMessageStatus.PENDING_APPROVAL, OutreachMessageStatus.APPROVED]), CommercialProspect.opt_out.is_(False)).limit(100))).all()
+    return [{"id": str(m.id), "business_name": p.business_name, "subject": m.subject, "body": m.body_text, "status": m.status.value} for m, p in rows]
 
 
 class AttributionIn(BaseModel):
