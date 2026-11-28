@@ -12,6 +12,10 @@ const ROUTES = [
   "/dashboard/finance-hub",
   "/dashboard/quotations",
   "/dashboard/customers",
+  "/dashboard/approvals",
+  "/dashboard/weather",
+  "/dashboard/jobs",
+  "/dashboard/assistant",
 ] as const;
 
 const OUT = path.join("test-results", "portal-screenshots");
