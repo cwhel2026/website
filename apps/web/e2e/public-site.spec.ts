@@ -39,3 +39,12 @@ test("commercial enquiry form", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Commercial surface restoration" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Submit commercial enquiry" })).toBeVisible();
 });
+
+
+test("public launch pages have no obsolete March launch notice", async ({ page }) => {
+  for (const path of ["/", "/quote", "/contact", "/commercial"]) {
+    const response = await page.goto(path);
+    expect(response?.status()).toBe(200);
+    await expect(page.getByText(/March 2027/i)).toHaveCount(0);
+  }
+});
