@@ -1,4 +1,5 @@
 import json
+import re
 from app.services.ai.company_handbook import COMPANY_HANDBOOK
 from app.services.ai.employees import EMPLOYEES, allowed_tool
 from typing import Any
@@ -105,6 +106,24 @@ async def chat_with_openai(
             tool_calls = choice.get("tool_calls") or []
             if not tool_calls:
                 reply = choice.get("content") or "No response."
+                if agent_slug == "marketing" and re.search(r"£\s*\d|\b\d+(?:\.\d+)?\s*(?:gbp|pounds)\b", reply, re.I) and re.search(r"budget|spend|advertis|campaign|target", question, re.I):
+                    # A model-selected calculator call is not sufficient to certify free-form prose.
+                    # Return only the checked allocation, never unchecked monetary recommendations.
+                    checked = tool_data.get("validate_ad_allocation", {})
+                    if not checked.get("valid"):
+                        reply = "I cannot verify a numerical advertising allocation yet. No spending is authorised. I need a validated allocation and current budget evidence."
+                    else:
+                        policy = tool_data.get("marketing_budget_policy", {})
+                        spend = tool_data.get("marketing_weekly_spend", {})
+                        from app.services.ai.budget_math import validate_allocation
+                        try:
+                            rows = checked["allocations"]
+                            actual = validate_allocation(policy["weekly_limit_gbp"], spend["total_spent_gbp"], rows)
+                            if not actual["valid"] or policy.get("emergency_pause_all"):
+                                raise ValueError()
+                            reply = "Provisional allocation for review (not authorised spend):\n" + "\n".join(f"{row['territory']}: £{row['total_gbp']} over {row['days']} days" for row in actual["allocations"]) + f"\nCombined: £{actual['total_gbp']}. Recorded spend is provisional; verify platform billing, daily and channel limits before approval."
+                        except (KeyError, ValueError, TypeError):
+                            reply = "Current budget evidence does not support a verified allocation. No spending is authorised."
                 from app.services.audit import record_audit
                 await record_audit(db, actor_type="ai_employee", actor_id=agent_slug, action="employee_decision_report", entity_type="ai_employee", detail={"question": question[:2000], "reply": reply[:3400], "evidence_tools": list(tool_data), "model": model, "estimated_cost_gbp": str(sum(cost_tracker)), "consulted": consultation_succeeded})
                 footer = f"\n\nAI: {model} | Est. cost £{sum(cost_tracker):.4f}" if root_call else ""
