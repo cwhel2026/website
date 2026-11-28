@@ -14,11 +14,15 @@ type Hour = {
 };
 
 export default function WeatherPage() {
+  const [busy,setBusy]=useState(false);
+  const [error,setError]=useState("");
   const [rows, setRows] = useState<Hour[]>([]);
   const [postcode, setPostcode] = useState("L39 4RX");
   const [status, setStatus] = useState<string | null>(null);
 
   async function load() {
+    setBusy(true);setError("");setRows([]);setStatus(null);
+    try {
     const token = getToken();
     const meta = await apiGet<{ provider: string; simulation_allowed_for_booking: boolean }>(
       "/api/v1/weather/status",
@@ -30,11 +34,12 @@ export default function WeatherPage() {
       token ?? undefined,
     );
     setRows(data);
+    } catch {setError("Forecast unavailable. Do not use this page to confirm a booking.");} finally {setBusy(false);}
   }
 
   return (
     <div className="max-w-2xl">
-      <h1 className="text-2xl font-semibold text-asphalt">Weather intelligence</h1>
+      <h1 className="text-2xl font-semibold text-asphalt portal-department-title">Weather intelligence</h1>
       <p className="mt-2 text-sm text-asphalt/70">
         Live UK forecasts via Open-Meteo when available. Simulation is labelled and never used for booking checks in
         production.
@@ -48,9 +53,10 @@ export default function WeatherPage() {
           className="mt-1 w-full rounded border px-3 py-2"
         />
       </label>
-      <button type="button" onClick={() => load()} className="btn-primary mt-4">
-        Load 24h forecast
+      <button type="button" disabled={busy} onClick={() => load()} className="btn-primary mt-4">
+        {busy?"Loading…":"Load 24h forecast"}
       </button>
+      {error&&<p role="alert" className="mt-3 text-red-700">{error}</p>}
       {rows[0] && (
         <p className="mt-3 text-xs text-asphalt/60">
           Source: {rows[0].source} · live data: {rows[0].is_live ? "yes" : "no (simulation)"}
