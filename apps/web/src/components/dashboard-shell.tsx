@@ -79,10 +79,11 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
 
   const inMarketing = pathname.startsWith("/dashboard/marketing");
   // Pages not yet migrated to the dark portal components use light-theme text colours.
-  const darkNative = inMarketing || pathname === "/dashboard" || pathname === "/dashboard/launch-readiness";
+  const darkNative = inMarketing || pathname === "/dashboard" || pathname === "/dashboard/launch-readiness" || pathname === "/dashboard/approvals";
 
   return (
     <div className="portal-root min-h-screen bg-[#141716] text-white overflow-x-hidden">
+      <a href="#portal-main" className="sr-only focus:not-sr-only focus:fixed focus:z-[70] focus:bg-amber-300 focus:p-3 focus:text-black">Skip to content</a>
       <header
         className="sticky top-0 z-40 border-b border-white/10 bg-[#1a1a1a]/95 backdrop-blur md:pl-0"
         style={{ paddingTop: "max(0.5rem, env(safe-area-inset-top))" }}
@@ -134,12 +135,13 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
                 )}
                 <ul className="space-y-0.5">
                   {section.items.map((item) => {
-                    const active = isNavActive(pathname, item.href);
+                    const active = currentSection?.href === item.href;
                     return (
                       <li key={item.href}>
                         <Link
                           href={item.href}
                           title={item.label}
+                          aria-current={active ? "page" : undefined}
                           className={`block rounded-lg px-2 py-2 ${
                             active
                               ? "bg-[#eab308] font-semibold text-[#1a1a1a]"
@@ -157,14 +159,14 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
           </nav>
         </aside>
 
-        <main className="min-w-0 flex-1 px-3 sm:px-6 py-5 pb-[calc(5rem+env(safe-area-inset-bottom))] md:pb-6">
+        <main id="portal-main" className="min-w-0 flex-1 px-3 sm:px-6 py-5 pb-[calc(5rem+env(safe-area-inset-bottom))] md:pb-6">
           <div
             className={`mx-auto max-w-full ${
               inMarketing
                 ? "text-white"
                 : darkNative
                   ? "rounded-3xl text-white"
-                  : "overflow-x-auto rounded-3xl border border-white/10 bg-white p-4 text-[#1a1a1a] shadow-lg md:p-6"
+                  : "portal-legacy overflow-x-auto rounded-2xl border border-white/10 bg-[#f8faf9] p-4 text-[#1a1a1a] shadow-lg md:p-6"
             }`}
           >
             {loadErrors.length > 0 && (
