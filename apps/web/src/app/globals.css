@@ -67,3 +67,11 @@ body {
  .portal-root table { max-width: 100%; }
  .portal-root input, .portal-root select, .portal-root textarea { max-width: 100%; }
 }
+
+@layer components {
+ .portal-department-title { @apply text-2xl font-bold tracking-tight sm:text-3xl; }
+ .portal-legacy { color-scheme: light; }
+ .portal-legacy button:not([aria-label]) { min-height: 44px; }
+ .portal-legacy input:not([type=checkbox]):not([type=radio]), .portal-legacy select { min-height: 44px; font-size: 16px; }
+ .portal-legacy td { overflow-wrap: anywhere; }
+}
