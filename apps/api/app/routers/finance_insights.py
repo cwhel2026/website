@@ -208,3 +208,45 @@ async def reconciliation_overview(
         "pending_reviews": await count(BookkeepingReviewItem, BookkeepingReviewItem.status == ReviewItemStatus.PENDING),
         "basis": "Local imported records only; not a verified bank balance or complete FreeAgent ledger.",
     }
+
+
+@router.get("/reconciliation/payment-candidates")
+async def payment_candidates(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[User, Depends(get_current_admin)],
+) -> dict:
+    from app.models.finance import Invoice, InvoiceStatus
+    from app.services.analytics_service import issued_business_invoices
+
+    rows = await db.execute(
+        select(BankTransaction).where(
+            BankTransaction.amount_gbp > 0,
+            BankTransaction.is_reconciled.is_(False),
+            BankTransaction.is_duplicate.is_(False),
+            BankTransaction.matched_invoice_id.is_(None),
+            BankTransaction.matched_expense_id.is_(None),
+            BankTransaction.freeagent_explanation_url.is_(None),
+        ).order_by(BankTransaction.transacted_at.desc(), BankTransaction.id).limit(100)
+    )
+    results = []
+    for txn in rows.scalars().all():
+        matches = await db.execute(
+            select(Invoice).where(
+                Invoice.id.in_(issued_business_invoices()),
+                Invoice.status.in_([InvoiceStatus.SENT, InvoiceStatus.PART_PAID, InvoiceStatus.OVERDUE]),
+                Invoice.issue_date <= txn.transacted_at,
+                Invoice.total_inc_vat_gbp - Invoice.amount_paid_gbp == txn.amount_gbp,
+            ).order_by(Invoice.id).limit(2)
+        )
+        candidates = list(matches.scalars().all())
+        results.append({
+            "transaction_id": str(txn.id),
+            "description": txn.description,
+            "amount_gbp": str(txn.amount_gbp),
+            "date": txn.transacted_at.isoformat(),
+            "status": "unique_candidate" if len(candidates) == 1 else "ambiguous" if candidates else "unmatched",
+            "invoice_id": str(candidates[0].id) if len(candidates) == 1 else None,
+            "invoice_number": candidates[0].invoice_number if len(candidates) == 1 else None,
+            "requires_review": True,
+        })
+    return {"transactions": results, "limit": 100, "basis": "Exact outstanding amount and invoice date only; suggestions are not verified payments."}
