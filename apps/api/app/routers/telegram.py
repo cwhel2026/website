@@ -38,7 +38,8 @@ START_MESSAGE = (
     "💷 /finance — business finances\n"
     "🌦 /weather — weather intelligence\n"
     "🔐 /approvals — review pending decisions\n"
-    "📆 /schedule — coating deadlines\n\n"
+    "📆 /schedule — coating deadlines\n"
+    "🧠 /director — business priorities\n\n"
     "Ask a business question or send a receipt photo (OCR must be configured)."
 
 )
@@ -102,7 +103,7 @@ def _reply_chat_id(message: dict[str, Any] | None) -> int | None:
 
 
 def report_review_markup(command: str, origin: str) -> dict | None:
-    routes = {"/approvals": ("Review approvals", "/dashboard/approvals"), "/schedule": ("Review jobs", "/dashboard/jobs")}
+    routes = {"/director": ("Open command centre", "/dashboard"), "/approvals": ("Review approvals", "/dashboard/approvals"), "/schedule": ("Review jobs", "/dashboard/jobs")}
     if command not in routes:
         return None
     try:
@@ -342,7 +343,9 @@ async def telegram_webhook(
                 tool_pending_approvals, tool_rain_risk_appointments,
                 tool_analytics_snapshot, tool_schedule_proposals,
             )
+            from app.services.business_director import director_signals
             commands = {
+                "/director": ("BUSINESS PRIORITIES", director_signals),
                 "/today": ("TODAY'S CONFIRMED JOBS", tool_jobs_today),
                 "/diary": ("NEXT SEVEN DAYS", tool_jobs_next_week),
                 "/quotes": ("QUOTATIONS AWAITING APPROVAL", tool_quotations_awaiting),
