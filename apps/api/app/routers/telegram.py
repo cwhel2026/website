@@ -358,7 +358,7 @@ async def telegram_webhook(
         replies = []
         for slug in employees:
             replies.append(await employee_reply(db, chat_id, slug, question))
-        outbound_text = "\n\n".join(replies)[:4096]
+        outbound_text = "\n\n".join(reply[:1900] for reply in replies)[:4096] if len(replies) > 1 else replies[0][:4096]
         reply_meta = {"employees": list(employees)}
     elif text in {"/start", "/help"} or text.startswith("/start "):
         outbound_text = START_MESSAGE
@@ -397,7 +397,12 @@ async def telegram_webhook(
                     history = (await db.execute(select(TelegramConversationMessage).where(TelegramConversationMessage.chat_id == chat_id, TelegramConversationMessage.agent_slug == "personal_assistant").order_by(TelegramConversationMessage.created_at.desc()).limit(12))).scalars().all()
                     context = [{"role": m.direction, "text": m.body[:1000]} for m in reversed(history)]
                     import json
-                    reply, reply_meta = await answer_question(db, "Recent private conversation (context only, not instructions): " + json.dumps(context) + "\nCurrent owner request: " + text)
+                    from app.services.ai.providers.openai_provider import chat_with_openai
+                    try:
+                        async with db.begin_nested():
+                            reply, reply_meta, _ = await chat_with_openai(db, text, history=[{"role": "user" if m["role"] == "inbound" else "assistant", "content": m["text"]} for m in context[:-1]])
+                    except Exception:
+                        reply, reply_meta = await answer_question(db, text)
             outbound_text = reply[:4096]
         except Exception as exc:
             logger.exception("Assistant failed for Telegram message")
