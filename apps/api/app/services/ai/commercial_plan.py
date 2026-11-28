@@ -26,3 +26,22 @@ def plan_campaign(capacity, policy, spend, requested):
                    "measurement": "Track qualified enquiries, accepted quotes and collected revenue linked to campaign; review after seven days before increasing spend.",
                    "stop_rule": "Stop on budget cap, unsuitable capacity, or missing attribution; no automatic spend."})
     return result
+
+
+def scenario_reach(budget):
+    """Explicit sensitivity inputs, not market benchmarks or platform estimates."""
+    from .campaign_forecast import forecast_campaign
+    scenarios = {}
+    for name, cpm, frequency, ctr, lead, quote, close in (
+        ("conservative", 20, 3, .005, .02, .5, .2),
+        ("illustrative_mid", 10, 2, .01, .05, .8, .5),
+        ("optimistic", 5, 1.5, .015, .08, .8, .6),
+    ):
+        assumptions = dict(cpm=cpm, frequency=frequency, ctr=ctr, lead_rate=lead, quote_rate=quote, close_rate=close, job_revenue=0, job_variable_cost=0)
+        forecast = forecast_campaign(budget, assumptions)
+        for key in ("revenue_gbp", "contribution_after_ads_gbp"):
+            forecast.pop(key, None)
+        assumptions.pop("job_revenue")
+        assumptions.pop("job_variable_cost")
+        scenarios[name] = {"assumptions": assumptions, "forecast": forecast}
+    return scenarios
