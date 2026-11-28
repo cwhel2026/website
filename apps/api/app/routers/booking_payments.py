@@ -2,7 +2,7 @@ from decimal import Decimal
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -98,3 +98,49 @@ async def payment_link(job_id: UUID, db: DB,
     response = serialize(row)
     await db.commit()
     return response
+
+
+@router.post("/gocardless/webhook")
+async def payment_webhook(request: Request, db: DB) -> dict:
+    import json
+    from sqlalchemy.dialects.postgresql import insert
+    from app.config import get_settings
+    from app.models.booking_payment import BookingPaymentEvent
+    from app.services.payments.gocardless import verify_webhook_signature
+
+    settings = get_settings()
+    if not settings.gocardless_enabled or settings.gocardless_environment != "sandbox":
+        raise HTTPException(503, "Payment integration disabled")
+    body = bytearray()
+    async for chunk in request.stream():
+        body.extend(chunk)
+        if len(body) > 1024 * 1024:
+            raise HTTPException(413, "Webhook too large")
+    if not verify_webhook_signature(bytes(body), request.headers.get("Webhook-Signature"),
+                                    settings.gocardless_webhook_secret or ""):
+        raise HTTPException(401, "Invalid webhook signature")
+    try:
+        events = json.loads(body)["events"]
+        if not isinstance(events, list) or len(events) > 1000:
+            raise ValueError()
+        for event in events:
+            event_id = event["id"]
+            action = event["action"]
+            resource = event["resource_type"]
+            payment_id = event.get("links", {}).get("payment")
+            if not all(isinstance(v, str) and v for v in (event_id, action, resource)):
+                raise ValueError()
+            if len(event_id) > 100 or len(action) > 80:
+                raise ValueError()
+            if payment_id is not None and (not isinstance(payment_id, str) or len(payment_id) > 100):
+                raise ValueError()
+            if resource != "payments":
+                continue
+            await db.execute(insert(BookingPaymentEvent).values(
+                event_id=event_id, action=action, payment_id=payment_id
+            ).on_conflict_do_nothing(index_elements=["event_id"]))
+    except (ValueError, KeyError, TypeError, AttributeError):
+        await db.rollback()
+        raise HTTPException(400, "Invalid webhook payload") from None
+    await db.commit()
+    return {"received": True}
