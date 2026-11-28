@@ -79,6 +79,21 @@ async def chat_with_openai(
     previous = (await db.scalars(select(AuditEvent).where(AuditEvent.action == "employee_decision_report", AuditEvent.actor_id == agent_slug).order_by(AuditEvent.created_at.desc()).limit(5))).all()
     if previous:
         messages.insert(2, {"role": "user", "content": "Previous recommendations, not verified outcomes: " + json.dumps([x.detail_json for x in previous], default=str)[:10000]})
+    if agent_slug == "marketing" and re.search(r"budget|spend|advertis|campaign|target", question, re.I):
+        from app.services.ai.commercial_plan import plan_campaign, scenario_reach
+        from app.services.marketing.competitor_research import list_competitor_findings
+        match = re.search(r"£\s*(\d+(?:\.\d{1,2})?)", question)
+        policy = tool_data.get("marketing_budget_policy", {})
+        plan = plan_campaign(tool_data.get("marketing_capacity", {}), policy, tool_data.get("marketing_weekly_spend", {}), match.group(1) if match else policy.get("weekly_limit_gbp"))
+        if plan.get("allocation"):
+            plan["scenarios"] = scenario_reach(plan["allocation"][0]["total_gbp"])
+        try:
+            async with db.begin_nested():
+                plan["stored_competitors"] = await list_competitor_findings(db, limit=10)
+        except Exception:
+            plan["stored_competitors"] = []
+        tool_data["hypothetical_campaign_plan"] = plan
+        messages.insert(2, {"role": "user", "content": "Calculated hypothetical campaign plan, not authorisation: " + json.dumps(plan, default=str)})
     if allow_consultation and agent_slug == "marketing" and re.search(r"\b(?:consult|ask|check with|speak to)\s+Arthur\b", question, re.I):
         consulted = True
         try:
@@ -88,20 +103,13 @@ async def chat_with_openai(
             if not profile or profile.is_paused or profile.emergency_stop:
                 raise ValueError("Arthur unavailable")
             async with db.begin_nested():
-                assessment, _, provider = await chat_with_openai(db, "Read-only affordability assessment for Olivia: " + question[:2000], agent_slug="finance", allow_consultation=False, cost_tracker=cost_tracker)
+                assessment, _, provider = await chat_with_openai(db, "Read-only affordability assessment for Olivia: " + question[:2000] + "\nCalculated campaign scenario (not verified outcomes): " + json.dumps(tool_data.get("hypothetical_campaign_plan", {}), default=str)[:10000], agent_slug="finance", allow_consultation=False, cost_tracker=cost_tracker)
                 await record_audit(db, actor_type="ai_employee", actor_id=agent_slug, action="employee_consultation", entity_type="ai_employee", detail={"department": "finance", "assessment": assessment[:3500], "provider": provider})
             consultation_succeeded = True
             tool_data["consult_colleague"] = {"colleague": "Arthur", "assessment": assessment}
         except Exception:
             tool_data["consult_colleague"] = {"error": "Arthur unavailable; do not claim consultation succeeded"}
         messages.insert(2, {"role": "user", "content": "Actual consultation result: " + json.dumps(tool_data["consult_colleague"], default=str)})
-    if agent_slug == "marketing" and re.search(r"budget|spend|advertis|campaign|target", question, re.I):
-        from app.services.ai.commercial_plan import plan_campaign
-        match = re.search(r"£\s*(\d+(?:\.\d{1,2})?)", question)
-        policy = tool_data.get("marketing_budget_policy", {})
-        plan = plan_campaign(tool_data.get("marketing_capacity", {}), policy, tool_data.get("marketing_weekly_spend", {}), match.group(1) if match else policy.get("weekly_limit_gbp"))
-        tool_data["hypothetical_campaign_plan"] = plan
-        messages.insert(2, {"role": "user", "content": "Calculated hypothetical campaign plan, not authorisation: " + json.dumps(plan)})
     model = settings.openai_model
     total_prompt = 0
     total_completion = 0
@@ -130,6 +138,12 @@ async def chat_with_openai(
                     plan = tool_data["hypothetical_campaign_plan"]
                     rows = plan.get("allocation", [])
                     reply = "Hypothetical campaign only; authorised spend £0.\n" + "\n".join(f"{row['territory']}: £{row['daily_gbp']}/day for {row['days']} days (£{row['total_gbp']})" for row in rows) + "\n" + plan.get("reason", plan.get("error", "")) + "\n" + plan.get("measurement", "") + "\n" + plan.get("stop_rule", "") + "\nFree actions:\n" + "\n".join(plan.get("free_actions", [])) + "\n" + "; ".join(plan.get("launch_blockers", []))
+                    if plan.get("scenarios"):
+                        reply += "\nReach sensitivity (illustrative assumptions, not Meta estimates):"
+                        for name, scenario in plan["scenarios"].items():
+                            forecast = scenario["forecast"]
+                            reply += f"\n{name}: reach {forecast['reach']}, impressions {forecast['impressions']}, enquiries {forecast['enquiries']}, expected jobs {forecast['jobs']}; CPM £{scenario['assumptions']['cpm']}, frequency {scenario['assumptions']['frequency']}."
+                        reply += "\nActual audience size and delivery estimates require platform data. Job profitability requires verified costs."
                 elif agent_slug == "marketing" and re.search(r"£\s*\d|\b\d+(?:\.\d+)?\s*(?:gbp|pounds)\b", reply, re.I) and re.search(r"budget|spend|advertis|campaign|target", question, re.I):
                     # A model-selected calculator call is not sufficient to certify free-form prose.
                     # Return only the checked allocation, never unchecked monetary recommendations.
