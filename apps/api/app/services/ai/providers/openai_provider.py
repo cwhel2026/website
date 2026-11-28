@@ -1,4 +1,5 @@
 import json
+from app.services.ai.employees import EMPLOYEES, allowed_tool
 from typing import Any
 
 import httpx
@@ -27,6 +28,7 @@ async def chat_with_openai(
     question: str,
     *,
     agent_slug: str = "personal_assistant",
+    history: list[dict[str, Any]] | None = None,
 ) -> tuple[str, dict[str, Any], str]:
     if not settings.openai_api_key:
         raise RuntimeError("OpenAI not configured")
@@ -37,7 +39,8 @@ async def chat_with_openai(
 
     tool_data: dict[str, Any] = {}
     messages: list[dict[str, Any]] = [
-        {"role": "system", "content": SYSTEM_PROMPT + f"\nToday UK: {uk_date_label(uk_now().date())}."},
+        {"role": "system", "content": SYSTEM_PROMPT + "\n" + EMPLOYEES.get(agent_slug, ("", ""))[1] + f"\nToday UK: {uk_date_label(uk_now().date())}."},
+        * (history or []),
         {"role": "user", "content": question},
     ]
     model = settings.openai_model
@@ -52,7 +55,7 @@ async def chat_with_openai(
                 json={
                     "model": model,
                     "messages": messages,
-                    "tools": [spec for spec in OPENAI_TOOL_SPECS if spec.get("function", {}).get("name") not in {"marketing_pause_all", "marketing_director_proactive"}],
+                    "tools": [spec for spec in OPENAI_TOOL_SPECS if allowed_tool(agent_slug, spec.get("function", {}).get("name"))],
                     "tool_choice": "auto",
                     "temperature": 0.2,
                 },
@@ -81,7 +84,7 @@ async def chat_with_openai(
             messages.append(choice)
             for call in tool_calls:
                 name = call["function"]["name"]
-                result = {"error": "Action requires explicit owner approval"} if name in {"marketing_pause_all", "marketing_director_proactive"} else await run_tool(db, name)
+                result = {"error": "Action requires explicit owner approval"} if not allowed_tool(agent_slug, name) else await run_tool(db, name)
                 tool_data[name] = result
                 messages.append(
                     {

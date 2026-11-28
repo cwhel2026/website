@@ -1,3 +1,4 @@
+from sqlalchemy import text as sql_text
 import enum
 import uuid
 from datetime import datetime
@@ -86,6 +87,7 @@ class TelegramConversationMessage(Base):
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
     chat_id: Mapped[int] = mapped_column(BigInteger, index=True)
+    agent_slug: Mapped[str] = mapped_column(String(60), server_default=sql_text("'personal_assistant'"), index=True)
     direction: Mapped[str] = mapped_column(String(12))
     body: Mapped[str] = mapped_column(Text)
     telegram_message_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
