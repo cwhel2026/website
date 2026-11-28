@@ -34,7 +34,7 @@ ALLOWED: dict[CommercialPipelineStage, set[CommercialPipelineStage]] = {
 def _append_history(prospect: CommercialProspect, event: str, detail: str) -> None:
     hist = list(prospect.contact_history_json or [])
     hist.append({"at": datetime.now(UTC).isoformat(), "event": event, "detail": detail})
-    prospect.contact_history_json = hist
+    prospect.contact_history_json = hist[-200:]
 
 
 async def transition_pipeline(
@@ -44,6 +44,7 @@ async def transition_pipeline(
     *,
     note: str = "",
 ) -> tuple[bool, str]:
+    await db.refresh(prospect, with_for_update=True)
     if prospect.opt_out and new_stage != CommercialPipelineStage.DO_NOT_CONTACT:
         return False, "Prospect opted out"
     current = prospect.pipeline_stage
