@@ -40,7 +40,7 @@ export default function AssistantPage() {
 
   return (
     <div className="flex h-[70vh] flex-col">
-      <h1 className="text-2xl font-semibold text-emerald-950">AI Assistant</h1>
+      <h1 className="text-2xl font-semibold text-emerald-950 portal-department-title">AI Assistant</h1>
       <p className="text-sm text-slate-600">
         Answers use live backend tools only ({`provider: deterministic_tools`}). No fabricated jobs or revenue.
       </p>
