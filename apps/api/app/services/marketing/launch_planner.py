@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -15,7 +16,7 @@ async def generate_launch_plan(db: AsyncSession, *, launch_date: date | None = N
     policy = await get_or_create_budget_policy(db)
     launch = launch_date or policy.official_launch_date
     if launch is None:
-        launch = date.today() + timedelta(days=30)
+        launch = datetime.now(ZoneInfo("Europe/London")).date()
     policy.official_launch_date = launch
     weeks = []
     for w in range(4):
@@ -39,7 +40,7 @@ async def generate_launch_plan(db: AsyncSession, *, launch_date: date | None = N
         )
     plan = {
         "launch_date": launch.isoformat(),
-        "pre_launch": True,
+        "pre_launch": launch > datetime.now(ZoneInfo("Europe/London")).date(),
         "weeks": weeks,
         "disclaimer": "No publish or live spend until owner approval",
     }
