@@ -6,6 +6,7 @@ import { apiGet, apiPost } from "@/lib/api";
 import { getToken } from "@/lib/auth-client";
 import { PortalError, PortalKpi } from "@/components/portal-ui";
 
+type Director = {signals: Record<string,number>; agents:{slug:string;name:string;mode:string;paused:boolean;emergency_stop:boolean}[]};
 type Command = { as_of: string; open_quotes: number; pending_approvals: number; coating_due_within_two_days: number; outstanding_invoice_gbp: string; upcoming_visits: {id:string; reference:string; start:string; type:string; weather_suitable:boolean|null}[]; director_tasks: {id:string; title:string; priority:number}[] };
 type Quotation = {
   reference: string;
@@ -38,6 +39,7 @@ type Approval = { id: string; title: string; status: string };
 type Watchdog = { count?: number; issues?: { title: string; severity: string }[] };
 
 export default function DashboardOverviewPage() {
+  const [director,setDirector] = useState<Director|null>(null);
   const [command, setCommand] = useState<Command | null>(null);
   const [errors, setErrors] = useState<string[]>([]);
   const [quotes, setQuotes] = useState<Quotation[]>([]);
@@ -67,7 +69,7 @@ export default function DashboardOverviewPage() {
     let active = true;
     setLoading(true);
     setErrors([]);
-    setCommand(null); setAnalytics(null); setFinance(null); setMarketing(null); setWatchdog(null); setQuotes([]); setEnquiries([]); setInvoices([]); setApprovals([]);
+    setDirector(null); setCommand(null); setAnalytics(null); setFinance(null); setMarketing(null); setWatchdog(null); setQuotes([]); setEnquiries([]); setInvoices([]); setApprovals([]);
     const authToken = getToken();
     if (!authToken) { setLoading(false); setErrors(['Session unavailable']); return; }
     const token: string = authToken;
@@ -82,6 +84,7 @@ export default function DashboardOverviewPage() {
     }
 
     void Promise.all([
+      load<Director>("/api/v1/business-director/overview",setDirector,"Director signals"),
       load<Command>("/api/v1/analytics/command-centre", setCommand, "Command centre"),
       load<Quotation[]>("/api/v1/quotations", (q) => setQuotes(q), "Quotations"),
       load<Enquiry[]>("/api/v1/crm/enquiries", (e) => setEnquiries(e), "Enquiries"),
@@ -176,6 +179,9 @@ export default function DashboardOverviewPage() {
         <p className="mt-1 text-sm text-white/70">Review approvals, coating priorities, stock and overdue invoices.</p>
         <button onClick={() => void scanDirector()} disabled={scanning || loading} className="mt-3 min-h-11 rounded-lg bg-[#eab308] px-4 font-semibold text-black disabled:opacity-50">{scanning ? "Scanning…" : "Scan business"}</button>
         <p role="status" className="mt-2 text-sm">{scanMessage}</p>
+        <div className="mt-4 grid grid-cols-2 gap-2">{director ? Object.entries(director.signals).map(([key,count])=><PortalKpi key={key} label={key.replaceAll("_"," ")} value={String(count)}/>) : <p>Director signals unavailable.</p>}</div>
+        <div className="mt-4 space-y-2">{director?.agents.map(a=><div key={a.slug} className="flex justify-between gap-2 rounded border border-white/10 p-2 text-sm"><span>{a.name}</span><span>{a.emergency_stop?"Stopped":a.paused?"Paused":a.mode}</span></div>)}</div>
+        <p className="mt-3 text-xs text-white/70">Recommendations only. External actions require separate approval.</p>
       </section>
       <div className="mt-8 grid gap-4 md:grid-cols-2">
         <ListSection title="Recent quotations" empty={loading ? "Loading…" : errors.includes("Quotations") ? "Unavailable" : "No quotations yet."} items={quotes.length}>
