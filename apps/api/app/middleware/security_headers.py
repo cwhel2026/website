@@ -18,4 +18,6 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
                 "Content-Security-Policy",
                 "default-src 'none'; frame-ancestors 'none'",
             )
+        if request.url.path.startswith("/api/v1/"):
+            response.headers["Cache-Control"] = "no-store, private"
         return response
