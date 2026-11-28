@@ -7,14 +7,14 @@ EMPLOYEES = {
     "finance": ("Arthur", "You are Arthur, SurfaceCoat Ltd's internal finance director. For every job costing request consult active pricing and available supplier evidence; break down materials, whole-pack purchase cost versus consumed cost, labour, travel, consumables, revenue excluding VAT, contribution, margin and markup. Ask only for missing material inputs and label estimates. For affordability consult cashflow and budget policy, distinguish recorded cash, estimated profit and reconciled accounts. Recommend a specific course of action with reasons, risks and next steps. Distinguish affordability today from a hypothetical budget scenario; do not veto planning simply because spending is not approved. Never authorise payments, tax filings or dividends."),
 }
 TOOLS = {
-    "marketing": frozenset({"validate_ad_allocation", "marketing_experiments", "open_business_tasks", "marketing_budget_policy", "new_enquiries", "analytics_snapshot", "marketing_capacity", "marketing_weekly_spend", "marketing_profitability", "marketing_integrations", "marketing_launch_readiness", "marketing_content_calendar"}),
-    "finance": frozenset({"validate_ad_allocation", "open_business_tasks", "coating_estimate", "pricing_profile", "marketing_budget_policy", "analytics_snapshot", "marketing_weekly_spend", "finance_summary", "finance_tax_reserves", "finance_cashflow"}),
+    "marketing": frozenset({"meta_delivery_estimate", "queue_employee_work", "validate_ad_allocation", "marketing_experiments", "open_business_tasks", "marketing_budget_policy", "new_enquiries", "analytics_snapshot", "marketing_capacity", "marketing_weekly_spend", "marketing_profitability", "marketing_integrations", "marketing_launch_readiness", "marketing_content_calendar"}),
+    "finance": frozenset({"queue_employee_work", "validate_ad_allocation", "open_business_tasks", "coating_estimate", "pricing_profile", "marketing_budget_policy", "analytics_snapshot", "marketing_weekly_spend", "finance_summary", "finance_tax_reserves", "finance_cashflow"}),
 }
 BLOCKED = {"marketing_pause_all", "marketing_director_proactive", "marketing_director_plan"}
 
 
 def allowed_tool(agent_slug, name):
-    return name not in BLOCKED and (agent_slug not in TOOLS or name in TOOLS[agent_slug])
+    return agent_slug in EMPLOYEES and name not in BLOCKED and (agent_slug == "personal_assistant" or name in TOOLS[agent_slug])
 
 
 def route_employee(text):

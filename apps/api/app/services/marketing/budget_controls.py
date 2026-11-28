@@ -124,21 +124,13 @@ def _policy_dict(policy: MarketingBudgetPolicy) -> dict:
 
 
 async def weekly_spend_summary(db: AsyncSession) -> dict:
-    since = datetime.now(UTC) - timedelta(days=7)
-    total = await db.scalar(
-        select(func.coalesce(func.sum(RegionalCampaign.spent_gbp), 0)).where(
-            RegionalCampaign.updated_at >= since
-        )
-    )
-    by_platform = await db.execute(
-        select(RegionalCampaign.platform, func.coalesce(func.sum(RegionalCampaign.spent_gbp), 0))
-        .where(RegionalCampaign.updated_at >= since)
-        .group_by(RegionalCampaign.platform)
-    )
-    return {
-        "window_days": 7,
-        "total_spent_gbp": float(total or 0),
-        "by_platform": {row[0].value: float(row[1]) for row in by_platform.all()},
-        "provisional": True,
-        "note": "Relies on campaign spent_gbp sync — verify against ad platform billing.",
-    }
+    # These columns contain cumulative totals. Filtering by updated_at incorrectly
+    # treats a recent sync of an old campaign as this week's expenditure.
+    rows = (await db.scalars(select(RegionalCampaign).where(RegionalCampaign.simulation_only.is_(False)))).all()
+    totals = {}
+    committed = Decimal(0)
+    for row in rows:
+        totals[row.platform.value] = totals.get(row.platform.value, Decimal(0)) + Decimal(str(row.spent_gbp or 0))
+        if row.status in (CampaignStatus.LIVE, CampaignStatus.APPROVED, CampaignStatus.PAUSED):
+            committed += Decimal(str(row.daily_budget_gbp or 0))
+    return {"window_days": None, "total_spent_gbp": str(sum(totals.values(), Decimal(0))), "by_platform": {k: str(v) for k, v in totals.items()}, "committed_daily_gbp": str(committed), "provisional": True, "note": "Cumulative recorded spend, conservatively counted against period limits. Dated platform billing is unavailable."}
