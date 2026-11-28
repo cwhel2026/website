@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth import get_current_admin
+from app.auth import get_current_admin, get_current_admin_writer
 from app.database import get_db
 from app.models.marketing_ops import CommercialPipelineStage, CommercialProspect
 from app.models.user import User
@@ -40,7 +40,7 @@ async def prospect_verticals(_: Annotated[User, Depends(get_current_admin)]) -> 
 @router.post("/director/run")
 async def director_run(
     db: Annotated[AsyncSession, Depends(get_db)],
-    _: Annotated[User, Depends(get_current_admin)],
+    _: Annotated[User, Depends(get_current_admin_writer)],
     research: bool = False,
 ) -> dict:
     result = await run_daily_director_cycle(db, execute_research=research)
@@ -77,7 +77,7 @@ async def experiments_list(
 async def experiments_eval(
     experiment_id: str,
     db: Annotated[AsyncSession, Depends(get_db)],
-    _: Annotated[User, Depends(get_current_admin)],
+    _: Annotated[User, Depends(get_current_admin_writer)],
 ) -> dict:
     from uuid import UUID
 
@@ -87,7 +87,7 @@ async def experiments_eval(
 @router.post("/pause-all-advertising")
 async def pause_all(
     db: Annotated[AsyncSession, Depends(get_db)],
-    _: Annotated[User, Depends(get_current_admin)],
+    _: Annotated[User, Depends(get_current_admin_writer)],
 ) -> dict:
     policy = await get_or_create_budget_policy(db)
     policy.emergency_pause_all = True
@@ -118,7 +118,7 @@ class BrandPatchIn(BaseModel):
 async def patch_brand(
     body: BrandPatchIn,
     db: Annotated[AsyncSession, Depends(get_db)],
-    _: Annotated[User, Depends(get_current_admin)],
+    _: Annotated[User, Depends(get_current_admin_writer)],
 ) -> dict:
     brand = await get_or_create_brand(db)
     if body.tone_of_voice is not None:
@@ -156,7 +156,7 @@ class CompetitorResearchIn(BaseModel):
 async def competitors_research(
     body: CompetitorResearchIn,
     db: Annotated[AsyncSession, Depends(get_db)],
-    _: Annotated[User, Depends(get_current_admin)],
+    _: Annotated[User, Depends(get_current_admin_writer)],
 ) -> dict:
     result = await research_competitors(db, area=body.area, territory_code=body.territory_code)
     await db.commit()
@@ -190,7 +190,7 @@ class LaunchPlanIn(BaseModel):
 async def create_launch_plan(
     body: LaunchPlanIn,
     db: Annotated[AsyncSession, Depends(get_db)],
-    _: Annotated[User, Depends(get_current_admin)],
+    _: Annotated[User, Depends(get_current_admin_writer)],
 ) -> dict:
     plan = await generate_launch_plan(db, launch_date=body.launch_date)
     await db.commit()
@@ -218,7 +218,7 @@ async def commercial_pipeline_transition(
     prospect_id: UUID,
     body: PipelineTransitionIn,
     db: Annotated[AsyncSession, Depends(get_db)],
-    _: Annotated[User, Depends(get_current_admin)],
+    _: Annotated[User, Depends(get_current_admin_writer)],
 ) -> dict:
     prospect = await db.get(CommercialProspect, prospect_id)
     if prospect is None:
