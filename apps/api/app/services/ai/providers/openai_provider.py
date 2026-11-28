@@ -1,5 +1,9 @@
 import json
 import re
+import logging
+from app.services.ai.providers.responses_adapter import request_response, parse_response
+
+logger = logging.getLogger(__name__)
 from app.services.ai.company_handbook import COMPANY_HANDBOOK
 from app.services.ai.employees import EMPLOYEES, allowed_tool
 from typing import Any
@@ -83,26 +87,18 @@ async def chat_with_openai(
             ok, msg = await check_spend_allowed(db)
             if not ok:
                 raise RuntimeError(msg)
-            response = await client.post(
-                "https://api.openai.com/v1/chat/completions",
-                headers={"Authorization": f"Bearer {settings.openai_api_key}"},
-                json={
-                    "model": model,
-                    "messages": messages,
-                    "tools": [spec for spec in OPENAI_TOOL_SPECS if allowed_tool(agent_slug, spec.get("function", {}).get("name"))] + ([consultation_spec] if allow_consultation and not consulted else []),
-                    "tool_choice": "auto",
-                    **({"temperature": 0.2} if model.startswith("gpt-4o") else {}),
-                },
-            )
-            response.raise_for_status()
-            payload = response.json()
-            usage = payload.get("usage") or {}
+            specs = [spec for spec in OPENAI_TOOL_SPECS if allowed_tool(agent_slug, spec.get("function", {}).get("name"))] + ([consultation_spec] if allow_consultation and not consulted else [])
+            try:
+                payload = await request_response(client, settings.openai_api_key, model, messages, specs)
+            except httpx.HTTPStatusError as exc:
+                logger.warning("OpenAI Responses request failed: model=%s status=%s request_id=%s", model, exc.response.status_code, exc.response.headers.get("x-request-id"))
+                raise
+            choice, output_items, usage = parse_response(payload)
             total_prompt += int(usage.get("prompt_tokens", 0))
             total_completion += int(usage.get("completion_tokens", 0))
             cost_tracker.append(estimate_openai_cost_gbp(int(usage.get("prompt_tokens", 0)), int(usage.get("completion_tokens", 0)), model))
             await record_usage(db, provider="openai", model=model, agent_slug=agent_slug, prompt_tokens=int(usage.get("prompt_tokens", 0)), completion_tokens=int(usage.get("completion_tokens", 0)), estimated_cost_gbp=estimate_openai_cost_gbp(int(usage.get("prompt_tokens", 0)), int(usage.get("completion_tokens", 0)), model))
             await db.flush()
-            choice = payload["choices"][0]["message"]
             tool_calls = choice.get("tool_calls") or []
             if not tool_calls:
                 reply = choice.get("content") or "No response."
@@ -129,7 +125,7 @@ async def chat_with_openai(
                 footer = f"\n\nAI: {model} | Est. cost £{sum(cost_tracker):.4f}" if root_call else ""
                 return reply.strip()[:3400] + footer, tool_data, "openai"
 
-            messages.append(choice)
+            messages.extend(output_items)
             for call in tool_calls:
                 name = call["function"]["name"]
                 if name == "consult_colleague":
@@ -167,9 +163,9 @@ async def chat_with_openai(
                 tool_data[name] = result
                 messages.append(
                     {
-                        "role": "tool",
-                        "tool_call_id": call["id"],
-                        "content": json.dumps(result, default=str),
+                        "type": "function_call_output",
+                        "call_id": call["id"],
+                        "output": json.dumps(result, default=str),
                     }
                 )
 
