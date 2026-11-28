@@ -7,7 +7,8 @@ from uuid import UUID
 import bcrypt
 from fastapi import Depends, HTTPException, Request, Response, status
 from fastapi.security import OAuth2PasswordBearer
-from jose import JWTError, jwt
+import jwt
+from jwt import InvalidTokenError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -97,12 +98,12 @@ async def get_current_user(
     if not token:
         raise credentials_exception
     try:
-        payload = jwt.decode(token, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
+        payload = jwt.decode(token, settings.jwt_secret, algorithms=[settings.jwt_algorithm], options={"require": ["exp", "sub"]})
         sub = payload.get("sub")
         if sub is None:
             raise credentials_exception
         user_id = UUID(sub)
-    except (JWTError, ValueError) as exc:
+    except (InvalidTokenError, ValueError, TypeError) as exc:
         raise credentials_exception from exc
 
     if from_cookie and request.method not in SAFE_METHODS:
