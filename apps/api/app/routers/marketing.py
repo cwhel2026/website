@@ -6,7 +6,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_admin, get_current_admin_writer
@@ -234,8 +234,8 @@ async def meta_insights(
 
 
 class ProspectSearchIn(BaseModel):
-    query: str = Field(min_length=2)
-    limit: int = Field(default=20, le=50)
+    query: str = Field(min_length=2, max_length=200)
+    limit: int = Field(default=20, ge=1, le=50)
 
 
 @router.post("/commercial-prospects/search")
@@ -689,3 +689,13 @@ async def track_attribution(
     )
     await db.commit()
     return {"status": "recorded"}
+
+@router.get("/acquisition-summary")
+async def acquisition_summary(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[User, Depends(get_current_admin)],
+) -> dict:
+    stages = (await db.execute(select(CommercialProspect.pipeline_stage, func.count()).where(CommercialProspect.opt_out.is_(False)).group_by(CommercialProspect.pipeline_stage))).all()
+    campaigns = (await db.execute(select(RegionalCampaign.status, func.count()).group_by(RegionalCampaign.status))).all()
+    drafts = await db.scalar(select(func.count()).select_from(OutreachMessage).where(OutreachMessage.status == OutreachMessageStatus.PENDING_APPROVAL))
+    return {"prospect_stages": {stage.value: count for stage, count in stages}, "campaign_stages": {stage.value: count for stage, count in campaigns}, "outreach_pending": int(drafts or 0), "external_delivery_verified": False}
