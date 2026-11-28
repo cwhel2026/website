@@ -75,6 +75,8 @@ async def generate_briefing(db: AsyncSession, kind: BriefingKind) -> BriefingRec
         )
         payload["tomorrow_appointment_count"] = count.scalar() or 0
 
+    from app.services.business_director import director_signals
+    payload["director_signals"] = await director_signals(db)
     record = BriefingRecord(kind=kind, content_json=json.dumps(payload))
     db.add(record)
     await db.flush()

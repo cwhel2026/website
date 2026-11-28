@@ -24,10 +24,10 @@ async def answer_question(
         try:
             reply, tool_data, used = await chat_with_openai(db, question, agent_slug=agent_slug)
             return reply, tool_data, used
-        except Exception as exc:
+        except Exception:
             fallback, tool_data = await answer_deterministic(db, question)
             return (
-                f"{fallback}\n\n(AI provider unavailable: {exc}. Showing tool-backed summary.)",
+                f"{fallback}\n\n(AI provider unavailable. Showing tool-backed summary.)",
                 tool_data,
                 "deterministic_fallback",
             )
