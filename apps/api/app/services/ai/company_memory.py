@@ -10,10 +10,10 @@ KEY = r"[a-z][a-z0-9_]{0,39}"
 
 
 def parse_memory(text):
-    match = re.fullmatch(r"/remember (" + KEY + r") = (.{1,500})", text.strip(), re.S)
+    match = re.fullmatch(r"(?:/remember |remember that )(" + KEY + r") = (.{1,500})", text.strip(), re.S)
     if match:
         return match[1], match[2].strip()
-    match = re.fullmatch(r"/forget (" + KEY + r")", text.strip())
+    match = re.fullmatch(r"(?:/forget |forget note )(" + KEY + r")", text.strip())
     if match:
         return match[1], None
     return None
