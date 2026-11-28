@@ -13,7 +13,8 @@ from app.models.service import Service, SurfaceType
 from app.services.vat_settings import vat_position_on
 from app.schemas.quotation import QuotationSectionIn
 from app.services.pricing_engine import PricingInput, QuotationSectionInput, calculate_quotation
-from app.services.quotation_travel import travel_km_from_base
+from app.services.quotation_travel import travel_km_from_base, road_travel_from_base
+from app.services.pricing_engine import get_active_pricing_profile
 from app.services.territory_lookup import resolve_territory_for_postcode
 
 CUSTOMER_NOTE = (
@@ -106,9 +107,17 @@ def customer_package(
     requires_washing: bool,
     customer_washed_already: bool,
     requires_coating: bool,
+    service_slug: str | None = None,
 ) -> dict[str, Any]:
     """What the customer is buying. No prices, rates or internal rules."""
-    washing_visit = requires_washing and not customer_washed_already
+    approved_finishes = {
+        'tarmac-driveway-restoration': 'Marl Coatings tarmac recolouring',
+        'block-paving-cleaning-sealing': 'Kiln-dried sand replenishment and Marl Coatings clear wet-look sealing',
+        'imprinted-concrete-restoration': 'Creteprint clear sealing',
+        'imprinted-concrete-colour-restoration': 'Creteprint coloured sealing',
+    }
+    finish = approved_finishes.get(service_slug)
+    washing_visit = bool(finish) or (requires_washing and not customer_washed_already)
     coating_visit = requires_coating
     included: list[dict[str, str]] = []
     visits: list[dict[str, str]] = []
@@ -128,7 +137,7 @@ def customer_package(
     if coating_visit:
         included.append(
             {
-                "title": "Specialist restoration coating",
+                "title": finish or "Specialist restoration coating",
                 "detail": "Applied once the surface is dry and the weather is suitable.",
             }
         )
@@ -149,7 +158,7 @@ def customer_package(
         visits = [
             {"title": "Visit 1 — Cleaning and preparation", "detail": "We clean and prepare the surface."},
             {
-                "title": "Visit 2 — Restoration coating",
+                "title": f"Visit 2 — {finish or 'Restoration coating'}",
                 "detail": "We apply the specialist restoration coating once the surface is dry and the weather is suitable.",
             },
         ]
@@ -192,7 +201,14 @@ async def price_quotation_inputs(
     supported, unsupported_reason = surface_supported(service, surface_type)
     sections_in = validate_sections(sections_raw)
     territory = await resolve_territory_for_postcode(db, postcode, town or "")
-    distance_km_from_base = await travel_km_from_base(db, postcode)
+    profile = await get_active_pricing_profile(db)
+    approved = profile.name == "surfacecoat-approved-restoration" and service.category.value == "restoration"
+    driving_hours = None
+    if approved and supported and territory is not None:
+        requires_washing, customer_washed_already = True, False
+        distance_km_from_base, driving_hours = await road_travel_from_base(db, postcode)
+    else:
+        distance_km_from_base = await travel_km_from_base(db, postcode)
     section_dicts = [
         {
             "label": s.label,
@@ -216,6 +232,8 @@ async def price_quotation_inputs(
         distance_km_from_base=distance_km_from_base,
         pricing_tier=pricing_tier,
     )
+    if approved:
+        fingerprint_basis.update(profile_id=str(profile.id), driving_hours=str(driving_hours))
     fingerprint = quotation_input_fingerprint(fingerprint_basis)
     if territory is None:
         unsupported_reason = (
@@ -240,6 +258,7 @@ async def price_quotation_inputs(
             pricing_tier=pricing_tier,
             charge_vat=charge_vat,
             vat_rate=vat_rate,
+            driving_hours_one_way=driving_hours,
         ),
     )
     return pricing, fingerprint, True, unsupported_reason, territory
