@@ -111,7 +111,7 @@ def slot_inside_working_hours(settings: SchedulingSettings, start: datetime, end
     local_end = _aware_utc(end).astimezone(LONDON)
     work_start = settings.work_day_start or time(8, 0)
     work_end = settings.work_day_end or time(17, 30)
-    launch = settings.earliest_work_date or LAUNCH_DATE
+    launch = settings.earliest_work_date or date.min
     if end <= start:
         return False
     if local_start.date() < launch or local_end.date() < launch:
