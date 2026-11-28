@@ -26,11 +26,18 @@ async def check_spend_allowed(db: AsyncSession) -> tuple[bool, str]:
 
 def estimate_openai_cost_gbp(prompt_tokens: int, completion_tokens: int, model: str) -> Decimal:
     """Rough list prices — monitor only, not billing."""
-    if "gpt-4" in model:
+    if model == "gpt-6.2-sol":
+        rate_in, rate_out = Decimal("0.000002"), Decimal("0.000010")
+    elif model == "gpt-6.2-astra":
+        rate_in, rate_out = Decimal("0.000008"), Decimal("0.000040")
+    elif "gpt-4" in model:
         rate_in, rate_out = Decimal("0.000004"), Decimal("0.000012")
     else:
         rate_in, rate_out = Decimal("0.0000004"), Decimal("0.0000012")
     cost = Decimal(prompt_tokens) * rate_in + Decimal(completion_tokens) * rate_out
+    if model in {"gpt-6.2-sol", "gpt-6.2-astra"}:
+        # Illustrative USD to GBP conversion, not live exchange rate; ignore cache discounts.
+        cost *= Decimal("0.80")
     return cost.quantize(Decimal("0.0001"))
 
 
