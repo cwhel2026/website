@@ -17,6 +17,7 @@ from app.models.finance import (
     ExpenseCategory,
     Invoice,
     InvoiceStatus,
+    InvoiceLine,
     Payment,
     Receipt,
     SyncSource,
@@ -85,7 +86,7 @@ async def finance_status(
 async def import_csv(
     file: UploadFile = File(...),
     db: Annotated[AsyncSession, Depends(get_db)] = ...,
-    user: Annotated[User, Depends(get_current_admin)] = ...,
+    user: Annotated[User, Depends(get_current_admin_writer)] = ...,
 ) -> dict:
     content = (await file.read()).decode("utf-8", errors="replace")
     result = await import_bank_csv(db, content)
@@ -452,3 +453,26 @@ async def confirm_bank_payment(
         detail={"transaction_id": str(txn.id), "amount_gbp": str(txn.amount_gbp)})
     await db.commit()
     return {"status": inv.status.value, "already_recorded": False}
+
+
+@router.get("/invoices/{invoice_id}/draft-review")
+async def invoice_draft_review(
+    invoice_id: UUID,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[User, Depends(get_current_admin)],
+) -> dict:
+    inv = await db.get(Invoice, invoice_id)
+    if not inv:
+        raise HTTPException(404, "Invoice not found")
+    customer = await db.get(Customer, inv.customer_id)
+    if not customer or customer.is_test or inv.status != InvoiceStatus.DRAFT:
+        raise HTTPException(409, "Non-test draft required")
+    lines = (await db.execute(select(InvoiceLine).where(InvoiceLine.invoice_id == inv.id))).scalars().all()
+    valid = bool(lines) and sum((line.line_total_gbp for line in lines), Decimal("0")) == inv.subtotal_ex_vat_gbp and inv.subtotal_ex_vat_gbp + inv.vat_gbp == inv.total_inc_vat_gbp
+    return {"invoice_number": inv.invoice_number, "customer": customer.full_name,
+        "issue_date": inv.issue_date.isoformat(), "due_date": inv.due_date.isoformat(),
+        "net_gbp": str(inv.subtotal_ex_vat_gbp), "vat_gbp": str(inv.vat_gbp),
+        "total_gbp": str(inv.total_inc_vat_gbp),
+        "lines": [{"description": line.description, "quantity": str(line.quantity), "unit_price_gbp": str(line.unit_price_gbp), "total_gbp": str(line.line_total_gbp)} for line in lines],
+        "totals_valid": valid, "external_posting_enabled": False,
+        "next_step": "Verify contact, VAT and invoice totals in FreeAgent sandbox before enabling draft creation."}
