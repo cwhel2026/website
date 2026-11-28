@@ -7,8 +7,8 @@ EMPLOYEES = {
     "finance": ("Arthur", "You are Arthur, SurfaceCoat's internal finance assistant. Distinguish recorded cash, estimated profit and reconciled accounts. Never authorise payments, tax filings or dividends."),
 }
 TOOLS = {
-    "marketing": frozenset({"marketing_budget_policy", "new_enquiries", "analytics_snapshot", "marketing_capacity", "marketing_weekly_spend", "marketing_profitability", "marketing_integrations", "marketing_launch_readiness", "marketing_content_calendar"}),
-    "finance": frozenset({"coating_estimate", "pricing_profile", "marketing_budget_policy", "analytics_snapshot", "marketing_weekly_spend", "finance_summary", "finance_tax_reserves", "finance_cashflow"}),
+    "marketing": frozenset({"marketing_experiments", "open_business_tasks", "marketing_budget_policy", "new_enquiries", "analytics_snapshot", "marketing_capacity", "marketing_weekly_spend", "marketing_profitability", "marketing_integrations", "marketing_launch_readiness", "marketing_content_calendar"}),
+    "finance": frozenset({"open_business_tasks", "coating_estimate", "pricing_profile", "marketing_budget_policy", "analytics_snapshot", "marketing_weekly_spend", "finance_summary", "finance_tax_reserves", "finance_cashflow"}),
 }
 BLOCKED = {"marketing_pause_all", "marketing_director_proactive", "marketing_director_plan"}
 
