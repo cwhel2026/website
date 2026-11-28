@@ -184,7 +184,13 @@ def coating_estimate(args):
         return {"error": "Invalid coating inputs"}
 
 
+OPENAI_TOOL_SPECS.append({"type":"function","function":{"name":"validate_ad_allocation","description":"Validate combined proposed weekly allocation against explicit weekly limit and already spent amount. Use before recommending any numeric allocation.","parameters":{"type":"object","properties":{"weekly_limit":{"type":"number"},"already_spent":{"type":"number"},"allocations":{"type":"array","items":{"type":"object","properties":{"territory":{"type":"string"},"daily_gbp":{"type":"number"},"days":{"type":"integer"}},"required":["territory","daily_gbp","days"],"additionalProperties":False}}},"required":["weekly_limit","already_spent","allocations"],"additionalProperties":False}}})
+
+
 async def run_tool(db: AsyncSession, name: str, args: dict | None = None) -> dict[str, Any]:
+    if name == "validate_ad_allocation":
+        from app.services.ai.budget_math import validate_allocation
+        return validate_allocation(**(args or {}))
     if name == "marketing_experiments":
         from app.services.marketing.experiments_engine import list_experiments
         return {"experiments": (await list_experiments(db))[:30], "warning": "No verified variant-level winner data."}
