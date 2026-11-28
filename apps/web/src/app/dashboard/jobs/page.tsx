@@ -33,7 +33,7 @@ export default function JobsPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-semibold text-emerald-950">Jobs</h1>
+      <h1 className="text-2xl font-semibold text-emerald-950 portal-department-title">Jobs</h1>
       <p className="mt-2 text-sm text-slate-600">Two-stage restoration workflow with seven-day coating targets.</p>
       {error && <p className="mt-4 text-sm text-amber-700">{error}</p>}
       {jobs.length === 0 ? (
