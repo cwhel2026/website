@@ -95,6 +95,13 @@ async def chat_with_openai(
         except Exception:
             tool_data["consult_colleague"] = {"error": "Arthur unavailable; do not claim consultation succeeded"}
         messages.insert(2, {"role": "user", "content": "Actual consultation result: " + json.dumps(tool_data["consult_colleague"], default=str)})
+    if agent_slug == "marketing" and re.search(r"budget|spend|advertis|campaign|target", question, re.I):
+        from app.services.ai.commercial_plan import plan_campaign
+        match = re.search(r"£\s*(\d+(?:\.\d{1,2})?)", question)
+        policy = tool_data.get("marketing_budget_policy", {})
+        plan = plan_campaign(tool_data.get("marketing_capacity", {}), policy, tool_data.get("marketing_weekly_spend", {}), match.group(1) if match else policy.get("weekly_limit_gbp"))
+        tool_data["hypothetical_campaign_plan"] = plan
+        messages.insert(2, {"role": "user", "content": "Calculated hypothetical campaign plan, not authorisation: " + json.dumps(plan)})
     model = settings.openai_model
     total_prompt = 0
     total_completion = 0
@@ -119,7 +126,11 @@ async def chat_with_openai(
             tool_calls = choice.get("tool_calls") or []
             if not tool_calls:
                 reply = choice.get("content") or "No response."
-                if agent_slug == "marketing" and re.search(r"£\s*\d|\b\d+(?:\.\d+)?\s*(?:gbp|pounds)\b", reply, re.I) and re.search(r"budget|spend|advertis|campaign|target", question, re.I):
+                if "hypothetical_campaign_plan" in tool_data:
+                    plan = tool_data["hypothetical_campaign_plan"]
+                    rows = plan.get("allocation", [])
+                    reply = "Hypothetical campaign only; authorised spend £0.\n" + "\n".join(f"{row['territory']}: £{row['daily_gbp']}/day for {row['days']} days (£{row['total_gbp']})" for row in rows) + "\n" + plan.get("reason", plan.get("error", "")) + "\n" + plan.get("measurement", "") + "\n" + plan.get("stop_rule", "") + "\nFree actions:\n" + "\n".join(plan.get("free_actions", [])) + "\n" + "; ".join(plan.get("launch_blockers", []))
+                elif agent_slug == "marketing" and re.search(r"£\s*\d|\b\d+(?:\.\d+)?\s*(?:gbp|pounds)\b", reply, re.I) and re.search(r"budget|spend|advertis|campaign|target", question, re.I):
                     # A model-selected calculator call is not sufficient to certify free-form prose.
                     # Return only the checked allocation, never unchecked monetary recommendations.
                     checked = tool_data.get("validate_ad_allocation", {})
