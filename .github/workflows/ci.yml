@@ -27,7 +27,7 @@ jobs:
         run: |
           python -m pip install pip-audit
           pip-audit -r requirements.txt -f json -o /tmp/surfacecoat-python-audit.json || true
-          pip-audit -r requirements.txt --desc on || true
+          pip-audit -r requirements.txt --desc off || true
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -102,10 +102,10 @@ jobs:
         run: |
           set -euo pipefail
           export PGPASSWORD=rmd_ci_password
-          pg_dump -h localhost -U rmd -Fc -f /tmp/surfacecoat-ci.dump revive_my_drive
-          pg_restore --list /tmp/surfacecoat-ci.dump > /tmp/surfacecoat-ci.manifest
+          docker exec -e PGPASSWORD="$PGPASSWORD" ${{ job.services.postgres.id }} pg_dump -h localhost -U rmd -Fc revive_my_drive > /tmp/surfacecoat-ci.dump
+          docker exec -i ${{ job.services.postgres.id }} pg_restore --list < /tmp/surfacecoat-ci.dump > /tmp/surfacecoat-ci.manifest
           createdb -h localhost -U rmd surfacecoat_restore_ci
-          pg_restore --exit-on-error --no-owner -h localhost -U rmd -d surfacecoat_restore_ci /tmp/surfacecoat-ci.dump
+          docker exec -i -e PGPASSWORD="$PGPASSWORD" ${{ job.services.postgres.id }} pg_restore --exit-on-error --no-owner -h localhost -U rmd -d surfacecoat_restore_ci < /tmp/surfacecoat-ci.dump
           test "$(psql -h localhost -U rmd -d surfacecoat_restore_ci -tAc 'select count(*) from scheduler_heartbeats')" -ge 1
           test "$(psql -h localhost -U rmd -d surfacecoat_restore_ci -tAc 'select version_num from alembic_version')" = "$(psql -h localhost -U rmd -d revive_my_drive -tAc 'select version_num from alembic_version')"
           rm -f /tmp/surfacecoat-ci.dump /tmp/surfacecoat-ci.manifest
