@@ -149,6 +149,8 @@ OPENAI_TOOL_SPECS: list[dict[str, Any]] = [
 
 
 for name, description in [
+    ("pricing_profile", "Active company pricing rules and provisional labour and material cost assumptions."),
+    ("marketing_budget_policy", "Current saved marketing budget limits, not live spending."),
     ("finance_summary", "Recorded revenue and expense summary; provisional accounting basis."),
     ("finance_tax_reserves", "Tax reserve estimates and unknown liabilities."),
     ("finance_cashflow", "Provisional 30-day cash flow forecast."),
@@ -159,6 +161,16 @@ for name, description in [
 async def run_tool(db: AsyncSession, name: str) -> dict[str, Any]:
     if name in {"marketing_pause_all", "marketing_director_proactive"}:
         return {"error": "Action requires explicit owner approval"}
+    if name == "pricing_profile":
+        from app.services.pricing_engine import get_active_pricing_profile, LABOUR_HOURS_PER_SQM, MATERIAL_COST_PER_SQM, DEFAULT_LABOUR_RATE
+        profile = await get_active_pricing_profile(db)
+        return {"version": profile.version, "rules": [{"type": r.rule_type.value, "surface": r.surface_type.value if r.surface_type else None, "category": r.service_category.value if r.service_category else None, "amount": str(r.amount_gbp), "percentage": str(r.percentage) if r.percentage is not None else None, "tier": r.label} for r in profile.rules if r.is_active], "labour_rate": str(DEFAULT_LABOUR_RATE), "labour_hours_per_sqm": {k.value: str(v) for k,v in LABOUR_HOURS_PER_SQM.items()}, "materials_per_sqm": {k.value: str(v) for k,v in MATERIAL_COST_PER_SQM.items()}, "basis": "Provisional engine assumptions, not verified Marl Coatings costs. Travel, VAT and surcharges require confirmation."}
+    if name == "marketing_budget_policy":
+        from app.models.marketing_ops import MarketingBudgetPolicy
+        from app.services.marketing.budget_controls import _policy_dict
+        from sqlalchemy import select
+        policy = (await db.execute(select(MarketingBudgetPolicy).limit(1))).scalar_one_or_none()
+        return _policy_dict(policy) if policy else {"error": "Budget policy not configured"}
     if name == "finance_summary":
         from app.services.analytics_service import revenue_and_expense_summary
         return await revenue_and_expense_summary(db)
