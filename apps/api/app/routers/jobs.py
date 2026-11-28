@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.auth import get_current_admin
+from app.auth import get_current_admin, get_current_admin_writer
 from app.database import get_db
 from app.models.crm import CustomerProperty, Enquiry, PipelineStage
 from app.models.jobs import (
@@ -133,7 +133,7 @@ async def field_jobs_today(
 async def create_job_from_quotation(
     quotation_id: UUID,
     db: Annotated[AsyncSession, Depends(get_db)],
-    _: Annotated[User, Depends(get_current_admin)],
+    _: Annotated[User, Depends(get_current_admin_writer)],
 ) -> JobOut:
     q_result = await db.execute(select(Quotation).where(Quotation.id == quotation_id).with_for_update())
     quotation = q_result.scalar_one_or_none()
@@ -202,7 +202,10 @@ async def propose_schedule(
     profile = pp.scalar_one_or_none()
     if profile is None:
         raise HTTPException(500, "No product profile configured")
-    prep, coat = await propose_two_stage_slots(db, job=job, lat=lat, lon=lon, product_profile=profile)
+    try:
+        prep, coat = await propose_two_stage_slots(db, job=job, lat=lat, lon=lon, product_profile=profile)
+    except RuntimeError as exc:
+        raise HTTPException(503, "Live weather unavailable") from exc
     return ProposeScheduleOut(
         preparation_slots=[
             SlotProposalOut(
@@ -234,7 +237,7 @@ async def add_appointment(
     job_id: UUID,
     body: CreateAppointmentIn,
     db: Annotated[AsyncSession, Depends(get_db)],
-    _: Annotated[User, Depends(get_current_admin)],
+    _: Annotated[User, Depends(get_current_admin_writer)],
 ) -> JobOut:
     result = await db.execute(
         select(Job).options(selectinload(Job.appointments)).where(Job.id == job_id).with_for_update()
@@ -263,6 +266,8 @@ async def add_appointment(
         prep_end = job.preparation_completed_at or max((a.scheduled_end for a in job.appointments if a.appointment_type == AppointmentType.PREPARATION and a.status == AppointmentStatus.CONFIRMED), default=None)
         if prep_end is None or body.scheduled_start < prep_end + timedelta(hours=settings.min_drying_hours):
             raise HTTPException(409, "Coating must follow preparation and drying")
+    if any(a.appointment_type == body.appointment_type and a.status in (AppointmentStatus.PROVISIONAL, AppointmentStatus.CONFIRMED, AppointmentStatus.IN_PROGRESS) for a in job.appointments):
+        raise HTTPException(409, "Existing active appointment of this type; review before rebooking")
     conflicts = await find_conflicts(db, body.scheduled_start, end)
     if conflicts:
         raise HTTPException(
@@ -318,7 +323,7 @@ async def complete_preparation(
     job_id: UUID,
     body: CompletePrepIn,
     db: Annotated[AsyncSession, Depends(get_db)],
-    _: Annotated[User, Depends(get_current_admin)],
+    _: Annotated[User, Depends(get_current_admin_writer)],
 ) -> JobOut:
     result = await db.execute(
         select(Job).options(selectinload(Job.appointments)).where(Job.id == job_id).with_for_update()
@@ -359,7 +364,7 @@ async def complete_coating(
     job_id: UUID,
     body: CompleteCoatIn,
     db: Annotated[AsyncSession, Depends(get_db)],
-    _: Annotated[User, Depends(get_current_admin)],
+    _: Annotated[User, Depends(get_current_admin_writer)],
 ) -> JobOut:
     job = (await db.execute(select(Job).options(selectinload(Job.appointments)).where(Job.id == job_id).with_for_update())).scalar_one_or_none()
     if job is None:
