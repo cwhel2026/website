@@ -2,7 +2,7 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Index, Integer, String, Text, UniqueConstraint, func, text
+from sqlalchemy import BigInteger, DateTime, Enum, ForeignKey, Index, Integer, String, Text, UniqueConstraint, func, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -72,7 +72,7 @@ class TelegramProcessedUpdate(Base):
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
     update_id: Mapped[int] = mapped_column(Integer, index=True)
-    chat_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    chat_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     message_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     processed_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
@@ -85,7 +85,7 @@ class TelegramConversationMessage(Base):
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
-    chat_id: Mapped[int] = mapped_column(Integer, index=True)
+    chat_id: Mapped[int] = mapped_column(BigInteger, index=True)
     direction: Mapped[str] = mapped_column(String(12))
     body: Mapped[str] = mapped_column(Text)
     telegram_message_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
