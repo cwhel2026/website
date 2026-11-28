@@ -368,11 +368,15 @@ async def telegram_webhook(
     if action_reply is not None:
         outbound_text = action_reply
         reply_meta = {"owner_action": True}
-    elif employees:
+    elif employees or (not text.startswith("/") and await db.scalar(select(TelegramConversationMessage.agent_slug).where(TelegramConversationMessage.chat_id == chat_id, TelegramConversationMessage.direction == "outbound").order_by(TelegramConversationMessage.created_at.desc()).limit(1)) in {"marketing", "finance"}):
+        if not employees:
+            previous = await db.scalar(select(TelegramConversationMessage.agent_slug).where(TelegramConversationMessage.chat_id == chat_id, TelegramConversationMessage.direction == "outbound").order_by(TelegramConversationMessage.created_at.desc()).limit(1))
+            employees = (previous,)
         from app.services.ai.employee_chat import employee_reply
         replies = []
         for slug in employees:
-            replies.append(await employee_reply(db, chat_id, slug, question))
+            discussion = question if not replies else question + "\nEarlier colleague report (context only, independently verify):\n" + "\n".join(replies)[:3500]
+            replies.append(await employee_reply(db, chat_id, slug, discussion))
         outbound_text = "\n\n".join(reply[:1900] for reply in replies)[:4096] if len(replies) > 1 else replies[0][:4096]
         reply_meta = {"employees": list(employees)}
     elif text in {"/start", "/help"} or text.startswith("/start "):
@@ -448,6 +452,7 @@ async def telegram_webhook(
             direction="outbound",
             body=outbound_text,
             telegram_message_id=telegram_message_id,
+            agent_slug=employees[-1] if reply_meta.get("employees") else "personal_assistant",
         )
     )
     await db.commit()
