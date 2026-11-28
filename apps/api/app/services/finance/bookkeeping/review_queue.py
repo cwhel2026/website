@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.bookkeeping import BookkeepingReviewItem, ReviewItemStatus
-from app.models.finance import BankTransaction, Expense, ExpenseCategory, SyncSource
+from app.models.finance import BankTransaction, Expense, ExpenseCategory, SyncSource, Receipt
 from app.services.finance.bookkeeping.categorizer import (
     AUTO_APPLY_CONFIDENCE,
     CategorisationSuggestion,
@@ -22,7 +22,7 @@ async def create_review_for_transaction(
     allow_auto_apply: bool = False,
 ) -> BookkeepingReviewItem | None:
     await db.refresh(txn, with_for_update=True)
-    if txn.is_reconciled or txn.review_item_id or txn.matched_expense_id or txn.is_duplicate:
+    if txn.amount_gbp >= 0 or txn.is_reconciled or txn.review_item_id or txn.matched_expense_id or txn.is_duplicate:
         return None
 
     suggestion = suggest_for_description(txn.description, txn.amount_gbp)
@@ -96,6 +96,7 @@ async def categorize_uncategorized_transactions(db: AsyncSession, limit: int = 2
     result = await db.execute(
         select(BankTransaction)
         .where(
+            BankTransaction.amount_gbp < 0,
             BankTransaction.review_item_id.is_(None),
             BankTransaction.is_reconciled.is_(False),
         )
@@ -117,7 +118,10 @@ async def categorize_uncategorized_transactions(db: AsyncSession, limit: int = 2
 async def approve_review_item(
     db: AsyncSession, item_id, actor: str, category: ExpenseCategory | None = None
 ) -> BookkeepingReviewItem:
-    item = await db.get(BookkeepingReviewItem, item_id, with_for_update=True)
+    initial = await db.get(BookkeepingReviewItem, item_id)
+    if initial and initial.bank_transaction_id:
+        await db.get(BankTransaction, initial.bank_transaction_id, with_for_update=True)
+    item = await db.get(BookkeepingReviewItem, item_id, with_for_update=True, populate_existing=True)
     if item is None:
         raise ValueError("Review item not found")
     if item.status in (ReviewItemStatus.APPROVED, ReviewItemStatus.AUTO_APPLIED):
@@ -136,10 +140,17 @@ async def approve_review_item(
             raise ValueError("Only outgoing bank transactions can be approved as expenses")
         if item.receipt_required and not item.receipt_id:
             raise ValueError("Attach and verify the required receipt before approving")
+        receipt = None
+        if item.receipt_id:
+            receipt = await db.get(Receipt, item.receipt_id, with_for_update=True)
+            if not receipt or receipt.matched_bank_transaction_id != txn.id or receipt.processing_status != "matched" or receipt.extracted_total_gbp != -txn.amount_gbp:
+                raise ValueError("Confirm the receipt match before approving")
+        if txn.source == SyncSource.FREEAGENT:
+            raise ValueError("Approve accounting entries in FreeAgent and sync")
         if txn and (txn.is_duplicate or txn.is_reconciled or txn.freeagent_explanation_url):
             raise ValueError("Transaction requires reconciliation, not a new expense")
         if txn and txn.amount_gbp < 0 and not txn.matched_expense_id:
-            await _apply_expense_from_suggestion(
+            expense = await _apply_expense_from_suggestion(
                 db,
                 txn,
                 CategorisationSuggestion(
@@ -152,6 +163,8 @@ async def approve_review_item(
                     possible_duplicate=item.possible_duplicate,
                 ),
             )
+            if receipt:
+                expense.receipt_id = receipt.id
     item.status = ReviewItemStatus.APPROVED
     item.resolved_at = datetime.now(UTC)
     item.resolved_by = actor
