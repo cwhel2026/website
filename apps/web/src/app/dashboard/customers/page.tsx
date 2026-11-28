@@ -47,6 +47,8 @@ export default function CustomersPage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [enquiries, setEnquiries] = useState<Enquiry[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [search,setSearch]=useState("");
+  const visibleCustomers=customers.filter(c=>[c.full_name,c.email,c.phone??""].some(v=>v.toLowerCase().includes(search.toLowerCase())));
   const [outcome, setOutcome] = useState<Record<string, string>>({});
 
   useEffect(() => {
@@ -77,7 +79,7 @@ export default function CustomersPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-semibold text-emerald-950">Customers</h1>
+      <h1 className="text-2xl font-semibold text-emerald-950 portal-department-title">Customers</h1>
       <p className="mt-2 text-sm text-slate-600">CRM records with deduplication by email.</p>
       {error && <p className="mt-4 text-sm text-amber-700">{error}</p>}
       <section className="mt-6 rounded-2xl border bg-white p-4 text-slate-900">
@@ -94,10 +96,11 @@ export default function CustomersPage() {
           </ul>
         )}
       </section>
-      {customers.length === 0 ? (
-        <p className="mt-8 text-sm text-slate-500">No customers yet.</p>
+      <label className="mt-6 block text-sm">Find customer<input value={search} onChange={e=>setSearch(e.target.value)} className="mt-1 w-full rounded-lg border p-3" placeholder="Name, email or phone"/></label>
+      {visibleCustomers.length === 0 ? (
+        <p className="mt-8 text-sm text-slate-500">No matching customers (check loading errors).</p>
       ) : (
-        <table className="mt-8 w-full text-left text-sm">
+        <div className="overflow-x-auto"><table className="mt-4 w-full text-left text-sm">
           <thead>
             <tr className="border-b text-slate-500">
               <th className="py-2">Name</th>
@@ -107,7 +110,7 @@ export default function CustomersPage() {
             </tr>
           </thead>
           <tbody>
-            {customers.map((c) => (
+            {visibleCustomers.map((c) => (
               <tr key={c.id} className="border-b">
                 <td className="py-2 font-medium">{c.full_name}</td>
                 <td>{c.email}</td>
@@ -116,7 +119,7 @@ export default function CustomersPage() {
               </tr>
             ))}
           </tbody>
-        </table>
+        </table></div>
       )}
 
       <h2 className="mt-12 text-xl font-semibold text-emerald-950">Quotation requests</h2>
