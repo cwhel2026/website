@@ -27,6 +27,7 @@ jobs:
         run: |
           python -m pip install pip-audit
           pip-audit -r requirements.txt -f json -o /tmp/surfacecoat-python-audit.json || true
+          pip-audit -r requirements.txt --desc on || true
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -128,6 +129,7 @@ jobs:
       - name: Dependency audit (report only pending remediation)
         working-directory: apps/web
         run: npm audit --json > /tmp/surfacecoat-npm-audit.json || true
+          npm audit --omit=dev || true
       - uses: actions/upload-artifact@v4
         with:
           name: npm-security-audit
