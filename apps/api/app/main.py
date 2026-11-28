@@ -15,7 +15,7 @@ from app.middleware.security_headers import SecurityHeadersMiddleware
 from app.rate_limit import limiter
 from app.security.startup import validate_production_settings
 from app.database import SessionLocal
-from app.routers import growth_fund, marketing_surfacecoat, ops, workspace
+from app.routers import growth_fund, marketing_surfacecoat, ops, workspace, booking_payments
 from app.routers import (
     approvals,
     assistant,
@@ -198,4 +198,5 @@ app.include_router(analytics.router, prefix=prefix)
 app.include_router(business_director.router, prefix=prefix)
 app.include_router(ops.router, prefix=prefix)
 app.include_router(workspace.router, prefix=prefix)
+app.include_router(booking_payments.router, prefix=prefix)
 app.include_router(health.router)
