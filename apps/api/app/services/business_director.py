@@ -1,13 +1,16 @@
 import json
 from datetime import UTC, datetime
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.approvals import ApprovalRequest, ApprovalStatus
-from app.models.jobs import Job, JobStatus
+from app.models.jobs import Job, JobStatus, Appointment, AppointmentStatus
 from app.models.crm import Enquiry, OwnerFollowUp
-from app.models.finance import Invoice, InvoiceStatus
+from app.models.finance import Invoice, InvoiceStatus, BankTransaction
+from app.models.quotation import Quotation, QuotationStatus
+from app.models.marketing_ops import CommercialProspect, OutreachMessage, OutreachMessageStatus
 from app.models.agents import AgentProfile
 from app.models.orchestration import AgentTask, TaskStatus
 from app.services.materials_forecast import low_stock_alerts
@@ -23,7 +26,7 @@ async def run_business_director_scan(db: AsyncSession) -> list[AgentTask]:
     """
     await db.execute(text("SELECT pg_advisory_xact_lock(52703105)"))
     profile = await db.scalar(select(AgentProfile).where(AgentProfile.slug == "business_director"))
-    if profile and (profile.is_paused or profile.emergency_stop):
+    if not profile or profile.is_paused or profile.emergency_stop:
         return []
     created: list[AgentTask] = []
 
@@ -82,10 +85,19 @@ async def run_business_director_scan(db: AsyncSession) -> list[AgentTask]:
     overdue = await db.scalar(select(func.count()).select_from(Invoice).where(Invoice.status == InvoiceStatus.OVERDUE))
     if overdue:
         created.append(AgentTask(agent_slug="finance", action_key="review_overdue_invoices", title=f"Review {overdue} overdue invoice(s)", payload_json=json.dumps({"count": overdue}), priority=85))
+    signals = await director_signals(db)
+    for key, count in signals.items():
+        if count and key in SIGNAL_ACTIONS:
+            agent, title, priority = SIGNAL_ACTIONS[key]
+            created.append(AgentTask(agent_slug=agent, action_key=key, title=f"{title}: {count}", payload_json=json.dumps({"count": count}), priority=priority))
     existing = (await db.execute(select(AgentTask).where(AgentTask.status.in_([TaskStatus.QUEUED, TaskStatus.RUNNING, TaskStatus.AWAITING_APPROVAL])))).scalars().all()
     keys = {task_identity(t) for t in existing}
+    profiles = {p.slug: p for p in (await db.execute(select(AgentProfile))).scalars().all()}
     added = []
     for task in sorted(created, key=lambda t: t.priority, reverse=True):
+        specialist = profiles.get(task.agent_slug)
+        if specialist and (specialist.is_paused or specialist.emergency_stop):
+            continue
         key = task_identity(task)
         if key in keys:
             continue
@@ -130,3 +142,25 @@ async def complete_task(db: AsyncSession, task_id, result: dict | None = None) -
     task.completed_at = datetime.now(UTC)
     task.result_json = json.dumps(result or {"ok": True})
     return task
+
+SIGNAL_ACTIONS = {
+    "coating_deadline_risk": ("scheduling", "Review coating deadlines", 95),
+    "weather_delayed": ("weather", "Review weather-delayed visits", 92),
+    "unreconciled_bank": ("finance", "Review unreconciled bank transactions", 75),
+    "pending_quotes": ("customer_service", "Review provisional quotations", 65),
+    "outreach_review": ("marketing", "Review outreach drafts", 60),
+}
+
+
+async def director_signals(db: AsyncSession) -> dict[str, int]:
+    """Read-only cross-department signals; counts are local records, not forecasts."""
+    today = datetime.now(ZoneInfo("Europe/London")).date()
+    from datetime import timedelta
+    queries = {
+        "coating_deadline_risk": select(func.count()).select_from(Job).where(Job.status.in_([JobStatus.RESTORATION_PENDING, JobStatus.PREPARATION_COMPLETED, JobStatus.COATING_SCHEDULED]), Job.seven_day_target_date <= today + timedelta(days=2)),
+        "weather_delayed": select(func.count()).select_from(Appointment).join(Job).where(Appointment.status == AppointmentStatus.WEATHER_DELAYED, Job.status.notin_([JobStatus.COMPLETED, JobStatus.CANCELLED])),
+        "unreconciled_bank": select(func.count()).select_from(BankTransaction).where(BankTransaction.is_duplicate.is_(False), BankTransaction.is_reconciled.is_(False)),
+        "pending_quotes": select(func.count()).select_from(Quotation).where(Quotation.is_test.is_(False), Quotation.status == QuotationStatus.PROVISIONAL),
+        "outreach_review": select(func.count()).select_from(OutreachMessage).join(CommercialProspect).where(OutreachMessage.status == OutreachMessageStatus.PENDING_APPROVAL, CommercialProspect.opt_out.is_(False)),
+    }
+    return {key: int(await db.scalar(query) or 0) for key, query in queries.items()}
