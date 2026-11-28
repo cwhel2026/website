@@ -79,8 +79,8 @@ def _chat_ids() -> list[int]:
 def telegram_recipients(category: str, payload: dict, settings) -> list[int]:
     if category == "assistant_reply" or "reply_chat_id" in payload:
         target = payload.get("reply_chat_id")
-        return [target] if type(target) is int and target in settings.telegram_admin_id_list else []
-    return list(dict.fromkeys(chat for chat in settings.telegram_alert_chat_ids if chat in settings.telegram_admin_id_list))
+        return [target] if type(target) is int and target > 0 and target in settings.telegram_admin_id_list else []
+    return list(dict.fromkeys(chat for chat in settings.telegram_alert_chat_ids if chat > 0 and (chat in settings.telegram_admin_id_list or chat == getattr(settings, "telegram_owner_chat_id", None))))
 
 
 async def deliver_telegram_outbox_item(db: AsyncSession, item: NotificationOutbox) -> bool:
