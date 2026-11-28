@@ -120,7 +120,7 @@ async def chat_with_openai(
             ok, msg = await check_spend_allowed(db)
             if not ok:
                 raise RuntimeError(msg)
-            specs = [spec for spec in OPENAI_TOOL_SPECS if allowed_tool(agent_slug, spec.get("function", {}).get("name")) and (execution_context is not None or spec.get("function", {}).get("name") != "queue_employee_work")] + ([consultation_spec] if allow_consultation and not consulted else [])
+            specs = [spec for spec in OPENAI_TOOL_SPECS if allowed_tool(agent_slug, spec.get("function", {}).get("name")) and (execution_context is not None or spec.get("function", {}).get("name") not in {"queue_employee_work", "employee_work_status"})] + ([consultation_spec] if allow_consultation and not consulted else [])
             try:
                 payload = await request_response(client, settings.openai_api_key, model, messages, specs)
             except httpx.HTTPStatusError as exc:

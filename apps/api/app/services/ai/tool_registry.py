@@ -188,6 +188,21 @@ OPENAI_TOOL_SPECS.append({"type":"function","function":{"name":"validate_ad_allo
 
 
 async def run_tool(db: AsyncSession, name: str, args: dict | None = None, *, agent_slug=None, execution_context=None) -> dict[str, Any]:
+    if name == "employee_work_status":
+        if not execution_context:
+            return {"error": "Trusted owner context required"}
+        import json
+        from sqlalchemy import select
+        from app.models.orchestration import AgentTask
+        query = select(AgentTask).where(AgentTask.action_key == "employee_execution", AgentTask.assigned_by == f"telegram:{execution_context['chat_id']}")
+        if agent_slug != "personal_assistant":
+            query = query.where(AgentTask.agent_slug == agent_slug)
+        rows = (await db.scalars(query.order_by(AgentTask.created_at.desc()).limit(5))).all()
+        work = []
+        for row in rows:
+            result = json.loads(row.result_json) if row.result_json else {}
+            work.append({"id": str(row.id), "title": row.title, "status": row.status.value, "attempts": row.iteration_count, "summary": result.get("summary", result.get("error")), "campaign_id": result.get("campaign_id"), "plan": result.get("plan")})
+        return {"work": work}
     if name == "meta_delivery_estimate":
         from app.services.marketing.meta.delivery_estimates import fetch_delivery_estimate
         return await fetch_delivery_estimate((args or {}).get("adset_id"))
@@ -236,3 +251,5 @@ async def run_tool(db: AsyncSession, name: str, args: dict | None = None, *, age
 OPENAI_TOOL_SPECS.append({"type": "function", "function": {"name": "queue_employee_work", "description": "Save explicitly requested campaign preparation, financial review or operational review for durable background execution. A campaign budget must come from the owner's request, never inferred. This creates local records only, not external actions.", "parameters": {"type": "object", "properties": {"kind": {"type": "string", "enum": ["campaign", "finance_review", "operations_review"]}, "brief": {"type": "string"}, "budget_gbp": {"type": ["number", "null"]}}, "required": ["kind", "brief", "budget_gbp"], "additionalProperties": False}}})
 
 OPENAI_TOOL_SPECS.append({"type": "function", "function": {"name": "meta_delivery_estimate", "description": "Read Meta audience bounds for an existing verified ad set ID. Eligible audience size is not predicted reach. Never invent an ID.", "parameters": {"type": "object", "properties": {"adset_id": {"type": "string"}}, "required": ["adset_id"], "additionalProperties": False}}})
+
+OPENAI_TOOL_SPECS.append({"type": "function", "function": {"name": "employee_work_status", "description": "Read recent saved employee work, progress, failures and completed campaign plans for the current owner. Use for follow-ups about previously requested work.", "parameters": {"type": "object", "properties": {}, "additionalProperties": False}}})

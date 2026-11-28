@@ -137,3 +137,17 @@ async def test_telegram_request_to_worker_to_dashboard(db, monkeypatch):
     from app.routers.business_director import employee_work
     result = (await employee_work(db, None))[0]
     assert result['status'] == 'completed' and result['result']['campaign_id']
+
+@pytest.mark.asyncio
+async def test_work_status_is_scoped_to_owner(db, monkeypatch):
+    from app.services.ai.tool_registry import run_tool
+    monkeypatch.setattr('app.services.ai.execution.collect_evidence', evidence)
+    await queue_work(db, agent_slug='marketing', chat_id=123, request_id=5, kind='campaign', brief='Campaign follow-up', budget_gbp=150)
+    await db.commit()
+    await run_next_employee_work(db)
+    own = await run_tool(db, 'employee_work_status', {}, agent_slug='marketing', execution_context={'chat_id': 123})
+    assert own['work'][0]['status'] == 'completed'
+    assert own['work'][0]['campaign_id']
+    other = await run_tool(db, 'employee_work_status', {}, agent_slug='marketing', execution_context={'chat_id': 456})
+    assert other['work'] == []
+    assert 'error' in await run_tool(db, 'employee_work_status')
