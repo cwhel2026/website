@@ -188,7 +188,7 @@ OPENAI_TOOL_SPECS.append({"type":"function","function":{"name":"validate_ad_allo
 
 
 async def run_tool(db: AsyncSession, name: str, args: dict | None = None, *, agent_slug=None, execution_context=None) -> dict[str, Any]:
-    if name in {"booking_deposit_status", "draft_booking_deposit"}:
+    if name in {"booking_deposit_status", "draft_booking_deposit", "find_customer_bookings"}:
         from app.config import get_settings
         from app.models.agents import AgentProfile
         from app.models.jobs import Job
@@ -201,6 +201,23 @@ async def run_tool(db: AsyncSession, name: str, args: dict | None = None, *, age
         profile = await db.scalar(select(AgentProfile).where(AgentProfile.slug == agent_slug))
         if not profile or profile.is_paused or profile.emergency_stop or get_settings().global_emergency_stop:
             return {"error": "Employee unavailable"}
+        if name == "find_customer_bookings":
+            from app.models.crm import Customer, CustomerProperty
+            from sqlalchemy import func
+            customer_name = (args or {}).get("customer_name")
+            if not isinstance(customer_name, str) or not 2 <= len(customer_name.strip()) <= 200:
+                return {"error": "Customer name required"}
+            rows = (await db.execute(select(Job, Customer, CustomerProperty.postcode)
+                .join(Customer, Customer.id == Job.customer_id)
+                .outerjoin(CustomerProperty, CustomerProperty.id == Job.property_id)
+                .where(Customer.is_test.is_(False),
+                       func.lower(Customer.full_name) == customer_name.strip().lower())
+                .order_by(Job.created_at.desc()).limit(11))).all()
+            return {"matches": [{"job_reference": job.reference, "customer_name": customer.full_name,
+                                 "postcode": postcode, "job_status": job.status.value}
+                                for job, customer, postcode in rows[:10]],
+                    "truncated": len(rows) > 10,
+                    "instruction": "Ask owner to select exact job if multiple matches; never guess"}
         reference = (args or {}).get("job_reference")
         if not isinstance(reference, str) or not 1 <= len(reference) <= 24:
             return {"error": "Exact job reference required"}
@@ -309,3 +326,6 @@ OPENAI_TOOL_SPECS.append({"type": "function", "function": {"name": "booking_depo
 
 
 OPENAI_TOOL_SPECS.append({"type": "function", "function": {"name": "draft_booking_deposit", "description": "Only when explicitly requested by the owner, prepare a local draft deposit invoice for an exact existing job reference. Default 10 percent unless owner specifies another percentage. Never sends a message, confirms an appointment or charges a customer.", "parameters": {"type": "object", "properties": {"job_reference": {"type": "string"}, "percentage": {"type": "number", "minimum": 0.01, "maximum": 100}}, "required": ["job_reference"], "additionalProperties": False}}})
+
+
+OPENAI_TOOL_SPECS.append({"type": "function", "function": {"name": "find_customer_bookings", "description": "Find existing non-test customer jobs by exact full name. Ask the owner to disambiguate multiple matches before drafting deposits.", "parameters": {"type": "object", "properties": {"customer_name": {"type": "string"}}, "required": ["customer_name"], "additionalProperties": False}}})
