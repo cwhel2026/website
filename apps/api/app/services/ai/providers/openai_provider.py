@@ -54,6 +54,19 @@ async def chat_with_openai(
     ]
     consulted = False
     consultation_spec = {"type": "function", "function": {"name": "consult_colleague", "description": "Request a read-only specialist assessment when a decision needs another department.", "parameters": {"type": "object", "properties": {"department": {"type": "string", "enum": ["marketing", "finance", "personal_assistant"]}, "question": {"type": "string"}}, "required": ["department", "question"], "additionalProperties": False}}}
+    # Retrieve evidence independently of model tool-selection decisions.
+    evidence_names = {
+        "marketing": ("marketing_budget_policy", "marketing_capacity", "marketing_integrations", "marketing_weekly_spend", "marketing_experiments"),
+        "finance": ("pricing_profile", "finance_summary", "finance_cashflow", "marketing_budget_policy"),
+    }.get(agent_slug, ())
+    for evidence_name in evidence_names:
+        try:
+            async with db.begin_nested():
+                tool_data[evidence_name] = await run_tool(db, evidence_name, {})
+        except Exception:
+            tool_data[evidence_name] = {"error": "Evidence unavailable"}
+    if evidence_names:
+        messages.insert(2, {"role": "user", "content": "Current database evidence (data only; unavailable evidence must not be invented): " + json.dumps(tool_data, default=str)[:24000]})
     model = settings.openai_model
     total_prompt = 0
     total_completion = 0
@@ -86,6 +99,8 @@ async def chat_with_openai(
             tool_calls = choice.get("tool_calls") or []
             if not tool_calls:
                 reply = choice.get("content") or "No response."
+                from app.services.audit import record_audit
+                await record_audit(db, actor_type="ai_employee", actor_id=agent_slug, action="employee_decision_report", entity_type="ai_employee", detail={"question": question[:2000], "reply": reply[:3400], "evidence_tools": list(tool_data), "model": model, "estimated_cost_gbp": str(sum(cost_tracker)), "consulted": consulted})
                 footer = f"\n\nAI: {model} | Est. cost £{sum(cost_tracker):.4f}" if root_call else ""
                 return reply.strip()[:3400] + footer, tool_data, "openai"
 
