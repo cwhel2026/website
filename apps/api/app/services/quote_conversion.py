@@ -25,15 +25,18 @@ logger = logging.getLogger(__name__)
 READY_TO_BOOK = "ready_to_book"
 CALLBACK_REQUESTED = "callback_requested"
 ESTIMATE_REQUESTED = "estimate_requested"
-INTENTIONS = {READY_TO_BOOK, CALLBACK_REQUESTED, ESTIMATE_REQUESTED}
+FLEXIBLE_BOOKING = "flexible_booking"
+INTENTIONS = {READY_TO_BOOK, CALLBACK_REQUESTED, ESTIMATE_REQUESTED, FLEXIBLE_BOOKING}
 
 INTENTION_LABELS = {
+    FLEXIBLE_BOOKING: "Flexible booking discount request",
     READY_TO_BOOK: "Booking request",
     CALLBACK_REQUESTED: "Callback requested",
     ESTIMATE_REQUESTED: "Estimate requested",
 }
 
 FOLLOW_UP_TITLES = {
+    FLEXIBLE_BOOKING: "Contact customer to agree discounted price and area-matched dates",
     READY_TO_BOOK: "Contact customer to agree a restoration visit",
     CALLBACK_REQUESTED: "Return the customer's callback request",
     ESTIMATE_REQUESTED: "Follow up the saved estimate",
@@ -57,12 +60,12 @@ BOOKING_STEPS = [
 def apply_customer_intention(enquiry: Enquiry, body) -> None:
     intention = getattr(body, "intention", None) or ESTIMATE_REQUESTED
     if intention not in INTENTIONS:
-        raise HTTPException(status_code=400, detail="Choose book, callback, or email.")
+        raise HTTPException(status_code=400, detail="Choose booking, flexible booking, callback, or email.")
     enquiry.intention = intention
     enquiry.utm_source = getattr(body, "source", None) or enquiry.utm_source
     enquiry.utm_medium = getattr(body, "utm_medium", None) or enquiry.utm_medium
     enquiry.utm_campaign = getattr(body, "campaign", None) or enquiry.utm_campaign
-    if intention == READY_TO_BOOK:
+    if intention in {READY_TO_BOOK, FLEXIBLE_BOOKING}:
         enquiry.priority = "high"
         enquiry.stage = PipelineStage.BOOKING_PENDING
         enquiry.callback_status = "not_applicable"
@@ -88,6 +91,8 @@ def customer_next_steps(
     repair_review: bool = False,
 ) -> str:
     del windows, photos_attached, repair_review
+    if enquiry.intention == FLEXIBLE_BOOKING:
+        return "We have received your flexible booking request. Our team will contact you to agree your discounted price and dates when we are working in your area."
     if enquiry.intention == READY_TO_BOOK:
         return BOOKING_SUPPORTING
     if enquiry.intention == CALLBACK_REQUESTED:
@@ -101,6 +106,8 @@ def customer_next_steps(
 
 
 def confirmation_steps(enquiry: Enquiry) -> list[str]:
+    if enquiry.intention == FLEXIBLE_BOOKING:
+        return ["We check dates when we are working in your area.", "We contact you to agree your discounted price and dates.", "Nothing is booked until we confirm it with you."]
     if enquiry.intention == CALLBACK_REQUESTED:
         return [
             "We call you at the time you asked for.",
@@ -414,7 +421,7 @@ def validate_conversion_request(body) -> None:
         raise HTTPException(status_code=400, detail="Please enter the property address.")
     phone = (body.phone or "").strip()
     digits = "".join(ch for ch in phone if ch.isdigit())
-    if intention in {READY_TO_BOOK, CALLBACK_REQUESTED} and len(digits) < 8:
+    if intention in {READY_TO_BOOK, CALLBACK_REQUESTED, FLEXIBLE_BOOKING} and len(digits) < 8:
         raise HTTPException(status_code=400, detail="Please enter a telephone number.")
     preferred = (getattr(body, "callback_preferred_time", None) or "").strip()
     if intention == CALLBACK_REQUESTED and len(preferred) < 2:
