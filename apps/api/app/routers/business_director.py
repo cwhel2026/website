@@ -82,3 +82,14 @@ async def target_review(
     monthly_target: Decimal = Query(gt=0, le=10000000),
 ) -> dict:
     return await director_target_review(db, monthly_target)
+
+
+@router.get("/employee-work")
+async def employee_work(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[User, Depends(get_current_admin)],
+) -> list[dict]:
+    import json
+    from app.models.orchestration import AgentTask
+    rows = (await db.scalars(select(AgentTask).where(AgentTask.action_key == "employee_execution").order_by(AgentTask.created_at.desc()).limit(50))).all()
+    return [{"id": str(t.id), "title": t.title, "agent": t.agent_slug, "status": t.status.value, "attempts": t.iteration_count, "created_at": t.created_at.isoformat(), "result": json.loads(t.result_json) if t.result_json else None} for t in rows]

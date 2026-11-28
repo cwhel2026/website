@@ -2,7 +2,7 @@ from decimal import Decimal
 from functools import lru_cache
 from typing import Self
 
-from pydantic import model_validator
+from pydantic import AliasChoices, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from app.db_urls import derive_sync_from_async, normalize_async_database_url, normalize_sync_database_url
@@ -74,7 +74,7 @@ class Settings(BaseSettings):
     freeagent_client_id: str | None = None
     freeagent_client_secret: str | None = None
     freeagent_redirect_uri: str | None = None
-    git_commit: str = "unknown"
+    git_commit: str = Field(default="unknown", validation_alias=AliasChoices("git_commit", "GIT_COMMIT", "RAILWAY_GIT_COMMIT_SHA"))
     build_time: str | None = None
     redis_url: str = "redis://localhost:6379/0"
     celery_broker_url: str | None = None

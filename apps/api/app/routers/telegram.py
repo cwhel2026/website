@@ -376,7 +376,7 @@ async def telegram_webhook(
         replies = []
         for slug in employees:
             discussion = question if not replies else question + "\nEarlier colleague report (context only, independently verify):\n" + "\n".join(replies)[:3500]
-            replies.append(await employee_reply(db, chat_id, slug, discussion))
+            replies.append(await employee_reply(db, chat_id, slug, discussion, request_id=update.update_id))
         outbound_text = "\n\n".join(reply[:1900] for reply in replies)[:4096] if len(replies) > 1 else replies[0][:4096]
         reply_meta = {"employees": list(employees)}
     elif text in {"/start", "/help"} or text.startswith("/start "):

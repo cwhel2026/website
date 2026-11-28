@@ -8,6 +8,10 @@ from app.services.notifications.outbox import enqueue_notification
 
 
 async def run_next_owner_task(db):
+    from app.services.ai.execution import run_next_employee_work
+    execution = await run_next_employee_work(db)
+    if execution.get("processed") or execution.get("failed_attempt"):
+        return execution
     task = await db.scalar(select(AgentTask).join(AgentProfile, AgentProfile.slug == AgentTask.agent_slug).where(
         AgentTask.action_key == "owner_manual_task",
         AgentTask.status == TaskStatus.QUEUED,

@@ -1,5 +1,6 @@
 "use client";
 
+import { EmployeeWork } from "@/components/employee-work";
 import Link from "next/link";
 import { EmptyState, MarketingCard } from "@/components/marketing-director-shell";
 import { SimulatedBadge } from "@/components/simulated-badge";
@@ -22,7 +23,7 @@ export default function CampaignsPage() {
     <>
       <MarketingCard title="Meta lead campaigns">
         <p className="text-xs text-slate-500">
-          Consolidated structure — £150/week. Launches require owner approval; simulated campaigns spend nothing.
+          Draft budgets use saved limits and recorded commitments. Launches require owner approval; simulated campaigns spend nothing.
         </p>
         <Link href="/dashboard/advertising" className="mt-2 inline-block text-sm underline">
           Full campaign manager
@@ -35,7 +36,7 @@ export default function CampaignsPage() {
       ) : campaigns.loading && !campaigns.data ? (
         <p className="text-sm text-white/70">Loading…</p>
       ) : (campaigns.data ?? []).length === 0 ? (
-        <EmptyState message="No campaigns in system. Prepare drafts after Meta is connected." />
+        <EmptyState message="No campaigns saved. Ask Olivia in Telegram to prepare a campaign; planning does not require a live Meta connection." />
       ) : (
         <ul className="space-y-2 text-sm text-white">
           {(campaigns.data ?? []).map((c) => (
@@ -46,6 +47,7 @@ export default function CampaignsPage() {
           ))}
         </ul>
       )}
+      <EmployeeWork />
     </>
   );
 }

@@ -1,5 +1,6 @@
 "use client";
 
+import { EmployeeWork } from "@/components/employee-work";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { apiGet, apiPost } from "@/lib/api";
@@ -230,6 +231,7 @@ export default function DashboardOverviewPage() {
           ))}
         </ListSection>
       </div>
+      <EmployeeWork />
     </div>
   );
 }
