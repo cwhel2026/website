@@ -14,11 +14,11 @@ export const publicBrand = {
     "Cumbria",
     "West Yorkshire",
   ],
-  launchLabel: "March 2027",
+  launchLabel: "soon",
 } as const;
 
-/** Pre-launch is on unless NEXT_PUBLIC_PRELAUNCH is false or 0. */
+/** Pre-launch is opt-in for planned downtime or future campaigns. */
 export function prelaunchMode(): boolean {
   const flag = process.env.NEXT_PUBLIC_PRELAUNCH;
-  return flag !== "false" && flag !== "0";
+  return flag === "true" || flag === "1";
 }
