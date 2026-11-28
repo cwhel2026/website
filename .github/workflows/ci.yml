@@ -126,6 +126,20 @@ jobs:
           node-version: "22"
           cache: npm
           cache-dependency-path: apps/web/package-lock.json
+      - name: Generate proposed frontend security lockfile (isolated)
+        working-directory: apps/web
+        run: |
+          mkdir -p /tmp/surfacecoat-upgrade
+          cp package.json package-lock.json /tmp/surfacecoat-upgrade/
+          cd /tmp/surfacecoat-upgrade
+          npm install --package-lock-only --ignore-scripts --save-exact next@15.5.29
+          npm install --package-lock-only --ignore-scripts --save-dev --save-exact eslint-config-next@15.5.29
+          npm audit --omit=dev
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: proposed-frontend-security-lockfile
+          path: /tmp/surfacecoat-upgrade/*.json
       - name: Dependency audit (report only pending remediation)
         working-directory: apps/web
         run: |
