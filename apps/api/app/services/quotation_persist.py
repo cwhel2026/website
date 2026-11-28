@@ -166,6 +166,9 @@ async def persist_submitted_quotation(
     await db.flush()
 
     sections_in = validate_sections(body.sections)
+    approved = pricing.breakdown.get("pricing_tier", "").startswith("approved")
+    if approved and body.visible_damage and body.visible_damage.strip():
+        pricing.requires_approval = True
     status = (
         QuotationStatus.PENDING_APPROVAL
         if pricing.requires_approval
@@ -182,8 +185,8 @@ async def persist_submitted_quotation(
         status=status,
         surface_type=body.surface_type,
         surface_condition=body.surface_condition,
-        requires_washing=body.requires_washing,
-        customer_washed_already=body.customer_washed_already,
+        requires_washing=True if approved else body.requires_washing,
+        customer_washed_already=False if approved else body.customer_washed_already,
         total_area_sqm=pricing.total_area_sqm,
         pricing_profile_id=pricing.pricing_profile_id,
         subtotal_ex_vat_gbp=pricing.subtotal_ex_vat_gbp,
