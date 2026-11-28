@@ -21,3 +21,28 @@ def booking_notification_plan(job, appointments, *, customer_name: str,
             "payload": calendar_payload(job, appointment),
         })
     return tasks
+
+
+async def enqueue_booking_notifications(db, job, appointments, **customer_details) -> None:
+    import json
+    from sqlalchemy import text
+    from sqlalchemy.dialects.postgresql import insert
+    from app.models.notifications import NotificationOutbox, NotificationPriority, OutboxStatus
+
+    for task in booking_notification_plan(job, appointments, **customer_details):
+        await db.execute(insert(NotificationOutbox).values(
+            dedupe_key=task["key"],
+            channel=task["kind"],
+            category="booking_confirmation",
+            priority=NotificationPriority.NORMAL,
+            title="Booking confirmation delivery",
+            body="Booking notification",
+            payload_json=json.dumps(task["payload"]),
+            status=OutboxStatus.PENDING,
+            attempts=0,
+            max_attempts=5,
+        ).on_conflict_do_nothing(
+            index_elements=["dedupe_key"],
+            index_where=text("dedupe_key IS NOT NULL"),
+        ))
+    # Caller commits alongside the booking state transition.
