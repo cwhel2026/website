@@ -119,8 +119,12 @@ jobs:
 
   web-build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
@@ -137,6 +141,16 @@ jobs:
           npm audit --omit=dev
           npm ci
           cp package.json package-lock.json "$GITHUB_WORKSPACE/apps/web/"
+      - name: Persist verified dependency lockfile on remediation branch
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'review/phase16-production'
+        run: |
+          git config user.name 'surfacecoat-ci'
+          git config user.email 'surfacecoat-ci@users.noreply.github.com'
+          git add apps/web/package.json apps/web/package-lock.json
+          if ! git diff --cached --quiet; then
+            git commit -m 'Persist audited Next.js dependency upgrade'
+            git push origin HEAD:refs/heads/review/phase16-production
+          fi
       - uses: actions/upload-artifact@v4
         if: always()
         with:
