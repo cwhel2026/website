@@ -17,7 +17,13 @@ type FreeAgentInfo = {
 type PaymentCandidate = { transaction_id: string; description: string; amount_gbp: string; date: string; status: "unique_candidate" | "ambiguous" | "unmatched"; invoice_number: string | null; invoice_id: string | null; local_confirmation_allowed?: boolean };
 type CandidateReport = { transactions: PaymentCandidate[]; basis: string; limit: number };
 
+type ReceiptMatch = { receipt_id: string; transaction_id: string; merchant: string | null; receipt_total: string | null; receipt_date: string | null; bank_description: string; bank_amount: string; bank_date: string; eligible: boolean };
+
 export default function FinancePage() {
+  const [receiptMatches, setReceiptMatches] = useState<ReceiptMatch[] | null>(null);
+  const [receiptError, setReceiptError] = useState(false);
+  const [receiptBusy, setReceiptBusy] = useState(false);
+  const [receiptMessage, setReceiptMessage] = useState<string | null>(null);
   const [candidates, setCandidates] = useState<CandidateReport | null>(null);
   const [candidateError, setCandidateError] = useState(false);
   const [paymentMessage, setPaymentMessage] = useState<string | null>(null);
@@ -36,6 +42,9 @@ export default function FinancePage() {
   const load = useCallback(() => {
     const token = getToken();
     if (!token) return;
+    setReceiptError(false);
+    setReceiptMatches(null);
+    apiGet<ReceiptMatch[]>("/api/v1/finance/bookkeeping/receipts/match-review", token).then(setReceiptMatches).catch(withLoadError(() => setReceiptError(true)));
     setCandidateError(false);
     setCandidates(null);
     apiGet<CandidateReport>("/api/v1/finance/insights/reconciliation/payment-candidates", token)
@@ -115,6 +124,20 @@ export default function FinancePage() {
     } finally {
       setPaymentBusy(false);
     }
+  }
+
+  async function confirmReceipt(item: ReceiptMatch) {
+    const token = getToken();
+    if (!token || !item.eligible || receiptBusy || !window.confirm("Have you checked the original receipt against this bank transaction?")) return;
+    setReceiptBusy(true);
+    setReceiptMessage(null);
+    try {
+      await apiPost("/api/v1/finance/bookkeeping/receipts/" + item.receipt_id + "/confirm-match", { transaction_id: item.transaction_id, confirmed: true }, token);
+      setReceiptMessage("Receipt match confirmed locally. Nothing posted to FreeAgent.");
+      load();
+    } catch {
+      setReceiptMessage("Could not confirm receipt. Review the original records.");
+    } finally { setReceiptBusy(false); }
   }
 
   const fa = status?.freeagent;
@@ -198,6 +221,19 @@ export default function FinancePage() {
           </div>}
           <p className="mt-3 text-xs text-slate-500">{candidates.basis} Showing up to {candidates.limit} transactions.</p>
         </>}
+      </section>
+      <section className="mt-6 rounded-xl border bg-white p-4">
+        <h2 className="font-semibold">Receipt match review</h2>
+        <p className="mt-1 text-xs text-slate-600">Compare original receipts and bank records before confirming. No external posting.</p>
+        {receiptMessage && <p role="status" className="mt-2 text-sm">{receiptMessage}</p>}
+        {receiptError ? <p role="alert" className="mt-3 text-sm text-red-700">Unable to load receipt matches. Refresh to retry.</p> : !receiptMatches ? <p className="mt-3 text-sm">Loading receipts…</p> : receiptMatches.length === 0 ? <p className="mt-3 text-sm">No suggested receipt matches awaiting review.</p> : <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          {receiptMatches.map(item => <article key={item.receipt_id} className="rounded-lg border p-3 text-sm">
+            <strong>{item.merchant || "Unknown merchant"}</strong>
+            <p>Receipt: {item.receipt_total === null ? "Unknown amount" : gbp(Number(item.receipt_total))} · {item.receipt_date || "Unknown date"}</p>
+            <p className="mt-2 break-words">{item.bank_description} · {gbp(Number(item.bank_amount))} · {item.bank_date}</p>
+            <button type="button" disabled={receiptBusy || !item.eligible} onClick={() => confirmReceipt(item)} className="mt-3 rounded-lg bg-emerald-800 px-3 py-2 text-white disabled:opacity-50">Confirm receipt match</button>
+          </article>)}
+        </div>}
       </section>
       <section className="mt-6">
         <h2 className="font-semibold">Territory estimated quoted contribution</h2>
