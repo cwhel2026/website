@@ -14,12 +14,14 @@ type FreeAgentInfo = {
   last_sync_at?: string | null;
 };
 
-type PaymentCandidate = { transaction_id: string; description: string; amount_gbp: string; date: string; status: "unique_candidate" | "ambiguous" | "unmatched"; invoice_number: string | null };
+type PaymentCandidate = { transaction_id: string; description: string; amount_gbp: string; date: string; status: "unique_candidate" | "ambiguous" | "unmatched"; invoice_number: string | null; invoice_id: string | null; local_confirmation_allowed?: boolean };
 type CandidateReport = { transactions: PaymentCandidate[]; basis: string; limit: number };
 
 export default function FinancePage() {
   const [candidates, setCandidates] = useState<CandidateReport | null>(null);
   const [candidateError, setCandidateError] = useState(false);
+  const [paymentMessage, setPaymentMessage] = useState<string | null>(null);
+  const [paymentBusy, setPaymentBusy] = useState(false);
   const [reconciliation, setReconciliation] = useState<Record<string, number | string> | null>(null);
   const [reconciliationError, setReconciliationError] = useState(false);
   const [status, setStatus] = useState<{ freeagent: FreeAgentInfo; mettle_feed: string } | null>(
@@ -98,6 +100,23 @@ export default function FinancePage() {
     }
   }
 
+  async function confirmPayment(item: PaymentCandidate) {
+    const token = getToken();
+    if (!token || !item.invoice_id || !item.local_confirmation_allowed || paymentBusy) return;
+    if (!window.confirm("Confirm you have independently verified this payment belongs to invoice " + item.invoice_number + "?")) return;
+    setPaymentBusy(true);
+    setPaymentMessage(null);
+    try {
+      await apiPost("/api/v1/finance/transactions/" + item.transaction_id + "/confirm-payment", { invoice_id: item.invoice_id, confirmed: true }, token);
+      setPaymentMessage("Local payment recorded. Refreshing records.");
+      load();
+    } catch {
+      setPaymentMessage("Payment could not be confirmed. Refresh and verify the invoice and transaction.");
+    } finally {
+      setPaymentBusy(false);
+    }
+  }
+
   const fa = status?.freeagent;
 
   return (
@@ -165,7 +184,8 @@ export default function FinancePage() {
       </section>
       <section className="mt-6 rounded-xl border border-slate-200 bg-white p-4">
         <h2 className="font-semibold">Incoming payment review</h2>
-        <p className="mt-1 text-xs text-slate-600">Suggested matches only. No invoices or bank records are changed here.</p>
+        <p className="mt-1 text-xs text-slate-600">Verify suggested matches independently. FreeAgent records must be reconciled in FreeAgent.</p>
+        {paymentMessage && <p role="status" className="mt-2 text-sm">{paymentMessage}</p>}
         {candidateError ? <p role="alert" className="mt-3 text-sm text-red-700">Could not load payment suggestions. Use Refresh above to retry.</p> : !candidates ? <p className="mt-3 text-sm">Loading payment suggestions…</p> : <>
           {candidates.transactions.length === 0 ? <p className="mt-3 text-sm text-slate-600">No eligible incoming payments found in imported records.</p> : <div className="mt-3 grid gap-3 sm:grid-cols-2">
             {candidates.transactions.map((item) => <article key={item.transaction_id} className="min-w-0 rounded-lg border p-3">
@@ -173,6 +193,7 @@ export default function FinancePage() {
               <p className="mt-2 break-words text-sm">{item.description}</p>
               <p className="text-xs text-slate-600">{item.date}</p>
               {item.invoice_number && <p className="mt-2 text-sm">Possible invoice: {item.invoice_number}</p>}
+              {item.local_confirmation_allowed && <button type="button" disabled={paymentBusy} onClick={() => confirmPayment(item)} className="mt-3 rounded-lg bg-emerald-800 px-3 py-2 text-sm text-white disabled:opacity-50">Confirm verified local payment</button>}
             </article>)}
           </div>}
           <p className="mt-3 text-xs text-slate-500">{candidates.basis} Showing up to {candidates.limit} transactions.</p>
