@@ -69,7 +69,10 @@ def _smtp_send(msg: EmailMessage) -> str:
 
 async def send_approved_outreach(db: AsyncSession, message: OutreachMessage, *, to_email: str) -> dict:
     policy = await get_or_create_budget_policy(db)
-    if not policy.outreach_email_enabled:
+    await db.refresh(policy, with_for_update=True)
+    if message.status != OutreachMessageStatus.APPROVED:
+        return {"ok": False, "message": "Explicit approval required"}
+    if policy.emergency_pause_all or not policy.outreach_email_enabled:
         return {"ok": False, "message": "Outreach email disabled in budget policy"}
     if await is_suppressed(db, to_email):
         message.status = OutreachMessageStatus.SUPPRESSED
@@ -107,7 +110,7 @@ async def send_approved_outreach(db: AsyncSession, message: OutreachMessage, *, 
     except Exception as exc:
         message.status = OutreachMessageStatus.FAILED
         message.delivery_status = "failed"
-        return {"ok": False, "message": str(exc)[:300]}
+        return {"ok": False, "message": "SMTP delivery failed; verify delivery before retrying"}
 
 
 async def approve_and_send(
@@ -116,14 +119,13 @@ async def approve_and_send(
     ok, reason = validate_outreach_eligibility(prospect)
     if not ok:
         return {"ok": False, "message": reason}
-    if message.status not in (OutreachMessageStatus.APPROVED, OutreachMessageStatus.PENDING_APPROVAL):
+    if message.status != OutreachMessageStatus.APPROVED:
         return {"ok": False, "message": "Message not approved"}
     if not prospect.contact_email:
         return {"ok": False, "message": "No verified contact email — cannot send"}
     if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", prospect.contact_email):
         return {"ok": False, "message": "Invalid email format"}
-    message.status = OutreachMessageStatus.APPROVED
-    return await send_approved_outreach(db, message, to_email=prospect.contact_email)
+    return {"ok": False, "live": False, "message": "External sending deferred until sender and delivery idempotency are verified"}
 
 
 async def record_reply(db: AsyncSession, *, email: str) -> int:

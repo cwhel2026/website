@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth import get_current_admin
+from app.auth import get_current_admin, get_current_admin_writer
 from app.database import get_db
 from app.models.marketing_ops import ContentPlatform, MarketingContentItem, MarketingMediaAsset
 from app.models.user import User
@@ -21,7 +21,7 @@ router = APIRouter(prefix="/marketing/content", tags=["marketing-content"])
 
 class GenerateIn(BaseModel):
     platform: ContentPlatform
-    brief: str = Field(min_length=4)
+    brief: str = Field(min_length=4, max_length=4000)
     territory_name: str | None = None
 
 
@@ -29,7 +29,7 @@ class GenerateIn(BaseModel):
 async def generate_content(
     body: GenerateIn,
     db: Annotated[AsyncSession, Depends(get_db)],
-    _: Annotated[User, Depends(get_current_admin)],
+    _: Annotated[User, Depends(get_current_admin_writer)],
 ) -> dict:
     item = await generate_platform_content(
         db, platform=body.platform, brief=body.brief, territory_name=body.territory_name
@@ -55,12 +55,12 @@ async def list_content(
 @router.post("/media/upload")
 async def upload_media(
     db: Annotated[AsyncSession, Depends(get_db)],
-    _: Annotated[User, Depends(get_current_admin)],
+    _: Annotated[User, Depends(get_current_admin_writer)],
     file: UploadFile = File(...),
     job_id: str | None = Form(None),
     category: str = Form("general"),
 ) -> dict:
-    data = await file.read()
+    data = await file.read(12_000_001)
     if len(data) > 12_000_000:
         raise HTTPException(400, "File too large")
     jid = uuid.UUID(job_id) if job_id else None
@@ -88,7 +88,7 @@ class BeforeAfterIn(BaseModel):
 async def before_after(
     body: BeforeAfterIn,
     db: Annotated[AsyncSession, Depends(get_db)],
-    _: Annotated[User, Depends(get_current_admin)],
+    _: Annotated[User, Depends(get_current_admin_writer)],
 ) -> dict:
     result = await build_before_after_package(
         db,
@@ -116,14 +116,16 @@ async def content_calendar(
 async def publish_item(
     item_id: uuid.UUID,
     db: Annotated[AsyncSession, Depends(get_db)],
-    user: Annotated[User, Depends(get_current_admin)],
+    user: Annotated[User, Depends(get_current_admin_writer)],
     simulate: bool | None = None,
 ) -> dict:
-    item = await db.get(MarketingContentItem, item_id)
+    item = await db.get(MarketingContentItem, item_id, with_for_update=True)
     if item is None:
         raise HTTPException(404)
     if item.status not in (ContentStatus.APPROVED, ContentStatus.SCHEDULED):
         raise HTTPException(400, "Content must be approved before publish")
-    result = await publish_content_item(db, item, force_simulation=simulate)
+    if simulate is not True:
+        raise HTTPException(409, "Live publishing requires verified provider and consent controls")
+    result = await publish_content_item(db, item, force_simulation=True)
     await db.commit()
     return result

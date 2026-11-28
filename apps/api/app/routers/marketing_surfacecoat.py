@@ -3,12 +3,12 @@
 import logging
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth import get_current_admin
+from app.auth import get_current_admin, get_current_admin_writer
 from app.database import get_db
 from app.models.marketing_ops import MarketingBudgetPolicy, MarketingDirectorMode, MarketingOrganicPost
 from app.models.user import User
@@ -48,7 +48,7 @@ async def overview(
     meta_spend = float(spend.get("spend_gbp") or 0) if spend.get("ok") else None
     meta_source = "meta_api" if spend.get("ok") else (spend.get("message") or "Meta not connected")
 
-    posts = 0
+    posts = None
     try:
         posts = int(await db.scalar(select(func.count()).select_from(MarketingOrganicPost)) or 0)
     except Exception:
@@ -69,7 +69,7 @@ async def overview(
     return {
         "pre_launch_mode": not snapshot["live_paid_spend_approved"],
         "weekly_budget_gbp": snapshot["weekly_limit_gbp"],
-        "remaining_budget_estimate_gbp": max(0.0, snapshot["weekly_limit_gbp"] - (meta_spend or 0)),
+        "remaining_budget_estimate_gbp": max(0.0, snapshot["weekly_limit_gbp"] - meta_spend) if meta_spend is not None else None,
         "meta_account_spend_7d_gbp": meta_spend,
         "meta_spend_source": meta_source,
         "organic_posts_total": posts,
@@ -86,7 +86,7 @@ async def overview(
 async def list_organic_posts(
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[User, Depends(get_current_admin)],
-    limit: int = 50,
+    limit: int = Query(default=50, ge=1, le=200),
 ) -> list[dict]:
     rows = (
         await db.execute(
@@ -111,7 +111,7 @@ async def list_organic_posts(
 @router.post("/organic-posts/sync")
 async def trigger_organic_sync(
     db: Annotated[AsyncSession, Depends(get_db)],
-    _: Annotated[User, Depends(get_current_admin)],
+    _: Annotated[User, Depends(get_current_admin_writer)],
 ) -> dict:
     result = await sync_all_organic(db)
     await db.commit()
@@ -155,11 +155,13 @@ async def get_launch_programme(
 async def patch_launch_programme(
     body: LaunchProgrammePatch,
     db: Annotated[AsyncSession, Depends(get_db)],
-    _: Annotated[User, Depends(get_current_admin)],
+    _: Annotated[User, Depends(get_current_admin_writer)],
 ) -> dict:
     policy = await get_or_create_budget_policy(db)
     if body.launch_programme_json is not None:
         policy.launch_programme_json = body.launch_programme_json
+    if body.director_operating_mode == MarketingDirectorMode.CONTROLLED_AUTO:
+        raise HTTPException(409, "Autonomous external execution is not verified")
     if body.director_operating_mode is not None:
         policy.director_operating_mode = body.director_operating_mode
     await db.commit()
@@ -172,5 +174,5 @@ async def meta_wizard(_: Annotated[User, Depends(get_current_admin)]) -> dict:
 
 
 @router.post("/meta/connection-test")
-async def meta_connection_test(_: Annotated[User, Depends(get_current_admin)]) -> dict:
+async def meta_connection_test(_: Annotated[User, Depends(get_current_admin_writer)]) -> dict:
     return await run_connection_tests()
