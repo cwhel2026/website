@@ -30,6 +30,7 @@ async def chat_with_openai(
     *,
     agent_slug: str = "personal_assistant",
     history: list[dict[str, Any]] | None = None,
+    allow_consultation: bool = True,
 ) -> tuple[str, dict[str, Any], str]:
     if not settings.openai_api_key:
         raise RuntimeError("OpenAI not configured")
@@ -47,6 +48,8 @@ async def chat_with_openai(
         * (history or []),
         {"role": "user", "content": question},
     ]
+    consulted = False
+    consultation_spec = {"type": "function", "function": {"name": "consult_colleague", "description": "Request a read-only specialist assessment when a decision needs another department.", "parameters": {"type": "object", "properties": {"department": {"type": "string", "enum": ["marketing", "finance", "personal_assistant"]}, "question": {"type": "string"}}, "required": ["department", "question"], "additionalProperties": False}}}
     model = settings.openai_model
     total_prompt = 0
     total_completion = 0
@@ -59,7 +62,7 @@ async def chat_with_openai(
                 json={
                     "model": model,
                     "messages": messages,
-                    "tools": [spec for spec in OPENAI_TOOL_SPECS if allowed_tool(agent_slug, spec.get("function", {}).get("name"))],
+                    "tools": [spec for spec in OPENAI_TOOL_SPECS if allowed_tool(agent_slug, spec.get("function", {}).get("name"))] + ([consultation_spec] if allow_consultation and not consulted else []),
                     "tool_choice": "auto",
                     "temperature": 0.2,
                 },
@@ -88,7 +91,27 @@ async def chat_with_openai(
             messages.append(choice)
             for call in tool_calls:
                 name = call["function"]["name"]
-                if not allowed_tool(agent_slug, name):
+                if name == "consult_colleague":
+                    result = {"error": "Consultation unavailable or already used"}
+                    if allow_consultation and not consulted:
+                        consulted = True
+                        try:
+                            args = json.loads(call["function"].get("arguments") or "{}")
+                            department = args["department"]
+                            question_for_colleague = args["question"]
+                            if department not in EMPLOYEES or department == agent_slug or not isinstance(question_for_colleague, str):
+                                raise ValueError("Invalid consultation")
+                            from sqlalchemy import select
+                            from app.models.agents import AgentProfile
+                            profile = await db.scalar(select(AgentProfile).where(AgentProfile.slug == department))
+                            if not profile or profile.is_paused or profile.emergency_stop:
+                                raise ValueError("Department unavailable")
+                            async with db.begin_nested():
+                                assessment, _, provider = await chat_with_openai(db, "Read-only internal consultation: " + question_for_colleague[:2000], agent_slug=department, allow_consultation=False)
+                            result = {"colleague": EMPLOYEES[department][0], "assessment": assessment, "provider": provider}
+                        except Exception:
+                            result = {"error": "Colleague assessment unavailable; do not claim consultation succeeded."}
+                elif not allowed_tool(agent_slug, name):
                     result = {"error": "Action requires explicit owner approval"}
                 else:
                     try:
