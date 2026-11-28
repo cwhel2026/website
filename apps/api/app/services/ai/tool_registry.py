@@ -149,6 +149,8 @@ OPENAI_TOOL_SPECS: list[dict[str, Any]] = [
 
 
 async def run_tool(db: AsyncSession, name: str) -> dict[str, Any]:
+    if name in {"marketing_pause_all", "marketing_director_proactive"}:
+        return {"error": "Action requires explicit owner approval"}
     handler: ToolHandler | None = TOOL_HANDLERS.get(name)  # type: ignore[assignment]
     if not handler:
         return {"error": f"Unknown tool: {name}"}
