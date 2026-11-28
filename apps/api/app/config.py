@@ -71,6 +71,16 @@ class Settings(BaseSettings):
     marketing_media_dir: str = "/data/marketing_media"
     marketing_ai_image_enabled: bool = False
     marketing_simulation_default: bool = True
+    google_client_id: str | None = None
+    google_client_secret: str | None = None
+    google_workspace_email: str = "bookings@surfacecoat.co.uk"
+    google_redirect_uri: str | None = None
+    gocardless_access_token: str | None = None
+    gocardless_webhook_secret: str | None = None
+    gocardless_environment: str = "sandbox"
+    gocardless_enabled: bool = False
+    gocardless_redirect_uri: str | None = None
+    gocardless_exit_uri: str | None = None
     freeagent_client_id: str | None = None
     freeagent_client_secret: str | None = None
     freeagent_redirect_uri: str | None = None
