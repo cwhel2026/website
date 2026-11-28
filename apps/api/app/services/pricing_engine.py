@@ -61,6 +61,7 @@ class PricingInput:
     pricing_tier: str = "launch"
     charge_vat: bool = False
     vat_rate: Decimal = Decimal("0")
+    driving_hours_one_way: Decimal | None = None
 
 
 @dataclass
@@ -159,7 +160,15 @@ async def calculate_quotation(
         raise ValueError("Total area must be greater than zero")
 
     tier = data.pricing_tier if data.pricing_tier in ("launch", "standard") else "launch"
-    base_rate = _rule_for_surface(rules, data.surface_type, data.service.category, tier)
+    approved = profile.name == "surfacecoat-approved-restoration" and data.service.category == ServiceCategory.RESTORATION
+    approved_rule = None
+    if approved:
+        label = "approved"
+        if data.surface_type == SurfaceType.IMPRINTED_CONCRETE:
+            label = "approved-colour" if data.service.slug == "imprinted-concrete-colour-restoration" else "approved-clear"
+        approved_rule = next((r for r in rules if r.rule_type == PricingRuleType.PER_SQM and _is_active(r) and r.surface_type == data.surface_type and r.label == label), None)
+        tier = label
+    base_rate = approved_rule.amount_gbp if approved_rule is not None else _rule_for_surface(rules, data.surface_type, data.service.category, tier)
     if base_rate is None or base_rate <= 0:
         raise ValueError(
             f"Pricing for {data.surface_type.value} ({tier}) is not configured. "
@@ -175,13 +184,13 @@ async def calculate_quotation(
     surface_subtotal = money(total_area * base_rate * condition_mult * commercial_mult)
 
     washing_charge = Decimal("0")
-    if data.requires_washing and not data.customer_washed_already:
+    if not approved and data.requires_washing and not data.customer_washed_already:
         wash_rate = _rule_amount(rules, PricingRuleType.WASHING_SURCHARGE)
         if wash_rate is not None and wash_rate > 0:
             washing_charge = money(total_area * wash_rate)
 
     coating_charge = Decimal("0")
-    if data.service.requires_coating:
+    if not approved and data.service.requires_coating:
         coat_rate = _rule_amount(rules, PricingRuleType.COATING_SURCHARGE)
         if coat_rate is not None and coat_rate > 0:
             coating_charge = money(total_area * coat_rate)
@@ -192,7 +201,7 @@ async def calculate_quotation(
     territory_minimum = (
         data.territory.minimum_job_value_gbp if data.territory else Decimal("0")
     )
-    effective_minimum = max(minimum_job, territory_minimum)
+    effective_minimum = minimum_job if approved else max(minimum_job, territory_minimum)
 
     # Minimum applies to the works (surface + washing + coating) before travel.
     # Travel is added afterwards. This order is intentional and matches the previous engine.
@@ -205,6 +214,10 @@ async def calculate_quotation(
         customer_washed_already=data.customer_washed_already,
         requires_coating=bool(data.service.requires_coating),
     )
+    if approved:
+        visits = 2
+        if data.driving_hours_one_way is None:
+            raise ValueError("Road routing duration not configured")
     per_mile, per_hour = _travel_rates(rules)
     miles_one_way = data.distance_km_from_base / KM_PER_MILE
     hours_one_way = (
@@ -212,6 +225,8 @@ async def calculate_quotation(
         if data.distance_km_from_base > 0
         else Decimal("0")
     )
+    if data.driving_hours_one_way is not None:
+        hours_one_way = data.driving_hours_one_way
     legs = Decimal(visits * 2)
     mileage_charge = money(miles_one_way * per_mile * legs)
     driving_charge = money(hours_one_way * per_hour * legs)
@@ -248,6 +263,10 @@ async def calculate_quotation(
     materials_per_sqm = MATERIAL_COST_PER_SQM.get(
         data.service.category, Decimal("2.50")
     )
+    if approved:
+        if approved_rule is None or approved_rule.percentage is None:
+            raise ValueError("Material allowance not configured")
+        materials_per_sqm = approved_rule.percentage
     materials_cost = money(total_area * materials_per_sqm)
     if washing_charge > 0:
         materials_cost += money(total_area * Decimal("0.15"))
@@ -268,7 +287,7 @@ async def calculate_quotation(
     )
     meets_margin = margin_ratio >= min_margin_pct
 
-    requires_approval = not meets_margin or total_inc_vat >= Decimal("5000")
+    requires_approval = not meets_margin or total_inc_vat >= Decimal("5000") or (approved and data.surface_condition in (SurfaceCondition.POOR, SurfaceCondition.HEAVILY_DEGRADED))
 
     breakdown = {
         "profile_id": str(profile.id),
@@ -315,6 +334,8 @@ async def calculate_quotation(
             "labour_hours": float(labour_hours),
             "labour_gbp": float(labour_cost),
             "materials_gbp": float(materials_cost),
+            "materials_per_sqm": float(materials_per_sqm),
+            "materials_basis": "Provisional retail cost allowance" if approved else "Legacy estimate",
             "travel_gbp": float(travel),
         },
         "margin_ratio": float(margin_ratio),

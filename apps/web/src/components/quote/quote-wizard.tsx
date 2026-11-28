@@ -654,7 +654,7 @@ function StepSurface({
           <button
             key={s.value}
             type="button"
-            onClick={() => patch({ surface_type: s.value })}
+            onClick={() => patch({ surface_type: s.value, service_slug: s.value === "tarmac" ? "tarmac-driveway-restoration" : s.value === "block_paving" ? "block-paving-cleaning-sealing" : s.value === "imprinted_concrete" ? "imprinted-concrete-restoration" : state.service_slug, requires_washing: true, customer_washed_already: false })}
             className={`min-h-12 border p-4 text-left transition ${
               state.surface_type === s.value ? "border-brand-ink bg-brand-paper" : "border-brand-line"
             }`}
@@ -680,8 +680,7 @@ function StepSurface({
       </label>
       {state.service_slug && state.service_slug !== "tarmac-restoration" ? (
         <p className="mt-3 text-sm leading-relaxed text-brand-ink/75">
-          An instant price is published for tarmac restoration. If this service has no published price, the estimate
-          will say so. Continuing does not confirm a booking.
+          Restoration includes cleaning and preparation, followed by a separate restoration visit. Continuing does not confirm a booking.
         </p>
       ) : null}
     </div>
@@ -821,6 +820,9 @@ function StepPrep({
   state: QuoteState;
   patch: (p: Partial<QuoteState>) => void;
 }) {
+  if (["tarmac-driveway-restoration", "block-paving-cleaning-sealing", "imprinted-concrete-restoration", "imprinted-concrete-colour-restoration"].includes(state.service_slug)) {
+    return <div><h2 className="font-display text-xl font-semibold">Preparation</h2><p className="mt-3 text-sm">Professional pressure washing and preparation are included. We return for restoration once the surface is dry and conditions are suitable.</p></div>;
+  }
   return (
     <div>
       <h2 className="font-display text-xl font-semibold">Preparation</h2>
