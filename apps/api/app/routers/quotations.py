@@ -77,6 +77,7 @@ async def calculate_provisional_quotation(
         requires_washing=body.requires_washing,
         customer_washed_already=body.customer_washed_already,
         requires_coating=bool(service.requires_coating),
+        service_slug=service.slug,
     )
     out = ProvisionalQuotationOut(
         input_fingerprint=fingerprint,
@@ -120,6 +121,7 @@ async def submit_quotation(
         requires_washing=body.requires_washing,
         customer_washed_already=body.customer_washed_already,
         requires_coating=bool(service.requires_coating),
+        service_slug=service.slug,
     )
     if enquiry is not None:
         try:
