@@ -91,7 +91,8 @@ async def run_business_director_scan(db: AsyncSession) -> list[AgentTask]:
             agent, title, priority = SIGNAL_ACTIONS[key]
             created.append(AgentTask(agent_slug=agent, action_key=key, title=f"{title}: {count}", payload_json=json.dumps({"count": count}), priority=priority))
     existing = (await db.execute(select(AgentTask).where(AgentTask.status.in_([TaskStatus.QUEUED, TaskStatus.RUNNING, TaskStatus.AWAITING_APPROVAL])))).scalars().all()
-    keys = {task_identity(t) for t in existing}
+    await reconcile_signal_tasks(db, existing, signals)
+    keys = {task_identity(t) for t in existing if t.status != TaskStatus.CANCELLED}
     profiles = {p.slug: p for p in (await db.execute(select(AgentProfile))).scalars().all()}
     added = []
     for task in sorted(created, key=lambda t: t.priority, reverse=True):
@@ -164,3 +165,37 @@ async def director_signals(db: AsyncSession) -> dict[str, int]:
         "outreach_review": select(func.count()).select_from(OutreachMessage).join(CommercialProspect).where(OutreachMessage.status == OutreachMessageStatus.PENDING_APPROVAL, CommercialProspect.opt_out.is_(False)),
     }
     return {key: int(await db.scalar(query) or 0) for key, query in queries.items()}
+
+
+async def reconcile_signal_tasks(db, tasks, signals):
+    """Refresh queued recommendations; never cancel running or approval tasks."""
+    for task in tasks:
+        if task.status != TaskStatus.QUEUED or task.action_key not in SIGNAL_ACTIONS:
+            continue
+        count = signals.get(task.action_key)
+        if count is None:
+            continue
+        locked = await db.get(AgentTask, task.id, with_for_update=True, populate_existing=True)
+        if locked is None or locked.status != TaskStatus.QUEUED:
+            continue
+        if count == 0:
+            locked.status = TaskStatus.CANCELLED
+            locked.completed_at = datetime.now(UTC)
+            locked.result_json = json.dumps({"reason": "signal_resolved"})
+        else:
+            locked.payload_json = json.dumps({"count": count})
+            locked.title = f"{SIGNAL_ACTIONS[locked.action_key][1]}: {count}"
+
+
+async def director_target_review(db, monthly_target):
+    """Compare owner-supplied target with recorded eligible invoice payments."""
+    from datetime import time
+    from decimal import Decimal
+    from app.models.finance import Payment
+    from app.models.crm import Customer
+    london = ZoneInfo("Europe/London")
+    now = datetime.now(london)
+    start = datetime.combine(now.date().replace(day=1), time.min, tzinfo=london)
+    amount = await db.scalar(select(func.coalesce(func.sum(Payment.amount_gbp), 0)).select_from(Payment).join(Invoice, Payment.invoice_id == Invoice.id).join(Customer, Invoice.customer_id == Customer.id).outerjoin(Quotation, Invoice.quotation_id == Quotation.id).where(Customer.is_test.is_(False), (Quotation.id.is_(None) | Quotation.is_test.is_(False)), Invoice.status.notin_([InvoiceStatus.DRAFT, InvoiceStatus.VOID]), Payment.paid_at >= start, Payment.paid_at <= now))
+    recorded = Decimal(str(amount or 0))
+    return {"monthly_target_gbp": str(monthly_target), "recorded_payments_gbp": str(recorded), "remaining_gbp": str(max(Decimal("0"), monthly_target-recorded)), "basis": "recorded_invoice_payments_not_verified_bank_cash"}
