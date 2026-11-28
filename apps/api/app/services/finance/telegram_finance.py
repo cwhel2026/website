@@ -26,6 +26,8 @@ async def answer_finance_question(db: AsyncSession, text: str) -> str | None:
     lower = text.lower()
     if "reserve" in lower and "tax" in lower:
         payload = await compute_tax_reserves(db)
+        if payload.get("recommended_reserve_gbp") is None:
+            return "Tax reserve unknown until reconciliation is complete."
         return (
             f"Tax reserve plan (provisional={payload['is_provisional']}): "
             f"£{payload['recommended_reserve_gbp']:.2f}. {payload['plain_english']}"
@@ -46,42 +48,11 @@ async def answer_finance_question(db: AsyncSession, text: str) -> str | None:
         reserves = await compute_distributable_reserves(db)
         if reserves.get("blocked") or not reserves.get("available"):
             return reserves.get("message", "Cannot recommend pay until FreeAgent reserves are verified.")
-        profile = await db.execute(select(CompanyProfile).limit(1))
-        prof = profile.scalar_one_or_none()
-        desired = (
-            prof.director_desired_monthly_net_gbp
-            if prof and prof.director_desired_monthly_net_gbp
-            else __import__("decimal").Decimal("2500")
-        )
-        dist = __import__("decimal").Decimal(str(reserves.get("available_distributable_gbp", 0)))
-        from app.services.finance.freeagent_reports import _extract_net_profit_before_tax, get_cached_report
-
-        pl = await get_cached_report(db, "pl_summary_ytd")
-        np = _extract_net_profit_before_tax(pl or {}) if pl else None
-        profit = np if np is not None else __import__("decimal").Decimal("0")
-        tax = await compute_tax_reserves(db)
-        obligation = __import__("decimal").Decimal(str(tax.get("recommended_reserve_gbp") or 0))
-        opt = optimise_remuneration(
-            RemunerationInputs(
-                desired_monthly_net_gbp=desired,
-                annual_company_profit_before_remuneration_gbp=profit,
-                distributable_reserves_gbp=dist,
-                company_cash_gbp=dist,
-                obligation_reserve_gbp=obligation,
-            )
-        )
-        if opt.get("blocked"):
-            return opt.get("blocked_reason", opt.get("plain_english", "Blocked pending accountant review."))
-        rec = opt.get("recommended")
-        if not rec:
-            return opt.get("plain_english", "Cannot compute pay yet.")
-        return (
-            f"Planning for ~£{desired}/mo net (accountant must approve): "
-            f"salary £{rec['salary_gross_gbp']:.0f}/yr, dividends £{rec['dividend_gbp']:.0f}/yr. "
-            f"{opt.get('recommendation_reason', opt['plain_english'])}"
-        )
+        return "Verified available company cash and accountant review required before recommending director pay."
     if "cash flow" in lower or "cashflow" in lower:
         fc = await simple_cashflow_forecast(db)
+        if fc.get("net_position_gbp") is None:
+            return "Cashflow forecast unavailable until financial records are complete."
         return f"30-day forecast net £{fc['net_position_gbp']:.2f}. {fc['plain_english']}"
     if "problem" in lower or "watchdog" in lower or "alert" in lower:
         issues = await run_financial_watchdog(db)
