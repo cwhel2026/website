@@ -18,6 +18,8 @@ class AppointmentClusterHint:
     postcode: str | None
     scheduled_start: datetime
     drive_minutes_from_previous: int | None
+    available_gap_minutes: int | None = None
+    travel_conflict: bool | None = None
 
 
 async def daily_route_hints(
@@ -37,11 +39,13 @@ async def daily_route_hints(
     items = list(result.all())
     hints: list[AppointmentClusterHint] = []
     prev_lat, prev_lon = base_lat, base_lon
+    previous_end = None
     for appt, job in items:
         lat, lon = appt.latitude, appt.longitude
         drive = None
         if all(v is not None for v in (prev_lat, prev_lon, lat, lon)):
             drive = estimate_drive_minutes(haversine_km(float(prev_lat), float(prev_lon), float(lat), float(lon)))
+        gap = int((appt.scheduled_start - previous_end).total_seconds() / 60) if previous_end is not None else None
         hints.append(
             AppointmentClusterHint(
                 appointment_id=str(appt.id),
@@ -49,7 +53,10 @@ async def daily_route_hints(
                 postcode=appt.postcode,
                 scheduled_start=appt.scheduled_start,
                 drive_minutes_from_previous=drive,
+                available_gap_minutes=gap,
+                travel_conflict=(gap < drive) if gap is not None and drive is not None else None,
             )
         )
         prev_lat, prev_lon = lat, lon
+        previous_end = appt.scheduled_end
     return hints
