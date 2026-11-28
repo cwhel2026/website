@@ -82,9 +82,16 @@ async def push_receipt_to_freeagent(
 ) -> dict:
     if not approved:
         return {"ok": False, "reason": "approval_required"}
+    await db.refresh(receipt, with_for_update=True)
     if receipt.freeagent_expense_url:
         return {"ok": True, "reason": "already_posted", "url": receipt.freeagent_expense_url}
 
+    if receipt.freeagent_attach_status in ("posting", "failed", "uncertain"):
+        return {"ok": False, "reason": "manual_verification_required"}
+    if not receipt.extracted_date or receipt.extracted_total_gbp is None or not receipt.extracted_total_gbp.is_finite() or receipt.extracted_total_gbp <= 0:
+        return {"ok": False, "reason": "verified_receipt_amount_and_date_required"}
+    if receipt.extracted_vat_gbp is not None and (not receipt.extracted_vat_gbp.is_finite() or not 0 <= receipt.extracted_vat_gbp <= receipt.extracted_total_gbp):
+        return {"ok": False, "reason": "invalid_receipt_vat"}
     settings = get_settings()
     status = await freeagent_status(db)
     if not status.can_sync:
@@ -94,6 +101,8 @@ async def push_receipt_to_freeagent(
     if receipt.matched_bank_transaction_id:
         txn = await db.get(BankTransaction, receipt.matched_bank_transaction_id)
 
+    if txn and (txn.is_duplicate or receipt.processing_status == 'needs_review'):
+        return {"ok": False, "reason": "verify_bank_match_first"}
     route = classify_receipt_route(receipt, txn)
     receipt.accounting_route = route.value
     await db.flush()
@@ -148,8 +157,10 @@ async def push_receipt_to_freeagent(
             content = receipt_file_path(receipt.storage_key or "").read_bytes()
             mime = mimetypes.guess_type(receipt.filename)[0] or "image/jpeg"
             b64 = base64.b64encode(content).decode("ascii")
-            dated = receipt.extracted_date or date.today()
+            dated = receipt.extracted_date
             vat = receipt.extracted_vat_gbp or Decimal("0")
+            receipt.freeagent_attach_status = 'posting'
+            await db.flush()
             resp = await freeagent_client.create_expense_with_attachment(
                 settings,
                 token,
@@ -165,15 +176,19 @@ async def push_receipt_to_freeagent(
             )
             expense = resp.get("expense") or {}
             url = expense.get("url")
-            receipt.freeagent_expense_url = str(url)[:255] if url else None
+            if not url:
+                receipt.freeagent_attach_status = "uncertain"
+                await db.flush()
+                return {"ok": False, "reason": "manual_verification_required"}
+            receipt.freeagent_expense_url = str(url)[:255]
             receipt.freeagent_attach_status = "expense_created"
             receipt.processing_status = "posted_freeagent"
             await db.flush()
             return {"ok": True, "route": route.value, "freeagent_expense_url": receipt.freeagent_expense_url}
         except Exception as exc:
             receipt.freeagent_attach_status = "failed"
-            receipt.freeagent_attach_error = str(exc)[:500]
+            receipt.freeagent_attach_error = type(exc).__name__
             await db.flush()
-            return {"ok": False, "reason": "api_error", "detail": str(exc)[:200]}
+            return {"ok": False, "reason": "api_error", "detail": "Verify FreeAgent before retrying"}
 
     return {"ok": False, "reason": "unmatched", "route": route.value}
