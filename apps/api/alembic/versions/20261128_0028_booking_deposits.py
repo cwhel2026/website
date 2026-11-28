@@ -24,6 +24,7 @@ def upgrade():
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
         sa.CheckConstraint("amount_pence > 0 AND amount_pence <= total_pence", name="ck_booking_deposit_amount"),
         sa.CheckConstraint("status IN ('draft','pending','confirmed','failed','cancelled','review')", name="ck_booking_deposit_status"),
+        if_not_exists=True,
     )
     op.create_table(
         "booking_payment_events",
@@ -31,6 +32,7 @@ def upgrade():
         sa.Column("action", sa.String(80), nullable=False),
         sa.Column("payment_id", sa.String(100)),
         sa.Column("received_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
+        if_not_exists=True,
     )
 
 
