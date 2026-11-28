@@ -87,7 +87,7 @@ async def chat_with_openai(
             messages.append(choice)
             for call in tool_calls:
                 name = call["function"]["name"]
-                result = {"error": "Action requires explicit owner approval"} if not allowed_tool(agent_slug, name) else await run_tool(db, name)
+                result = {"error": "Action requires explicit owner approval"} if not allowed_tool(agent_slug, name) else await run_tool(db, name, json.loads(call["function"].get("arguments") or "{}"))
                 tool_data[name] = result
                 messages.append(
                     {
