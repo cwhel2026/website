@@ -14,8 +14,8 @@ async def audit_public_site() -> dict:
     settings = get_settings()
     base = (settings.public_dashboard_base_url or (settings.cors_origin_list[0] if settings.cors_origin_list else "")).rstrip("/")
     if not base:
-        base = "https://revivemydrive.co.uk"
-    pages = ["/", "/services/tarmac-restoration", "/instant-quote"]
+        return {"audited_at": datetime.now(UTC).isoformat(), "pages": [], "state": "site_url_not_configured"}
+    pages = ["/", "/services/tarmac-restoration", "/quote", "/contact", "/privacy", "/terms"]
     results = []
     async with httpx.AsyncClient(timeout=20.0, follow_redirects=True) as client:
         for path in pages:
@@ -36,8 +36,8 @@ async def audit_public_site() -> dict:
                         "has_json_ld": "application/ld+json" in html,
                     }
                 )
-            except httpx.HTTPError as exc:
-                results.append({"url": url, "error": str(exc)[:200]})
+            except httpx.HTTPError:
+                results.append({"url": url, "error": "Website request failed"})
     return {"audited_at": datetime.now(UTC).isoformat(), "pages": results}
 
 

@@ -46,7 +46,7 @@ DEFAULT_LAUNCH_PROGRAMME = {
         },
     ],
     "hypothesis_weekly_enquiries": "10–20 is a planning target, not guaranteed",
-    "operational_launch": "2027-03-01",
+    "operational_launch": None,
 }
 
 

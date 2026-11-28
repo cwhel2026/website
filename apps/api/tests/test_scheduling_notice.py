@@ -54,3 +54,10 @@ def test_reversed_window_rejected():
 def test_notice_across_dst_is_elapsed_time():
     now = datetime(2027, 3, 28, 8, tzinfo=UTC)
     assert earliest_search_from(_settings(), now) >= now + timedelta(hours=24)
+
+
+def test_immediate_launch_keeps_notice_and_weekends():
+    now = datetime(2026, 11, 28, 8, tzinfo=UTC)
+    start = earliest_search_from(_settings(earliest_work_date=None), now)
+    assert start == datetime(2026, 11, 30, 8, tzinfo=UTC)
+    assert slot_inside_working_hours(_settings(earliest_work_date=None), start, start + timedelta(hours=2))
