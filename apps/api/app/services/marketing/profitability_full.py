@@ -44,12 +44,9 @@ async def marketing_profitability_full(db: AsyncSession, *, days: int = 90) -> d
         if inv.total_inc_vat_gbp is not None:
             collected += inv.total_inc_vat_gbp
 
+    # Company-wide revenue is not attributable campaign revenue.
     cac = None
-    if funnel.get("quotations_accepted") and ad_spend is not None and funnel["quotations_accepted"] > 0:
-        cac = float(Decimal(str(ad_spend)) / Decimal(funnel["quotations_accepted"]))
     mroi = None
-    if ad_spend is not None and float(ad_spend) > 0:
-        mroi = float(collected) / float(ad_spend)
 
     return {
         **funnel,
@@ -60,6 +57,7 @@ async def marketing_profitability_full(db: AsyncSession, *, days: int = 90) -> d
         "collected_revenue_note": "Only PAID invoices linked to COMPLETED jobs",
         "customer_acquisition_cost_gbp": cac,
         "marketing_roi": mroi,
+        "attribution_note": "Campaign-level linked spend and collected revenue required before CAC or ROI can be calculated.",
         "job_contribution_gbp": None,
         "job_contribution_note": "Direct job cost allocation not fully modelled — null not zero",
         "optimise_for": "profitable_completed_work",
