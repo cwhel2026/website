@@ -1,6 +1,7 @@
 import json
 import re
 import logging
+from app.services.ai.reply_format import complete_excerpt
 from app.services.ai.providers.responses_adapter import request_response, parse_response
 
 logger = logging.getLogger(__name__)
@@ -78,6 +79,21 @@ async def chat_with_openai(
     previous = (await db.scalars(select(AuditEvent).where(AuditEvent.action == "employee_decision_report", AuditEvent.actor_id == agent_slug).order_by(AuditEvent.created_at.desc()).limit(5))).all()
     if previous:
         messages.insert(2, {"role": "user", "content": "Previous recommendations, not verified outcomes: " + json.dumps([x.detail_json for x in previous], default=str)[:10000]})
+    if agent_slug == "marketing" and re.search(r"budget|spend|advertis|campaign|target", question, re.I):
+        from app.services.ai.commercial_plan import plan_campaign, scenario_reach
+        from app.services.marketing.competitor_research import list_competitor_findings
+        match = re.search(r"£\s*(\d+(?:\.\d{1,2})?)", question)
+        policy = tool_data.get("marketing_budget_policy", {})
+        plan = plan_campaign(tool_data.get("marketing_capacity", {}), policy, tool_data.get("marketing_weekly_spend", {}), match.group(1) if match else policy.get("weekly_limit_gbp"))
+        if plan.get("allocation"):
+            plan["scenarios"] = scenario_reach(plan["allocation"][0]["total_gbp"])
+        try:
+            async with db.begin_nested():
+                plan["stored_competitors"] = await list_competitor_findings(db, limit=10)
+        except Exception:
+            plan["stored_competitors"] = []
+        tool_data["hypothetical_campaign_plan"] = plan
+        messages.insert(2, {"role": "user", "content": "Calculated hypothetical campaign plan, not authorisation: " + json.dumps(plan, default=str)})
     if allow_consultation and agent_slug == "marketing" and re.search(r"\b(?:consult|ask|check with|speak to)\s+Arthur\b", question, re.I):
         consulted = True
         try:
@@ -87,7 +103,7 @@ async def chat_with_openai(
             if not profile or profile.is_paused or profile.emergency_stop:
                 raise ValueError("Arthur unavailable")
             async with db.begin_nested():
-                assessment, _, provider = await chat_with_openai(db, "Read-only affordability assessment for Olivia: " + question[:2000], agent_slug="finance", allow_consultation=False, cost_tracker=cost_tracker)
+                assessment, _, provider = await chat_with_openai(db, "Read-only affordability assessment for Olivia: " + question[:2000] + "\nCalculated campaign scenario (not verified outcomes): " + json.dumps(tool_data.get("hypothetical_campaign_plan", {}), default=str)[:10000], agent_slug="finance", allow_consultation=False, cost_tracker=cost_tracker)
                 await record_audit(db, actor_type="ai_employee", actor_id=agent_slug, action="employee_consultation", entity_type="ai_employee", detail={"department": "finance", "assessment": assessment[:3500], "provider": provider})
             consultation_succeeded = True
             tool_data["consult_colleague"] = {"colleague": "Arthur", "assessment": assessment}
@@ -118,12 +134,22 @@ async def chat_with_openai(
             tool_calls = choice.get("tool_calls") or []
             if not tool_calls:
                 reply = choice.get("content") or "No response."
-                if agent_slug == "marketing" and re.search(r"£\s*\d|\b\d+(?:\.\d+)?\s*(?:gbp|pounds)\b", reply, re.I) and re.search(r"budget|spend|advertis|campaign|target", question, re.I):
+                if "hypothetical_campaign_plan" in tool_data:
+                    plan = tool_data["hypothetical_campaign_plan"]
+                    rows = plan.get("allocation", [])
+                    reply = "Hypothetical campaign only; authorised spend £0.\n" + "\n".join(f"{row['territory']}: £{row['daily_gbp']}/day for {row['days']} days (£{row['total_gbp']})" for row in rows) + "\n" + plan.get("reason", plan.get("error", "")) + "\n" + plan.get("measurement", "") + "\n" + plan.get("stop_rule", "") + "\nFree actions:\n" + "\n".join(plan.get("free_actions", [])) + "\n" + "; ".join(plan.get("launch_blockers", []))
+                    if plan.get("scenarios"):
+                        reply += "\nReach sensitivity (illustrative assumptions, not Meta estimates):"
+                        for name, scenario in plan["scenarios"].items():
+                            forecast = scenario["forecast"]
+                            reply += f"\n{name}: reach {forecast['reach']}, impressions {forecast['impressions']}, enquiries {forecast['enquiries']}, expected jobs {forecast['jobs']}; CPM £{scenario['assumptions']['cpm']}, frequency {scenario['assumptions']['frequency']}."
+                        reply += "\nActual audience size and delivery estimates require platform data. Job profitability requires verified costs."
+                elif agent_slug == "marketing" and re.search(r"£\s*\d|\b\d+(?:\.\d+)?\s*(?:gbp|pounds)\b", reply, re.I) and re.search(r"budget|spend|advertis|campaign|target", question, re.I):
                     # A model-selected calculator call is not sufficient to certify free-form prose.
                     # Return only the checked allocation, never unchecked monetary recommendations.
                     checked = tool_data.get("validate_ad_allocation", {})
                     if not checked.get("valid") and step < 2:
-                        messages.append({"role": "user", "content": "Your allocation was not validated. Call validate_ad_allocation using the current budget policy and recorded spend, then explain your geographical recommendation. If evidence is missing, provide a non-numerical recommendation and identify the missing evidence."})
+                        messages.append({"role": "user", "content": "Your allocation was not validated. Call validate_ad_allocation using the current budget policy and recorded spend. If paid spend is blocked, provide a non-numerical geographical test plan, audience, creative, measurement and free acquisition actions. Identify missing evidence. Planning is not permission to spend."})
                         continue
                     if not checked.get("valid"):
                         reply = "I cannot verify a numerical advertising allocation yet. No spending is authorised. I need a validated allocation and current budget evidence."
@@ -140,11 +166,11 @@ async def chat_with_openai(
                         except (KeyError, ValueError, TypeError):
                             reply = "Current budget evidence does not support a verified allocation. No spending is authorised."
                 if consulted and "consult_colleague" in tool_data:
-                    reply += "\n\nArthur consultation: " + ("Completed; " + str(tool_data["consult_colleague"].get("assessment", ""))[:700] if consultation_succeeded else "Unavailable. Financial review not completed.")
+                    reply += "\n\nArthur consultation: " + ("Completed; " + complete_excerpt(str(tool_data["consult_colleague"].get("assessment", "")), 1000) if consultation_succeeded else "Unavailable. Financial review not completed.")
                 from app.services.audit import record_audit
                 await record_audit(db, actor_type="ai_employee", actor_id=agent_slug, action="employee_decision_report", entity_type="ai_employee", detail={"question": question[:2000], "reply": reply[:3400], "evidence_tools": list(tool_data), "model": model, "estimated_cost_gbp": str(sum(cost_tracker)), "consulted": consultation_succeeded})
                 footer = f"\n\nAI: {model} | Est. cost £{sum(cost_tracker):.4f}" if root_call else ""
-                return reply.strip()[:3400] + footer, tool_data, "openai"
+                return complete_excerpt(reply.strip(), 3400) + footer, tool_data, "openai"
 
             messages.extend(output_items)
             for call in tool_calls:
