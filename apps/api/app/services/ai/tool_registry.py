@@ -188,6 +188,32 @@ OPENAI_TOOL_SPECS.append({"type":"function","function":{"name":"validate_ad_allo
 
 
 async def run_tool(db: AsyncSession, name: str, args: dict | None = None, *, agent_slug=None, execution_context=None) -> dict[str, Any]:
+    if name == "booking_deposit_status":
+        from app.config import get_settings
+        from app.models.agents import AgentProfile
+        from app.models.jobs import Job
+        from app.models.booking_payment import BookingDeposit
+        from sqlalchemy import select
+        if (not execution_context or execution_context.get("request_id") is None
+                or agent_slug not in {"personal_assistant", "finance"}
+                or execution_context.get("chat_id") not in get_settings().telegram_alert_chat_ids):
+            return {"error": "Trusted authorised owner context required"}
+        profile = await db.scalar(select(AgentProfile).where(AgentProfile.slug == agent_slug))
+        if not profile or profile.is_paused or profile.emergency_stop or get_settings().global_emergency_stop:
+            return {"error": "Employee unavailable"}
+        reference = (args or {}).get("job_reference")
+        if not isinstance(reference, str) or not 1 <= len(reference) <= 24:
+            return {"error": "Exact job reference required"}
+        job = await db.scalar(select(Job).where(Job.reference == reference))
+        if not job:
+            return {"error": "Job not found; ask owner for exact reference"}
+        deposit = await db.scalar(select(BookingDeposit).where(BookingDeposit.job_id == job.id))
+        if not deposit:
+            return {"job_reference": reference, "deposit_status": "not_created"}
+        return {"job_reference": reference, "deposit_status": deposit.status,
+                "amount_gbp": str(Decimal(deposit.amount_pence) / 100),
+                "payment_link_available": bool(deposit.payment_url),
+                "sandbox_only": True, "warning": "Provider status is not proof of invoice settlement"}
     if name == "flexible_opportunities":
         from app.services.flexible_planning import flexible_opportunities
         return await flexible_opportunities(db)
@@ -258,3 +284,6 @@ OPENAI_TOOL_SPECS.append({"type": "function", "function": {"name": "meta_deliver
 OPENAI_TOOL_SPECS.append({"type": "function", "function": {"name": "employee_work_status", "description": "Read recent saved employee work, progress, failures and completed campaign plans for the current owner. Use for follow-ups about previously requested work.", "parameters": {"type": "object", "properties": {}, "additionalProperties": False}}})
 
 OPENAI_TOOL_SPECS.append({"type":"function","function":{"name":"flexible_opportunities","description":"Find open flexible booking quotes within five straight-line miles of confirmed visits over the next 14 days, with conservative discount review. These are area leads, not verified available slots. Never promise dates or savings amounts from this tool alone.","parameters":{"type":"object","properties":{},"additionalProperties":False}}})
+
+
+OPENAI_TOOL_SPECS.append({"type": "function", "function": {"name": "booking_deposit_status", "description": "Read the saved deposit status for an exact existing job reference. Never invent a reference or claim sandbox payment is real.", "parameters": {"type": "object", "properties": {"job_reference": {"type": "string"}}, "required": ["job_reference"], "additionalProperties": False}}})
