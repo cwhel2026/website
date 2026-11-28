@@ -107,3 +107,32 @@ class GoCardlessClient:
                 "redirect_uri": redirect_uri,
                 "exit_uri": exit_uri,
             }}, idempotency_key)
+
+
+    async def get_payment(self, payment_id: str) -> dict[str, Any]:
+        if not payment_id or not payment_id.isascii() or not payment_id.isalnum():
+            raise ValueError("Invalid payment identifier")
+        headers = {"Authorization": f"Bearer {self._token}", "GoCardless-Version": API_VERSION,
+                   "Accept": "application/json"}
+        try:
+            async with httpx.AsyncClient(base_url=self._base, headers=headers, timeout=20,
+                                         transport=self._transport) as client:
+                response = await client.get(f"/payments/{payment_id}")
+                response.raise_for_status()
+                return response.json()["payments"]
+        except (httpx.HTTPError, ValueError, KeyError) as exc:
+            raise GoCardlessError("Payment verification failed") from exc
+
+    async def get_billing_request(self, request_id: str) -> dict[str, Any]:
+        if not request_id or not request_id.isascii() or not request_id.isalnum():
+            raise ValueError("Invalid billing request identifier")
+        headers = {"Authorization": f"Bearer {self._token}", "GoCardless-Version": API_VERSION,
+                   "Accept": "application/json"}
+        try:
+            async with httpx.AsyncClient(base_url=self._base, headers=headers, timeout=20,
+                                         transport=self._transport) as client:
+                response = await client.get(f"/billing_requests/{request_id}")
+                response.raise_for_status()
+                return response.json()["billing_requests"]
+        except (httpx.HTTPError, ValueError, KeyError) as exc:
+            raise GoCardlessError("Billing request verification failed") from exc
