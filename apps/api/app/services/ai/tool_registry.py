@@ -188,6 +188,9 @@ OPENAI_TOOL_SPECS.append({"type":"function","function":{"name":"validate_ad_allo
 
 
 async def run_tool(db: AsyncSession, name: str, args: dict | None = None, *, agent_slug=None, execution_context=None) -> dict[str, Any]:
+    if name == "flexible_opportunities":
+        from app.services.flexible_planning import flexible_opportunities
+        return await flexible_opportunities(db)
     if name == "employee_work_status":
         if not execution_context:
             return {"error": "Trusted owner context required"}
@@ -253,3 +256,5 @@ OPENAI_TOOL_SPECS.append({"type": "function", "function": {"name": "queue_employ
 OPENAI_TOOL_SPECS.append({"type": "function", "function": {"name": "meta_delivery_estimate", "description": "Read Meta audience bounds for an existing verified ad set ID. Eligible audience size is not predicted reach. Never invent an ID.", "parameters": {"type": "object", "properties": {"adset_id": {"type": "string"}}, "required": ["adset_id"], "additionalProperties": False}}})
 
 OPENAI_TOOL_SPECS.append({"type": "function", "function": {"name": "employee_work_status", "description": "Read recent saved employee work, progress, failures and completed campaign plans for the current owner. Use for follow-ups about previously requested work.", "parameters": {"type": "object", "properties": {}, "additionalProperties": False}}})
+
+OPENAI_TOOL_SPECS.append({"type":"function","function":{"name":"flexible_opportunities","description":"Find open flexible booking quotes within five straight-line miles of confirmed visits over the next 14 days, with conservative discount review. These are area leads, not verified available slots. Never promise dates or savings amounts from this tool alone.","parameters":{"type":"object","properties":{},"additionalProperties":False}}})
