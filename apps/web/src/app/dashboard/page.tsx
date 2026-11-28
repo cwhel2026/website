@@ -51,6 +51,9 @@ export default function DashboardOverviewPage() {
   const [approvals, setApprovals] = useState<Approval[]>([]);
   const [watchdog, setWatchdog] = useState<Watchdog | null>(null);
 
+  const [target,setTarget]=useState("");
+  const [targetResult,setTargetResult]=useState<{recorded_payments_gbp:string;remaining_gbp:string}|null>(null);
+  async function reviewTarget(){setTargetResult(null);try{setTargetResult(await apiGet(`/api/v1/business-director/target-review?monthly_target=${encodeURIComponent(target)}`,getToken() ?? undefined));}catch{setScanMessage("Target review unavailable");}}
   const [scanning, setScanning] = useState(false);
   const [scanMessage, setScanMessage] = useState("");
   async function scanDirector() {
@@ -181,6 +184,7 @@ export default function DashboardOverviewPage() {
         <p role="status" className="mt-2 text-sm">{scanMessage}</p>
         <div className="mt-4 grid grid-cols-2 gap-2">{director ? Object.entries(director.signals).map(([key,count])=><PortalKpi key={key} label={key.replaceAll("_"," ")} value={String(count)}/>) : <p>Director signals unavailable.</p>}</div>
         <div className="mt-4 space-y-2">{director?.agents.map(a=><div key={a.slug} className="flex justify-between gap-2 rounded border border-white/10 p-2 text-sm"><span>{a.name}</span><span>{a.emergency_stop?"Stopped":a.paused?"Paused":a.mode}</span></div>)}</div>
+        <div className="mt-4 rounded border border-white/10 p-3"><label className="block text-sm">Monthly payment target (£)<input type="number" min="1" value={target} onChange={e=>{setTarget(e.target.value);setTargetResult(null)}} className="mt-1 block w-full rounded bg-black/30 p-2"/></label><button disabled={!Number.isFinite(Number(target))||Number(target)<=0} onClick={()=>void reviewTarget()} className="mt-2 rounded border px-3 py-2">Review target</button>{targetResult&&<p className="mt-2 text-sm">Recorded payments: {formatGbp(targetResult.recorded_payments_gbp)} · Remaining: {formatGbp(targetResult.remaining_gbp)}</p>}<p className="text-xs text-white/60">Recorded payments, not verified bank cash.</p></div>
         <p className="mt-3 text-xs text-white/70">Recommendations only. External actions require separate approval.</p>
       </section>
       <div className="mt-8 grid gap-4 md:grid-cols-2">
