@@ -14,17 +14,19 @@ async def graph_get(path: str, params: dict | None = None) -> dict:
     token = settings.meta_access_token
     if not token:
         return {"ok": False, "message": "META_ACCESS_TOKEN not configured"}
-    q = {"access_token": token, **(params or {})}
+    q = {k: v for k, v in (params or {}).items() if k != "access_token"}
     try:
         async with httpx.AsyncClient(timeout=45.0) as client:
-            resp = await client.get(f"{GRAPH}/{path.lstrip('/')}", params=q)
+            resp = await client.get(f"{GRAPH}/{path.lstrip('/')}", params=q, headers={"Authorization": f"Bearer {token}"})
             data = resp.json()
+            if not isinstance(data, dict):
+                return {"ok": False, "message": "Invalid Meta response"}
             if resp.status_code >= 400:
                 err = data.get("error", {})
                 return {"ok": False, "message": err.get("message", resp.text[:200]), "code": err.get("code")}
             return {"ok": True, "data": data}
-    except httpx.HTTPError as exc:
-        return {"ok": False, "message": str(exc)[:300]}
+    except (httpx.HTTPError, ValueError, TypeError):
+        return {"ok": False, "message": "Meta read request failed"}
 
 
 async def fetch_page_posts(limit: int = 25) -> dict:

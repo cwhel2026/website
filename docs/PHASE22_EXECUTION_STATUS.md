@@ -12,7 +12,7 @@ The configured AI model is retained. No database migration is needed.
 
 ## Evidence and verification
 
-Regression tests cover a £150 draft with a 5% buffer, duplicate execution, dashboard API readback, unknown bank evidence, unavailable integrations, capacity constraints, conflicting limits, rollback after a campaign write, bounded retries, role denial and emergency stop. Tests use a real SQLite database for these local workflow checks; they do not certify PostgreSQL concurrency or a live Telegram/model session.
+Regression tests cover a £150 draft with a 5% buffer, duplicate execution, dashboard API readback, unknown bank evidence, unavailable integrations, capacity constraints, conflicting limits, rollback after a campaign write, bounded retries, role denial and emergency stop. A mocked-provider Telegram webhook test covers owner authentication, tool dispatch, duplicate update handling, worker execution and dashboard API readback. Tests use a real SQLite database for these local workflow checks; they do not certify PostgreSQL concurrency or a live Telegram/model session.
 
 Meta documentation reviewed on 28 November 2026:
 - https://developers.facebook.com/docs/graph-api/reference/ad-campaign/delivery_estimate/

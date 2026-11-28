@@ -108,3 +108,32 @@ def test_platform_estimate_is_not_reach():
     assert not parse_estimate({'data': [{'estimate_ready': False}]})['available']
     result = parse_estimate({'data': [{'estimate_ready': True, 'estimate_mau_lower_bound': 100, 'estimate_mau_upper_bound': 200}]})
     assert result['audience_upper'] == 200 and 'reach' not in result
+
+@pytest.mark.asyncio
+async def test_telegram_request_to_worker_to_dashboard(db, monkeypatch):
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+    from app.models.notifications import TelegramProcessedUpdate, TelegramConversationMessage
+    from app.routers import telegram
+    from app.services.ai.tool_registry import run_tool
+    async with db.bind.begin() as conn:
+        for model in (TelegramProcessedUpdate, TelegramConversationMessage):
+            await conn.run_sync(lambda c, m=model: m.__table__.create(c))
+    monkeypatch.setattr(telegram, 'get_settings', lambda: SimpleNamespace(telegram_bot_token='test', telegram_webhook_secret='test-secret', telegram_admin_id_list=[123], public_origin='https://example.com'))
+    monkeypatch.setattr(telegram, '_safe_send', AsyncMock(return_value=12))
+    async def provider(session, question, **kwargs):
+        assert question == 'prepare a £150 campaign'
+        result = await run_tool(session, 'queue_employee_work', {'kind': 'campaign', 'brief': question, 'budget_gbp': 150}, agent_slug=kwargs['agent_slug'], execution_context=kwargs['execution_context'])
+        assert result['status'] == 'queued'
+        return 'Campaign work saved for execution.', result, 'test-provider'
+    monkeypatch.setattr('app.services.ai.employee_chat.chat_with_openai', provider)
+    monkeypatch.setattr('app.services.ai.execution.collect_evidence', evidence)
+    update = telegram.TelegramUpdate(update_id=777, message={'from': {'id': 123}, 'chat': {'id': 123}, 'text': 'Olivia, prepare a £150 campaign'})
+    response = await telegram.telegram_webhook(update, db, 'test-secret')
+    assert json.loads(response.body)['status'] == 'ok'
+    assert json.loads((await telegram.telegram_webhook(update, db, 'test-secret')).body)['status'] == 'duplicate'
+    assert await db.scalar(select(func.count()).select_from(AgentTask)) == 1
+    assert await run_next_employee_work(db) == {'processed': 1}
+    from app.routers.business_director import employee_work
+    result = (await employee_work(db, None))[0]
+    assert result['status'] == 'completed' and result['result']['campaign_id']
