@@ -9,6 +9,8 @@ depends_on = None
 
 
 def upgrade():
+    if sa.inspect(op.get_bind()).has_table("workspace_connections"):
+        return
     op.create_table(
         "workspace_connections",
         sa.Column("id", sa.Integer(), primary_key=True),
