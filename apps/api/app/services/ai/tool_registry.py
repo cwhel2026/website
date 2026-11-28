@@ -188,7 +188,7 @@ OPENAI_TOOL_SPECS.append({"type":"function","function":{"name":"validate_ad_allo
 
 
 async def run_tool(db: AsyncSession, name: str, args: dict | None = None, *, agent_slug=None, execution_context=None) -> dict[str, Any]:
-    if name in {"booking_deposit_status", "draft_booking_deposit", "find_customer_bookings"}:
+    if name in {"booking_deposit_status", "draft_booking_deposit", "find_customer_bookings", "reserve_booking_visit"}:
         from app.config import get_settings
         from app.models.agents import AgentProfile
         from app.models.jobs import Job
@@ -224,6 +224,27 @@ async def run_tool(db: AsyncSession, name: str, args: dict | None = None, *, age
         job = await db.scalar(select(Job).where(Job.reference == reference))
         if not job:
             return {"error": "Job not found; ask owner for exact reference"}
+        if name == "reserve_booking_visit":
+            from datetime import datetime
+            from app.services.payments.provisional import reserve_provisional_visit
+            from app.services.audit import record_audit
+            if agent_slug != "personal_assistant":
+                return {"error": "Only the personal assistant may reserve visits"}
+            try:
+                start = datetime.fromisoformat((args or {})["start"])
+                end = datetime.fromisoformat((args or {})["end"])
+                async with db.begin_nested():
+                    visit = await reserve_provisional_visit(db, job.id, start, end)
+                    await record_audit(db, actor_type="ai_employee", actor_id=agent_slug,
+                        action="booking.visit_provisional", entity_type="appointment",
+                        entity_id=visit.id, detail={"request_id": str(execution_context["request_id"])})
+                    result = {"job_reference": reference, "appointment_id": str(visit.id),
+                              "start": visit.scheduled_start.isoformat(), "end": visit.scheduled_end.isoformat(),
+                              "status": "provisional", "external_actions": False,
+                              "warning": "Travel and weather not verified; not a confirmed booking"}
+                return result
+            except (ValueError, KeyError, TypeError):
+                return {"error": "Cannot reserve visit; verify dates, job eligibility and availability"}
         if name == "draft_booking_deposit":
             from app.services.payments.booking import draft_deposit
             from app.services.audit import record_audit
@@ -329,3 +350,6 @@ OPENAI_TOOL_SPECS.append({"type": "function", "function": {"name": "draft_bookin
 
 
 OPENAI_TOOL_SPECS.append({"type": "function", "function": {"name": "find_customer_bookings", "description": "Find existing non-test customer jobs by exact full name. Ask the owner to disambiguate multiple matches before drafting deposits.", "parameters": {"type": "object", "properties": {"customer_name": {"type": "string"}}, "required": ["customer_name"], "additionalProperties": False}}})
+
+
+OPENAI_TOOL_SPECS.append({"type": "function", "function": {"name": "reserve_booking_visit", "description": "Only on explicit owner instruction reserve a provisional visit for an existing job. Require exact start and end with Europe/London offset, never infer duration. Does not confirm booking, send messages or verify weather or travel.", "parameters": {"type": "object", "properties": {"job_reference": {"type": "string"}, "start": {"type": "string"}, "end": {"type": "string"}}, "required": ["job_reference", "start", "end"], "additionalProperties": False}}})
