@@ -16,7 +16,6 @@ from app.services.weather.service import get_hourly_forecast
 from app.services.weather_engine import WorkActivity, score_window
 
 LONDON = ZoneInfo("Europe/London")
-LAUNCH_DATE = date(2027, 3, 1)
 
 
 @dataclass
@@ -85,7 +84,7 @@ def earliest_search_from(settings: SchedulingSettings, now: datetime | None = No
     cursor = (now_utc + notice).astimezone(LONDON)
     work_start = settings.work_day_start or time(8, 0)
     work_end = settings.work_day_end or time(17, 30)
-    launch = settings.earliest_work_date or LAUNCH_DATE
+    launch = settings.earliest_work_date or date.min
     for _ in range(60):
         if cursor.date() < launch:
             cursor = datetime.combine(launch, work_start, tzinfo=LONDON)
