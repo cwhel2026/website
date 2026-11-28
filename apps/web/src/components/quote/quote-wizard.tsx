@@ -40,7 +40,7 @@ type QuoteState = {
   address_line2: string;
   consent_marketing: boolean;
   consent_service_messages: boolean;
-  intention: "" | "ready_to_book" | "callback_requested" | "estimate_requested";
+  intention: "" | "ready_to_book" | "callback_requested" | "estimate_requested" | "flexible_booking";
   callback_preferred_time: string;
   photoToken: string;
   photoNote: string;
@@ -1095,6 +1095,13 @@ function QuoteResultCard({
         >
           Book me in ASAP
         </button>
+        <div className="rounded-md border border-brand-gold bg-brand-paper p-4">
+          <h3 className="font-display text-xl font-semibold">Flexible on dates? Save on your restoration.</h3>
+          <p className="mt-2 text-sm">If you're happy to arrange your restoration for when we're already working in your area, we'll offer you a discounted price.</p>
+          <p className="mt-2 text-sm">Our team will contact you personally to discuss available dates and your reduced price.</p>
+          <button type="button" onClick={() => onChoose("flexible_booking")} className="mt-4 w-full rounded-md bg-brand-gold px-4 py-3 font-semibold">Request a discounted price</button>
+          <p className="mt-2 text-xs">No obligation to book.</p>
+        </div>
         <button
           type="button"
           onClick={() => onChoose("callback_requested")}
@@ -1131,7 +1138,7 @@ function StepContact({
   error: string | null;
   onSubmit: () => void;
 }) {
-  const needsPhone = state.intention === "ready_to_book" || state.intention === "callback_requested";
+  const needsPhone = state.intention === "ready_to_book" || state.intention === "callback_requested" || state.intention === "flexible_booking";
   const phoneDigits = state.phone.replace(/\D/g, "");
   const formValid =
     provisional &&
@@ -1197,13 +1204,13 @@ function StepContact({
       ? "Send a booking request"
       : state.intention === "callback_requested"
         ? "Request a callback"
-        : "Email me my estimate";
+        : state.intention === "flexible_booking" ? "Request a discounted price" : "Email me my estimate";
   const submitLabel =
     state.intention === "ready_to_book"
       ? "Book me in ASAP"
       : state.intention === "callback_requested"
         ? "Request my callback"
-        : "Email my estimate";
+        : state.intention === "flexible_booking" ? "Send my flexible booking request" : "Email my estimate";
 
   return (
     <div>
