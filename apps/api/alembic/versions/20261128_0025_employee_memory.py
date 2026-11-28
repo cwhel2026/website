@@ -9,8 +9,12 @@ depends_on = None
 
 
 def upgrade():
-    op.add_column("telegram_conversation_messages", sa.Column("agent_slug", sa.String(60), nullable=False, server_default="personal_assistant"))
-    op.create_index("ix_telegram_conversation_messages_agent_slug", "telegram_conversation_messages", ["agent_slug"])
+    inspector = sa.inspect(op.get_bind())
+    table = "telegram_conversation_messages"
+    if "agent_slug" not in {c["name"] for c in inspector.get_columns(table)}:
+        op.add_column(table, sa.Column("agent_slug", sa.String(60), server_default="personal_assistant", nullable=False))
+    if "ix_telegram_conversation_messages_agent_slug" not in {i["name"] for i in inspector.get_indexes(table)}:
+        op.create_index("ix_telegram_conversation_messages_agent_slug", table, ["agent_slug"])
 
 
 def downgrade():
