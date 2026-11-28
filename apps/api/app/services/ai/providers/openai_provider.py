@@ -1,6 +1,7 @@
 import json
 import re
 import logging
+from app.services.ai.reply_format import complete_excerpt
 from app.services.ai.providers.responses_adapter import request_response, parse_response
 
 logger = logging.getLogger(__name__)
@@ -123,7 +124,7 @@ async def chat_with_openai(
                     # Return only the checked allocation, never unchecked monetary recommendations.
                     checked = tool_data.get("validate_ad_allocation", {})
                     if not checked.get("valid") and step < 2:
-                        messages.append({"role": "user", "content": "Your allocation was not validated. Call validate_ad_allocation using the current budget policy and recorded spend, then explain your geographical recommendation. If evidence is missing, provide a non-numerical recommendation and identify the missing evidence."})
+                        messages.append({"role": "user", "content": "Your allocation was not validated. Call validate_ad_allocation using the current budget policy and recorded spend. If paid spend is blocked, provide a non-numerical geographical test plan, audience, creative, measurement and free acquisition actions. Identify missing evidence. Planning is not permission to spend."})
                         continue
                     if not checked.get("valid"):
                         reply = "I cannot verify a numerical advertising allocation yet. No spending is authorised. I need a validated allocation and current budget evidence."
@@ -140,11 +141,11 @@ async def chat_with_openai(
                         except (KeyError, ValueError, TypeError):
                             reply = "Current budget evidence does not support a verified allocation. No spending is authorised."
                 if consulted and "consult_colleague" in tool_data:
-                    reply += "\n\nArthur consultation: " + ("Completed; " + str(tool_data["consult_colleague"].get("assessment", ""))[:700] if consultation_succeeded else "Unavailable. Financial review not completed.")
+                    reply += "\n\nArthur consultation: " + ("Completed; " + complete_excerpt(str(tool_data["consult_colleague"].get("assessment", "")), 1000) if consultation_succeeded else "Unavailable. Financial review not completed.")
                 from app.services.audit import record_audit
                 await record_audit(db, actor_type="ai_employee", actor_id=agent_slug, action="employee_decision_report", entity_type="ai_employee", detail={"question": question[:2000], "reply": reply[:3400], "evidence_tools": list(tool_data), "model": model, "estimated_cost_gbp": str(sum(cost_tracker)), "consulted": consultation_succeeded})
                 footer = f"\n\nAI: {model} | Est. cost £{sum(cost_tracker):.4f}" if root_call else ""
-                return reply.strip()[:3400] + footer, tool_data, "openai"
+                return complete_excerpt(reply.strip(), 3400) + footer, tool_data, "openai"
 
             messages.extend(output_items)
             for call in tool_calls:
