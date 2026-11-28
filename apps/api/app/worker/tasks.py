@@ -657,3 +657,14 @@ def marketing_organic_sync(self) -> dict:
         raise
     finally:
         session.close()
+
+@celery_app.task(name="rmd.employee_work")
+def employee_work():
+    from app.database import SessionLocal as AsyncSessionLocal
+    from app.services.ai.background_work import run_next_owner_task
+
+    async def run():
+        async with AsyncSessionLocal() as db:
+            return await run_next_owner_task(db)
+
+    return asyncio.run(run())
