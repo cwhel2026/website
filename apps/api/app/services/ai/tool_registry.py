@@ -150,6 +150,8 @@ OPENAI_TOOL_SPECS: list[dict[str, Any]] = [
 
 
 for name, description in [
+    ("marketing_experiments", "Recorded experiment history; historical conclusions require variant-level verification."),
+    ("open_business_tasks", "Open business tasks from the director queue."),
     ("pricing_profile", "Active company pricing rules and provisional labour and material cost assumptions."),
     ("marketing_budget_policy", "Current saved marketing budget limits, not live spending."),
     ("finance_summary", "Recorded revenue and expense summary; provisional accounting basis."),
@@ -183,6 +185,12 @@ def coating_estimate(args):
 
 
 async def run_tool(db: AsyncSession, name: str, args: dict | None = None) -> dict[str, Any]:
+    if name == "marketing_experiments":
+        from app.services.marketing.experiments_engine import list_experiments
+        return {"experiments": (await list_experiments(db))[:30], "warning": "No verified variant-level winner data."}
+    if name == "open_business_tasks":
+        from app.services.business_director import list_open_tasks
+        return {"tasks": [{"id": str(t.id), "title": t.title, "agent": t.agent_slug, "status": t.status.value} for t in await list_open_tasks(db, 20)]}
     if name == "coating_estimate":
         return coating_estimate(args)
     if name in {"marketing_pause_all", "marketing_director_proactive", "marketing_director_plan"}:
