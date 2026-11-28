@@ -119,8 +119,6 @@ jobs:
 
   web-build:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -130,37 +128,11 @@ jobs:
           node-version: "22"
           cache: npm
           cache-dependency-path: apps/web/package-lock.json
-      - name: Generate proposed frontend security lockfile (isolated)
-        working-directory: apps/web
-        run: |
-          mkdir -p /tmp/surfacecoat-upgrade
-          cp package.json package-lock.json /tmp/surfacecoat-upgrade/
-          cd /tmp/surfacecoat-upgrade
-          npm install --package-lock-only --ignore-scripts --save-exact next@16.4.6
-          npm install --package-lock-only --ignore-scripts --save-dev --save-exact eslint-config-next@16.4.6
-          npm audit --omit=dev
-          npm ci
-          cp package.json package-lock.json "$GITHUB_WORKSPACE/apps/web/"
-      - name: Persist verified dependency lockfile on remediation branch
-        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'review/phase16-production'
-        run: |
-          git config user.name 'surfacecoat-ci'
-          git config user.email 'surfacecoat-ci@users.noreply.github.com'
-          git add apps/web/package.json apps/web/package-lock.json
-          if ! git diff --cached --quiet; then
-            git commit -m 'Persist audited Next.js dependency upgrade'
-            git push origin HEAD:refs/heads/review/phase16-production
-          fi
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: proposed-frontend-security-lockfile
-          path: /tmp/surfacecoat-upgrade/*.json
-      - name: Dependency audit (report only pending remediation)
+      - name: Production dependency security audit
         working-directory: apps/web
         run: |
           npm audit --json > /tmp/surfacecoat-npm-audit.json || true
-          npm audit --omit=dev || true
+          npm audit --omit=dev
       - uses: actions/upload-artifact@v4
         with:
           name: npm-security-audit
