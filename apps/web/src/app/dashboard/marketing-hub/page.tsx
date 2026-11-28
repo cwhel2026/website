@@ -28,6 +28,7 @@ type CompetitorRow = { competitor_name: string; confidence: number; source_name:
 type Profitability = { marketing_roi: number | null; job_contribution_gbp: number | null; optimise_for?: string };
 
 export default function MarketingHubPage() {
+  const [summary, setSummary] = useState<{prospect_stages: Record<string, number>; campaign_stages: Record<string, number>; outreach_pending: number} | null>(null);
   const [plan, setPlan] = useState<DailyPlan | null>(null);
   const [budget, setBudget] = useState<Budget | null>(null);
   const [prospects, setProspects] = useState<
@@ -44,6 +45,7 @@ export default function MarketingHubPage() {
 
   const reload = () => {
     if (!token) return;
+    apiGet<{prospect_stages: Record<string, number>; campaign_stages: Record<string, number>; outreach_pending: number}>("/api/v1/marketing/acquisition-summary", token).then(setSummary).catch(() => setSummary(null));
     apiGet<DailyPlan>("/api/v1/marketing/director/daily-plan", token).then(setPlan).catch(withLoadError(() => setPlan(null)));
     apiGet<Budget>("/api/v1/marketing/budget", token).then(setBudget).catch(withLoadError(() => setBudget(null)));
     apiGet<Array<{ business_name: string; lead_score: number; pipeline_stage?: string }>>(
@@ -67,6 +69,7 @@ export default function MarketingHubPage() {
 
   const toggleLiveSpend = async () => {
     if (!token || !budget) return;
+    if (!budget.policy.live_paid_spend_approved && !window.confirm("Enable paid spend policy? Individual campaigns still require approval.")) return;
     await apiPatch(
       "/api/v1/marketing/budget",
       { live_paid_spend_approved: !budget.policy.live_paid_spend_approved },
@@ -95,13 +98,22 @@ export default function MarketingHubPage() {
 
   return (
     <div className="max-w-2xl space-y-8 pb-16">
-      <header>
-        <h1 className="text-2xl font-semibold text-emerald-950">Marketing command centre</h1>
-        <p className="mt-2 text-sm text-slate-600">
+      <header className="rounded-2xl bg-slate-950 p-6 text-white">
+        <p className="text-xs uppercase tracking-widest text-amber-300">SurfaceCoat · Growth</p>
+        <h1 className="mt-2 text-2xl font-semibold">Marketing command centre</h1>
+        <p className="mt-2 text-sm text-slate-300">
           Diary-led growth — live ad spend stays off until you approve it below.
         </p>
       </header>
 
+      <section className="rounded-xl border p-4">
+        <h2 className="font-semibold">Acquisition pipeline</h2>
+        {summary ? <><div className="mt-3 grid grid-cols-2 gap-3 text-sm">
+          <div>Active prospects <strong className="block text-2xl">{Object.values(summary.prospect_stages).reduce((a,b)=>a+b,0)}</strong></div>
+          <div>Outreach awaiting review <strong className="block text-2xl">{summary.outreach_pending}</strong></div>
+        </div><div className="mt-3 space-y-1 text-sm">{Object.entries(summary.prospect_stages).map(([stage,count]) => <p key={stage}>{stage.replaceAll("_"," ")}: {count}</p>)}</div></> : <p className="text-sm text-slate-500">Pipeline data unavailable.</p>}
+        <p className="mt-3 text-xs text-slate-500">External delivery is not verified. Drafts only.</p>
+      </section>
       <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
         <h2 className="font-semibold text-slate-900">Budget controls</h2>
         {budget && (
@@ -156,7 +168,7 @@ export default function MarketingHubPage() {
         <h2 className="font-semibold">Competitor intelligence</h2>
         <div className="mt-2 flex gap-2">
           <input
-            className="flex-1 rounded border px-2 py-1 text-sm"
+            className="min-w-0 flex-1 rounded border px-2 py-1 text-sm"
             value={compArea}
             onChange={(e) => setCompArea(e.target.value)}
           />
@@ -170,7 +182,7 @@ export default function MarketingHubPage() {
               {c.competitor_name} · {c.source_name} · confidence {c.confidence}
             </li>
           ))}
-          {!competitors.length && <li>Run research when Places API is configured (mock-safe without key).</li>}
+          {!competitors.length && <li>No competitor findings available. Configure Places API to research.</li>}
         </ul>
       </section>
 
