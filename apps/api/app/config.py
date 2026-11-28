@@ -71,6 +71,7 @@ class Settings(BaseSettings):
     marketing_media_dir: str = "/data/marketing_media"
     marketing_ai_image_enabled: bool = False
     marketing_simulation_default: bool = True
+    workspace_booking_delivery_enabled: bool = False
     google_client_id: str | None = None
     google_client_secret: str | None = None
     google_workspace_email: str = "bookings@surfacecoat.co.uk"
