@@ -3,6 +3,7 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -394,5 +395,63 @@ async def complete_coating(
             enquiry = await db.get(Enquiry, quote.enquiry_id)
             if enquiry:
                 enquiry.stage = PipelineStage.JOB_COMPLETED
+    await db.commit()
+    return (await _jobs_out(db, [job]))[0]
+
+
+class RescheduleIn(BaseModel):
+    scheduled_start: datetime
+    confirmed: bool = False
+
+
+@router.post("/{job_id}/appointments/{appointment_id}/reschedule", response_model=JobOut)
+async def reschedule_appointment(
+    job_id: UUID, appointment_id: UUID, body: RescheduleIn,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[User, Depends(get_current_admin_writer)],
+) -> JobOut:
+    if not body.confirmed:
+        raise HTTPException(422, "Explicit owner confirmation required")
+    job = (await db.execute(select(Job).options(selectinload(Job.appointments)).where(Job.id == job_id).with_for_update())).scalar_one_or_none()
+    if job is None:
+        raise HTTPException(404)
+    if job.status in (JobStatus.COMPLETED, JobStatus.CANCELLED, JobStatus.ON_HOLD):
+        raise HTTPException(409, "Job is not open")
+    appt = next((a for a in job.appointments if a.id == appointment_id), None)
+    if appt is None or appt.status not in (AppointmentStatus.PROVISIONAL, AppointmentStatus.CONFIRMED, AppointmentStatus.WEATHER_DELAYED):
+        raise HTTPException(409, "Appointment cannot be moved")
+    from app.models.scheduling import SchedulingSettings
+    await db.execute(select(SchedulingSettings).with_for_update())
+    settings = await get_scheduling_settings(db)
+    start = body.scheduled_start
+    end = start + timedelta(minutes=appt.duration_minutes)
+    if start.tzinfo is None or start < earliest_search_from(settings) or not slot_inside_working_hours(settings, start, end):
+        raise HTTPException(422, "Invalid working window")
+    if await find_conflicts(db, start, end, exclude_appointment_id=appt.id):
+        raise HTTPException(409, "Diary conflict")
+    if appt.appointment_type == AppointmentType.PREPARATION:
+        if any(a.appointment_type == AppointmentType.COATING and a.status in (AppointmentStatus.CONFIRMED, AppointmentStatus.PROVISIONAL) and a.scheduled_start < end + timedelta(hours=settings.min_drying_hours) for a in job.appointments):
+            raise HTTPException(409, "Move dependent coating appointment first")
+    if appt.appointment_type == AppointmentType.COATING and job.requires_two_stage and not job.customer_washed_already:
+        prep_end = job.preparation_completed_at or max((a.scheduled_end for a in job.appointments if a.appointment_type == AppointmentType.PREPARATION and a.status == AppointmentStatus.CONFIRMED), default=None)
+        if prep_end is None or start < prep_end + timedelta(hours=settings.min_drying_hours):
+            raise HTTPException(409, "Preparation and drying required")
+    if appt.appointment_type in (AppointmentType.PREPARATION, AppointmentType.COATING):
+        prop = await db.get(CustomerProperty, job.property_id) if job.property_id else None
+        profile = await db.scalar(select(ProductProfile).where(ProductProfile.is_active.is_(True)).limit(1))
+        if prop is None or prop.customer_id != job.customer_id or prop.latitude is None or prop.longitude is None or profile is None:
+            raise HTTPException(422, "Property and weather profile required")
+        try:
+            forecast, _, live = await get_hourly_forecast(db, prop.latitude, prop.longitude, hours=168, for_booking=True)
+        except RuntimeError as exc:
+            raise HTTPException(503, "Live weather unavailable") from exc
+        activity = WorkActivity.COATING if appt.appointment_type == AppointmentType.COATING else WorkActivity.WASHING
+        if not live or not score_window(activity, profile, forecast, start, appt.duration_minutes / 60).is_safe:
+            raise HTTPException(409, "Unsafe or unavailable forecast")
+        appt.weather_suitable = True
+        appt.latitude, appt.longitude, appt.postcode = prop.latitude, prop.longitude, prop.postcode
+    appt.scheduled_start, appt.scheduled_end = start, end
+    appt.status = AppointmentStatus.CONFIRMED
+    sync_job_status_from_appointments(job, customer_washed_already=job.customer_washed_already)
     await db.commit()
     return (await _jobs_out(db, [job]))[0]
