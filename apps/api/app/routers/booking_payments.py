@@ -61,7 +61,7 @@ async def payment_link(job_id: UUID, db: DB,
     from app.models.finance import Invoice, InvoiceStatus
 
     settings = get_settings()
-    if not settings.gocardless_enabled or settings.gocardless_environment != "sandbox":
+    if settings.environment.lower() == "production" or not settings.gocardless_enabled or settings.gocardless_environment != "sandbox":
         raise HTTPException(409, "Sandbox payments must be explicitly enabled; live payments are not available")
     if not all((settings.gocardless_access_token, settings.gocardless_webhook_secret,
                 settings.gocardless_redirect_uri, settings.gocardless_exit_uri)):
@@ -109,7 +109,7 @@ async def payment_webhook(request: Request, db: DB) -> dict:
     from app.services.payments.gocardless import verify_webhook_signature
 
     settings = get_settings()
-    if not settings.gocardless_enabled or settings.gocardless_environment != "sandbox":
+    if settings.environment.lower() == "production" or not settings.gocardless_enabled or settings.gocardless_environment != "sandbox":
         raise HTTPException(503, "Payment integration disabled")
     body = bytearray()
     async for chunk in request.stream():
@@ -144,3 +144,33 @@ async def payment_webhook(request: Request, db: DB) -> dict:
         raise HTTPException(400, "Invalid webhook payload") from None
     await db.commit()
     return {"received": True}
+
+
+@router.post("/jobs/{job_id}/reconcile")
+async def reconcile_deposit(job_id: UUID, db: DB,
+                            user: Annotated[User, Depends(get_current_admin_writer)]) -> dict:
+    from app.config import get_settings
+    from app.services.payments.gocardless import GoCardlessClient, GoCardlessError
+    from app.services.payments.reconcile import reconcile_sandbox_deposit
+
+    settings = get_settings()
+    if (settings.environment.lower() == "production" or not settings.gocardless_enabled
+            or settings.gocardless_environment != "sandbox" or not settings.gocardless_access_token):
+        raise HTTPException(409, "Reconciliation requires a non-production sandbox")
+    row = await db.scalar(select(BookingDeposit).where(BookingDeposit.job_id == job_id))
+    if not row:
+        raise HTTPException(404, "Booking deposit not found")
+    try:
+        state = await reconcile_sandbox_deposit(db, row.id, GoCardlessClient(settings.gocardless_access_token))
+    except ValueError:
+        await db.rollback()
+        raise HTTPException(409, "Deposit requires review") from None
+    except GoCardlessError:
+        await db.rollback()
+        raise HTTPException(502, "Provider verification unavailable") from None
+    await record_audit(db, actor_type="user", actor_id=str(user.id),
+                       action="booking.sandbox_reconcile", entity_id=row.id,
+                       detail={"state": state})
+    result = serialize(row)
+    await db.commit()
+    return result
