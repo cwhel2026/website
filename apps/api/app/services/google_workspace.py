@@ -90,3 +90,23 @@ class WorkspaceClient:
         )
         response.raise_for_status()
         return response.json()
+
+
+    async def publish_booking_event(self, event: dict) -> dict:
+        event_id = event.get("id", "")
+        if not isinstance(event_id, str) or len(event_id) != 32 or any(c not in "0123456789abcdef" for c in event_id):
+            raise ValueError("Stable appointment event ID required")
+        endpoint = "https://www.googleapis.com/calendar/v3/calendars/primary/events"
+        response = await self.client.post(endpoint, headers=self.headers,
+                                          params={"sendUpdates": "none"}, json=event)
+        if response.status_code == 409:
+            existing = await self.client.get(f"{endpoint}/{event_id}", headers=self.headers)
+            existing.raise_for_status()
+            current = existing.json()
+            if current.get("id") != event_id or current.get("status") == "cancelled":
+                raise ValueError("Calendar event requires review")
+            response = await self.client.patch(f"{endpoint}/{event_id}", headers=self.headers,
+                                               params={"sendUpdates": "none"},
+                                               json={k: v for k, v in event.items() if k != "id"})
+        response.raise_for_status()
+        return response.json()
