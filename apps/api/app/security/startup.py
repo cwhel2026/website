@@ -18,6 +18,8 @@ def validate_production_settings(settings: Settings) -> None:
         raise RuntimeError(
             "JWT_SECRET must be a unique random string of at least 32 characters in production."
         )
+    if "*" in settings.cors_origin_list:
+        raise RuntimeError("Wildcard CORS origins are forbidden in production.")
     if settings.default_admin_password in FACTORY_DEFAULT_PASSWORDS:
         import logging
 
