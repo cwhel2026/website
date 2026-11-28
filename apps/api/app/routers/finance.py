@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, time
 from decimal import Decimal
 from typing import Annotated
 from uuid import UUID
@@ -17,13 +17,14 @@ from app.models.finance import (
     ExpenseCategory,
     Invoice,
     InvoiceStatus,
+    InvoiceLine,
     Payment,
     Receipt,
     SyncSource,
 )
 from app.models.quotation import Quotation, QuotationStatus
 from app.models.jobs import Job, JobStatus
-from app.models.crm import Enquiry, PipelineStage
+from app.models.crm import Customer, Enquiry, PipelineStage
 from app.models.user import User
 from app.services.audit import record_audit
 from app.services.finance.csv_import import import_bank_csv
@@ -46,8 +47,8 @@ router = APIRouter(prefix="/finance", tags=["finance"])
 class ExpenseIn(BaseModel):
     description: str
     category: ExpenseCategory
-    amount_gbp: Decimal
-    vat_gbp: Decimal = Decimal("0")
+    amount_gbp: Decimal = Field(gt=0, max_digits=12, decimal_places=2)
+    vat_gbp: Decimal = Field(default=Decimal("0"), ge=0, max_digits=12, decimal_places=2)
     job_id: UUID | None = None
     territory_id: UUID | None = None
 
@@ -85,7 +86,7 @@ async def finance_status(
 async def import_csv(
     file: UploadFile = File(...),
     db: Annotated[AsyncSession, Depends(get_db)] = ...,
-    user: Annotated[User, Depends(get_current_admin)] = ...,
+    user: Annotated[User, Depends(get_current_admin_writer)] = ...,
 ) -> dict:
     content = (await file.read()).decode("utf-8", errors="replace")
     result = await import_bank_csv(db, content)
@@ -159,11 +160,13 @@ async def record_payment(
         raise HTTPException(404)
     if inv.freeagent_id or inv.freeagent_url:
         raise HTTPException(409, "Record payment in FreeAgent and sync")
-    if inv.status == InvoiceStatus.VOID:
-        raise HTTPException(409, "Invoice is void")
+    if inv.status in (InvoiceStatus.VOID, InvoiceStatus.DRAFT):
+        raise HTTPException(409, "Invoice must be issued before recording payment")
     if not body.reference or not body.reference.strip():
         raise HTTPException(422, "Payment reference required")
     body.reference = body.reference.strip()
+    if body.reference.startswith('bank-match:'):
+        raise HTTPException(422, 'Reserved payment reference')
     existing = (await db.execute(select(Payment).where(Payment.invoice_id == invoice_id, Payment.reference == body.reference))).scalar_one_or_none()
     if existing:
         if existing.amount_gbp != body.amount_gbp:
@@ -222,6 +225,8 @@ async def create_expense(
 ) -> dict:
     from datetime import date
 
+    if body.vat_gbp > body.amount_gbp:
+        raise HTTPException(422, 'VAT cannot exceed gross expense')
     exp = Expense(
         description=body.description,
         category=body.category,
@@ -333,7 +338,7 @@ async def freeagent_callback(
         raise HTTPException(400, str(exc)) from exc
     except httpx.HTTPError as exc:
         await db.rollback()
-        raise HTTPException(502, f"FreeAgent token exchange failed: {exc}") from exc
+        raise HTTPException(502, "FreeAgent token exchange failed") from exc
 
 
 @router.post("/freeagent/sync")
@@ -391,3 +396,83 @@ async def corporation_tax_estimate(
 
     estimate = estimate_corporation_tax(Decimal(str(profit_gbp)), uses_small_profits_rate=small_profits_rate)
     return estimate
+
+class ConfirmBankPaymentIn(BaseModel):
+    invoice_id: UUID
+    confirmed: bool = False
+
+
+@router.post("/transactions/{transaction_id}/confirm-payment")
+async def confirm_bank_payment(
+    transaction_id: UUID,
+    body: ConfirmBankPaymentIn,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    user: Annotated[User, Depends(get_current_admin_writer)],
+) -> dict:
+    if not body.confirmed:
+        raise HTTPException(422, "Explicit payment confirmation required")
+    txn = await db.get(BankTransaction, transaction_id, with_for_update=True)
+    if txn is None:
+        raise HTTPException(404, "Bank transaction not found")
+    inv = await db.get(Invoice, body.invoice_id, with_for_update=True)
+    if inv is None:
+        raise HTTPException(404, "Invoice not found")
+    reference = f"bank-match:{txn.id}"
+    existing = (await db.execute(select(Payment).where(Payment.reference == reference))).scalar_one_or_none()
+    if existing:
+        if existing.invoice_id == inv.id and existing.amount_gbp == txn.amount_gbp and txn.matched_invoice_id == inv.id:
+            return {"status": inv.status.value, "already_recorded": True}
+        raise HTTPException(409, "Conflicting payment record")
+    if txn.source == SyncSource.FREEAGENT or txn.freeagent_explanation_url or inv.freeagent_id or inv.freeagent_url:
+        raise HTTPException(409, "Reconcile FreeAgent records in FreeAgent and sync")
+    if txn.is_duplicate or txn.is_reconciled or txn.matched_invoice_id or txn.matched_expense_id or txn.amount_gbp <= 0:
+        raise HTTPException(409, "Transaction is not eligible")
+    customer = await db.get(Customer, inv.customer_id)
+    quote = await db.get(Quotation, inv.quotation_id) if inv.quotation_id else None
+    if not customer or customer.is_test or (quote and quote.is_test):
+        raise HTTPException(409, "Non-test customer invoice required")
+    if inv.status not in (InvoiceStatus.SENT, InvoiceStatus.PART_PAID, InvoiceStatus.OVERDUE):
+        raise HTTPException(409, "Outstanding issued invoice required")
+    if txn.transacted_at < inv.issue_date or txn.transacted_at > datetime.now(UTC).date():
+        raise HTTPException(409, "Transaction date is outside eligible range")
+    if txn.amount_gbp != inv.total_inc_vat_gbp - inv.amount_paid_gbp:
+        raise HTTPException(409, "Payment must equal the outstanding balance")
+    db.add(Payment(invoice_id=inv.id, amount_gbp=txn.amount_gbp,
+        paid_at=datetime.combine(txn.transacted_at, time.min, tzinfo=UTC),
+        method="bank_transfer", reference=reference, source=txn.source))
+    inv.amount_paid_gbp += txn.amount_gbp
+    inv.status = InvoiceStatus.PAID
+    txn.matched_invoice_id = inv.id
+    txn.is_reconciled = True
+    if quote and quote.enquiry_id:
+        enquiry = await db.get(Enquiry, quote.enquiry_id)
+        if enquiry and not enquiry.is_test:
+            enquiry.stage = PipelineStage.PAID
+    await record_audit(db, actor_type="user", actor_id=str(user.id),
+        action="finance.confirm_bank_payment", entity_id=inv.id,
+        detail={"transaction_id": str(txn.id), "amount_gbp": str(txn.amount_gbp)})
+    await db.commit()
+    return {"status": inv.status.value, "already_recorded": False}
+
+
+@router.get("/invoices/{invoice_id}/draft-review")
+async def invoice_draft_review(
+    invoice_id: UUID,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[User, Depends(get_current_admin)],
+) -> dict:
+    inv = await db.get(Invoice, invoice_id)
+    if not inv:
+        raise HTTPException(404, "Invoice not found")
+    customer = await db.get(Customer, inv.customer_id)
+    if not customer or customer.is_test or inv.status != InvoiceStatus.DRAFT:
+        raise HTTPException(409, "Non-test draft required")
+    lines = (await db.execute(select(InvoiceLine).where(InvoiceLine.invoice_id == inv.id))).scalars().all()
+    valid = bool(lines) and sum((line.line_total_gbp for line in lines), Decimal("0")) == inv.subtotal_ex_vat_gbp and inv.subtotal_ex_vat_gbp + inv.vat_gbp == inv.total_inc_vat_gbp
+    return {"invoice_number": inv.invoice_number, "customer": customer.full_name,
+        "issue_date": inv.issue_date.isoformat(), "due_date": inv.due_date.isoformat(),
+        "net_gbp": str(inv.subtotal_ex_vat_gbp), "vat_gbp": str(inv.vat_gbp),
+        "total_gbp": str(inv.total_inc_vat_gbp),
+        "lines": [{"description": line.description, "quantity": str(line.quantity), "unit_price_gbp": str(line.unit_price_gbp), "total_gbp": str(line.line_total_gbp)} for line in lines],
+        "totals_valid": valid, "external_posting_enabled": False,
+        "next_step": "Verify contact, VAT and invoice totals in FreeAgent sandbox before enabling draft creation."}

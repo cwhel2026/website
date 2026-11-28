@@ -85,9 +85,6 @@ async def generate_weekly_finance_report(db: AsyncSession) -> FinancialReportRec
     from app.services.finance.profitability import territory_profitability
 
     territories = await territory_profitability(db)
-    marketing = sum(
-        1 for _ in territories
-    )  # placeholder count; detail in payload
     payload = {
         "revenue_gbp": rev_exp.get("revenue_gbp"),
         "expenses_gbp": rev_exp.get("expenses_gbp"),
@@ -96,9 +93,10 @@ async def generate_weekly_finance_report(db: AsyncSession) -> FinancialReportRec
         "cashflow_30d": cashflow,
         "invoices": invoices,
         "missing_receipts": missing_receipts,
-        "marketing_territories_tracked": marketing,
+        "basis": rev_exp.get("basis"),
+        "is_provisional": True,
         "territory_profitability": [
-            {"territory": r.territory_code, "profit_gbp": float(r.estimated_profit_gbp)}
+            {"territory": r.territory_code, "estimated_quoted_contribution_gbp": float(r.estimated_profit_gbp)}
             for r in territories[:12]
         ],
         "plain_english": (
@@ -113,9 +111,9 @@ async def generate_weekly_finance_report(db: AsyncSession) -> FinancialReportRec
 async def generate_monthly_finance_report(db: AsyncSession) -> FinancialReportRecord:
     reserves = await compute_tax_reserves(db)
     dist = await compute_distributable_reserves(db)
-    distributable = dist.get("available_distributable_gbp") or dist.get("distributable_profit_gbp")
+    distributable = dist.get("available_distributable_gbp")
     desired = await _company_desired_net(db)
-    profit = Decimal("0")
+    profit = None
     pl_cached = await get_cached_report(db, "pl_summary_ytd")
     if pl_cached:
         from app.services.finance.freeagent_reports import _extract_net_profit_before_tax
@@ -130,19 +128,13 @@ async def generate_monthly_finance_report(db: AsyncSession) -> FinancialReportRe
         blocked_reason = "Tax liabilities incomplete; remuneration recommendations withheld."
     elif dist.get("blocked"):
         blocked_reason = dist.get("message") or "Reserves unavailable"
+    elif profit is None or distributable is None:
+        blocked_reason = "Verified profit and reserves unavailable."
     else:
-        opt = optimise_remuneration(
-            RemunerationInputs(
-                desired_monthly_net_gbp=desired,
-                annual_company_profit_before_remuneration_gbp=profit,
-                distributable_reserves_gbp=Decimal(str(distributable or 0)),
-                company_cash_gbp=Decimal(str(distributable or 0)),
-                obligation_reserve_gbp=obligation,
-            )
-        )
+        blocked_reason = "Verified available company cash required before remuneration recommendations."
     pl = await get_cached_report(db, "pl_summary_ytd")
     bs = await get_cached_report(db, "balance_sheet_latest")
-    ct_forecast = corporation_tax_with_marginal_relief(profit) if profit > 0 else {"corporation_tax_gbp": None}
+    ct_forecast = corporation_tax_with_marginal_relief(profit) if profit is not None and profit > 0 else {"corporation_tax_gbp": None}
     deadlines = await upcoming_reminders(db, within_days=90)
     cashflow = await multi_horizon_cashflow(db)
     adequacy = reserves.get("recommended_reserve_gbp")
@@ -153,7 +145,7 @@ async def generate_monthly_finance_report(db: AsyncSession) -> FinancialReportRe
             "balance_sheet_cached": bs is not None,
             "revenue_gbp": (await revenue_and_expense_summary(db)).get("revenue_gbp"),
         },
-        "company_profitability_gbp": float(profit),
+        "company_profitability_gbp": float(profit) if profit is not None else None,
         "corporation_tax_forecast": ct_forecast,
         "personal_tax_note": "Use director-pay optimiser after accountant confirms reserves.",
         "tax_reserves": reserves,

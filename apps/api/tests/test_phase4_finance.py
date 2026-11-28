@@ -64,3 +64,47 @@ async def test_invoice_linked_revenue_excludes_vat():
     txn = SimpleNamespace(is_duplicate=False, amount_gbp=Decimal("120"), is_reconciled=True, matched_invoice_id="invoice", description="Customer payment")
     inv = SimpleNamespace(status=InvoiceStatus.PAID, total_inc_vat_gbp=Decimal("120"), subtotal_ex_vat_gbp=Decimal("100"))
     assert await eligible_revenue_gbp(txn, inv) == Decimal("100.00")
+
+
+@pytest.mark.asyncio
+async def test_bank_payment_requires_explicit_confirmation():
+    from app.routers.finance import confirm_bank_payment, ConfirmBankPaymentIn
+    from fastapi import HTTPException
+    from uuid import uuid4
+    from unittest.mock import AsyncMock
+    db = AsyncMock()
+    with pytest.raises(HTTPException) as exc:
+        await confirm_bank_payment(uuid4(), ConfirmBankPaymentIn(invoice_id=uuid4()), db, SimpleNamespace())
+    assert exc.value.status_code == 422
+    db.get.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_receipt_match_requires_explicit_confirmation():
+    from app.routers.bookkeeping import confirm_receipt_match, ReceiptMatchDecision
+    from fastapi import HTTPException
+    from uuid import uuid4
+    from unittest.mock import AsyncMock
+    db = AsyncMock()
+    with pytest.raises(HTTPException) as exc:
+        await confirm_receipt_match(uuid4(), ReceiptMatchDecision(transaction_id=uuid4()), db, SimpleNamespace())
+    assert exc.value.status_code == 422
+    db.get.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_receipt_external_write_requires_approval():
+    from app.services.finance.receipt_accounting import push_receipt_to_freeagent
+    from unittest.mock import AsyncMock
+    db = AsyncMock()
+    assert (await push_receipt_to_freeagent(db, SimpleNamespace(), approved=False))["reason"] == "approval_required"
+    db.refresh.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_incoming_transaction_not_expense():
+    from app.services.finance.bookkeeping.review_queue import create_review_for_transaction
+    from unittest.mock import AsyncMock
+    db = AsyncMock()
+    assert await create_review_for_transaction(db, SimpleNamespace(amount_gbp=Decimal("100"))) is None
+    db.add.assert_not_called()
