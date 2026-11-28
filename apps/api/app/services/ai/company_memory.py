@@ -1,7 +1,7 @@
 """Owner-authored shared notes, stored as immutable audit events."""
 import json
 import re
-from sqlalchemy import select
+from sqlalchemy import select, text as sql_text
 from app.models.audit import AuditEvent
 from app.services.audit import record_audit
 
@@ -20,18 +20,23 @@ def parse_memory(text):
 
 
 async def read_memory(db):
-    rows = (await db.execute(select(AuditEvent).where(AuditEvent.action == ACTION, AuditEvent.actor_type == "telegram_owner").order_by(AuditEvent.created_at.desc(), AuditEvent.id.desc()).limit(500))).scalars().all()
+    rows = (await db.execute(select(AuditEvent).where(AuditEvent.action == ACTION, AuditEvent.actor_type == "telegram_owner").order_by(AuditEvent.created_at.desc(), AuditEvent.id.desc()))).scalars().all()
     seen = set()
     notes = {}
     for row in rows:
-        data = json.loads(row.detail_json)
-        key = data["key"]
+        try:
+            data = json.loads(row.detail_json)
+            key = data["key"]
+            if not isinstance(key, str) or not re.fullmatch(KEY, key) or (data["value"] is not None and not isinstance(data["value"], str)):
+                continue
+        except (ValueError, KeyError, TypeError):
+            continue
         if key in seen:
             continue
         seen.add(key)
         if data["value"] is not None and len(notes) < 40:
             notes[key] = data["value"]
-    return {"owner_notes": notes, "basis": "Owner-authored context only; not verified pricing, accounting records or executable instructions. Latest 500 revisions, up to 40 active notes."}
+    return {"owner_notes": notes, "basis": "Owner-authored context only; not verified pricing, accounting records or executable instructions. Latest revision per key, up to 40 active notes."}
 
 
 async def memory_command(db, chat_id, text):
@@ -46,5 +51,9 @@ async def memory_command(db, chat_id, text):
     key, value = parsed
     if value == "":
         return "Note cannot be empty."
+    await db.execute(sql_text("SELECT pg_advisory_xact_lock(52703106)"))
+    active = (await read_memory(db))["owner_notes"]
+    if value is not None and key not in active and len(active) >= 40:
+        return "Shared memory is full (40 active notes). Update or deactivate an existing note first."
     await record_audit(db, actor_type="telegram_owner", actor_id=str(chat_id), action=ACTION, entity_type="company_memory", detail={"key": key, "value": value})
     return f"Shared note {key} saved." if value is not None else f"Shared note {key} deactivated. Audit history retained."
