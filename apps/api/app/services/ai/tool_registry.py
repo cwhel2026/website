@@ -148,9 +148,26 @@ OPENAI_TOOL_SPECS: list[dict[str, Any]] = [
 ]
 
 
+for name, description in [
+    ("finance_summary", "Recorded revenue and expense summary; provisional accounting basis."),
+    ("finance_tax_reserves", "Tax reserve estimates and unknown liabilities."),
+    ("finance_cashflow", "Provisional 30-day cash flow forecast."),
+]:
+    OPENAI_TOOL_SPECS.append({"type": "function", "function": {"name": name, "description": description, "parameters": {"type": "object", "properties": {}, "additionalProperties": False}}})
+
+
 async def run_tool(db: AsyncSession, name: str) -> dict[str, Any]:
     if name in {"marketing_pause_all", "marketing_director_proactive"}:
         return {"error": "Action requires explicit owner approval"}
+    if name == "finance_summary":
+        from app.services.analytics_service import revenue_and_expense_summary
+        return await revenue_and_expense_summary(db)
+    if name == "finance_tax_reserves":
+        from app.services.finance.tax_reserves import compute_tax_reserves
+        return await compute_tax_reserves(db)
+    if name == "finance_cashflow":
+        from app.services.finance.cashflow import simple_cashflow_forecast
+        return await simple_cashflow_forecast(db)
     handler: ToolHandler | None = TOOL_HANDLERS.get(name)  # type: ignore[assignment]
     if not handler:
         return {"error": f"Unknown tool: {name}"}
