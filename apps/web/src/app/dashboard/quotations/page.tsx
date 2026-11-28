@@ -89,7 +89,7 @@ export default function QuotationsPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-semibold text-emerald-950">Quotations</h1>
+      <h1 className="text-2xl font-semibold text-emerald-950 portal-department-title">Quotations</h1>
       <p className="mt-2 text-sm text-slate-600">
         Customer totals, with the internal costing breakdown kept here for audit.
       </p>

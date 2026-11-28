@@ -28,7 +28,7 @@ type FinanceTask = {
 type GrowthSummary = { virtual_reserve_balance_gbp?: number; available_uncommitted_gbp?: number };
 
 export default function FinanceHubPage() {
-  const [queue, setQueue] = useState<ReviewItem[]>([]);
+  const [queue, setQueue] = useState<ReviewItem[] | null>(null);
   const [tasks, setTasks] = useState<FinanceTask[]>([]);
   const [growth, setGrowth] = useState<GrowthSummary | null>(null);
   const [status, setStatus] = useState<string | null>(null);
@@ -39,7 +39,7 @@ export default function FinanceHubPage() {
     if (!token) return;
     apiGet<ReviewItem[]>("/api/v1/finance/bookkeeping/review-queue", token)
       .then(setQueue)
-      .catch(withLoadError(() => setQueue([])));
+      .catch(withLoadError(() => setQueue(null)));
     apiGet<{ tasks: FinanceTask[] }>("/api/v1/finance/insights/tasks", token)
       .then((r) => setTasks(r.tasks.slice(0, 6)))
       .catch(withLoadError(() => setTasks([])));
@@ -87,8 +87,8 @@ export default function FinanceHubPage() {
   }
 
   return (
-    <div className="mx-auto max-w-lg pb-16">
-      <h1 className="text-xl font-semibold text-emerald-950">Money hub</h1>
+    <div className="mx-auto max-w-4xl pb-16">
+      <h1 className="text-xl font-semibold text-emerald-950 portal-department-title">Money hub</h1>
       <p className="mt-2 text-sm leading-relaxed text-slate-600">
         Plain-English bookkeeping for SurfaceCoat Ltd. FreeAgent stays the official books — here you review
         suggestions and receipts. Photograph receipts in Telegram.
@@ -143,11 +143,11 @@ export default function FinanceHubPage() {
 
       <section className="mt-6">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
-          Needs your review ({queue.length})
+          Needs your review ({queue?.length ?? "—"})
         </h2>
         <ul className="mt-3 space-y-3">
-          {queue.length === 0 ? (
-            <li className="rounded-xl border bg-white p-4 text-sm text-slate-500">Nothing waiting — good work.</li>
+          {queue === null ? <li>Review queue loading or unavailable.</li> : queue.length === 0 ? (
+            <li className="rounded-xl border bg-white p-4 text-sm text-slate-500">No recorded items awaiting review.</li>
           ) : (
             queue.map((item) => (
               <li key={item.id} className="rounded-xl border border-slate-200 bg-white p-4 text-sm shadow-sm">

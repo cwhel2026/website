@@ -164,6 +164,7 @@ export default function DashboardOverviewPage() {
       </div>
 
       <div className="mt-3 grid grid-cols-2 gap-2"><PortalKpi label="Coating due within 2 days" value={String(command?.coating_due_within_two_days ?? "—")} /><PortalKpi label="Outstanding invoices" value={formatGbp(command?.outstanding_invoice_gbp)} /></div>
+      <section className="portal-panel mt-5"><h2 className="font-semibold">Quotation conversion</h2><p className="mt-1 text-xs text-white/65">Recorded analytics counts, not a revenue forecast.</p>{analytics?.quotations != null && analytics?.quotes_accepted != null && analytics.quotations > 0 && analytics.quotes_accepted >= 0 && analytics.quotes_accepted <= analytics.quotations ? <><p className="mt-3 text-2xl font-bold">{Math.round(100*analytics.quotes_accepted/analytics.quotations)}%</p><div role="progressbar" aria-label="Quotation conversion" aria-valuenow={Math.round(100*analytics.quotes_accepted/analytics.quotations)} className="mt-2 h-3 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-amber-400" style={{width:`${100*analytics.quotes_accepted/analytics.quotations}%`}}/></div><p className="mt-2 text-sm">{analytics.quotes_accepted} accepted / {analytics.quotations} quotations</p></> : <p className="mt-3 text-sm">Not enough comparable quotation data.</p>}</section>
       <h2 className="mt-7 text-lg font-semibold">Your workspace</h2>
       <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
         <QuickLink href="/dashboard/quotations" label="New quote" />

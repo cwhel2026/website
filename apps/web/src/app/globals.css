@@ -59,3 +59,19 @@ body {
     min-height: 6.5rem;
   }
 }
+@layer components {
+ .portal-panel { @apply min-w-0 rounded-2xl border border-white/10 bg-[#202422] p-4 text-white sm:p-6; }
+ .portal-filter { @apply min-h-11 rounded-xl border border-white/20 px-4 py-2 text-sm font-medium; }
+ .portal-filter[aria-pressed="true"] { @apply border-amber-300/60 bg-amber-300/10 text-amber-300; }
+ .portal-root :focus-visible { outline: 2px solid #eab308; outline-offset: 3px; }
+ .portal-root table { max-width: 100%; }
+ .portal-root input, .portal-root select, .portal-root textarea { max-width: 100%; }
+}
+
+@layer components {
+ .portal-department-title { @apply text-2xl font-bold tracking-tight sm:text-3xl; }
+ .portal-legacy { color-scheme: light; }
+ .portal-legacy button:not([aria-label]) { min-height: 44px; }
+ .portal-legacy input:not([type=checkbox]):not([type=radio]), .portal-legacy select { min-height: 44px; font-size: 16px; }
+ .portal-legacy td { overflow-wrap: anywhere; }
+}
