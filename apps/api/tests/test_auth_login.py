@@ -5,7 +5,7 @@ from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from jose import jwt
+import jwt
 from starlette.testclient import TestClient
 
 from app.auth import create_access_token, hash_password, verify_password
@@ -33,7 +33,7 @@ def test_access_token_expired_rejected():
         settings.jwt_secret,
         algorithm=settings.jwt_algorithm,
     )
-    from jose.exceptions import ExpiredSignatureError
+    from jwt.exceptions import ExpiredSignatureError
 
     with pytest.raises(ExpiredSignatureError):
         jwt.decode(bad, settings.jwt_secret, algorithms=[settings.jwt_algorithm])

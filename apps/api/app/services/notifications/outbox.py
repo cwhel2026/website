@@ -77,10 +77,10 @@ def _chat_ids() -> list[int]:
 
 
 def telegram_recipients(category: str, payload: dict, settings) -> list[int]:
-    if category == "assistant_reply":
+    if category == "assistant_reply" or "reply_chat_id" in payload:
         target = payload.get("reply_chat_id")
-        return [target] if type(target) is int and target in settings.telegram_admin_id_list else []
-    return list(dict.fromkeys(settings.telegram_alert_chat_ids))
+        return [target] if type(target) is int and target > 0 and target in settings.telegram_admin_id_list else []
+    return list(dict.fromkeys(chat for chat in settings.telegram_alert_chat_ids if chat > 0 and (chat in settings.telegram_admin_id_list or chat == getattr(settings, "telegram_owner_chat_id", None))))
 
 
 async def deliver_telegram_outbox_item(db: AsyncSession, item: NotificationOutbox) -> bool:
@@ -91,9 +91,17 @@ async def deliver_telegram_outbox_item(db: AsyncSession, item: NotificationOutbo
     if item.status == OutboxStatus.CANCELLED:
         return False
     settings = get_settings()
-    payload = json.loads(item.payload_json or "{}")
+    try:
+        payload = json.loads(item.payload_json or "{}")
+        if not isinstance(payload, dict):
+            raise ValueError("Invalid payload")
+    except (ValueError, TypeError):
+        item.status = OutboxStatus.FAILED
+        item.last_error = "Invalid notification payload"
+        await db.flush()
+        return False
     chats = telegram_recipients(item.category, payload, settings)
-    if item.category == "assistant_reply" and not chats:
+    if (item.category == "assistant_reply" or "reply_chat_id" in payload) and not chats:
         item.status = OutboxStatus.CANCELLED
         item.last_error = "Private reply recipient no longer authorised"
         await db.flush()
@@ -105,6 +113,11 @@ async def deliver_telegram_outbox_item(db: AsyncSession, item: NotificationOutbo
         await db.flush()
         return False
 
+    if item.attempts >= item.max_attempts:
+        item.status = OutboxStatus.FAILED
+        item.last_error = "Retry limit reached"
+        await db.flush()
+        return False
     item.status = OutboxStatus.SENDING
     item.attempts += 1
     db.add(item)
@@ -130,7 +143,7 @@ async def deliver_telegram_outbox_item(db: AsyncSession, item: NotificationOutbo
         if chat_id in delivered_chats:
             continue
         try:
-            last_result = await send_message(chat_id=chat_id, text=text, **({"reply_markup": markup} if markup else {}))
+            last_result = await send_message(chat_id=chat_id, text=text[:4096], **({"reply_markup": markup} if markup else {}))
             delivered_chats.append(chat_id)
         except TelegramApiError as exc:
             errors.append(f"{chat_id}: Telegram delivery failed (status={exc.status_code})")

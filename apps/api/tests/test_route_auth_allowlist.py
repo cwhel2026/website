@@ -59,13 +59,22 @@ def _dependency_calls(dependant, acc):
 
 def test_every_route_is_authenticated_or_allowlisted():
     unauthenticated = set()
-    for route in app.routes:
-        if not hasattr(route, "dependant"):
-            continue
+    # FastAPI now retains included routers as nested route objects.
+    # Resolve each concrete route through its effective router context.
+    from fastapi.routing import APIRoute
+    def walk(routes, prefix=""):
+        for route in routes:
+            if isinstance(route, APIRoute):
+                yield prefix + route.path, route
+            elif hasattr(route, "original_router") and hasattr(route, "include_context"):
+                yield from walk(route.original_router.routes, prefix + route.include_context.prefix)
+            elif hasattr(route, "routes"):
+                yield from walk(route.routes, prefix + getattr(route, "path", ""))
+    for path, route in walk(app.routes):
         if auth.get_current_user in _dependency_calls(route.dependant, set()):
             continue
         for method in route.methods:
-            unauthenticated.add((method, route.path))
+            unauthenticated.add((method, path))
     assert unauthenticated - PUBLIC_ROUTES == set(), "Unauthenticated routes not in allowlist"
     assert PUBLIC_ROUTES - unauthenticated == set(), "Allowlist entries that no longer exist or now require auth"
 

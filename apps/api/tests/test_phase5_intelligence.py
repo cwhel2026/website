@@ -25,4 +25,4 @@ def test_private_reply_never_broadcasts():
     assert telegram_recipients("assistant_reply", {"reply_chat_id": 123}, cfg) == [123]
     assert telegram_recipients("assistant_reply", {"reply_chat_id": -100}, cfg) == []
     assert telegram_recipients("assistant_reply", {}, cfg) == []
-    assert telegram_recipients("general", {}, cfg) == [123, 456, -100]
+    assert telegram_recipients("general", {}, cfg) == [123, 456]

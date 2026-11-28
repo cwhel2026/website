@@ -37,10 +37,10 @@ async def ready(db: AsyncSession = Depends(get_db)):
         await db.rollback()
         current = None
     head = _alembic_head()
-    if current != head:
+    if not current or not head or current != head:
         return JSONResponse(
             status_code=503,
-            content={"status": "unavailable", "detail": "schema", "schema_revision": current, "schema_head": head},
+            content={"status": "unavailable", "detail": "schema"},
         )
     return {"status": "ready", "database": "ok", "schema_revision": current}
 

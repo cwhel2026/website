@@ -117,6 +117,8 @@ async def _telegram_outbox_pump() -> None:
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     validate_production_settings(settings)
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
     # CI integration tests (ENVIRONMENT=test) need a fully seeded DB before requests.
     if settings.environment == "test":
         await _bootstrap_data()
@@ -134,10 +136,13 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(
-    title="Revive My Drive API",
+    title="SurfaceCoat API",
     version="0.7.0",
     description="Regional business operating system — Phase 7 production readiness",
     lifespan=lifespan,
+    docs_url=None if settings.environment.lower() == "production" else "/docs",
+    redoc_url=None if settings.environment.lower() == "production" else "/redoc",
+    openapi_url=None if settings.environment.lower() == "production" else "/openapi.json",
 )
 
 app.state.limiter = limiter
