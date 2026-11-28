@@ -24,6 +24,7 @@ celery_app.conf.update(
     result_expires=86400,
     broker_connection_retry_on_startup=True,
     beat_schedule={
+        "employee-work": {"task": "rmd.employee_work", "schedule": crontab(minute="*/5"), "options": {"expires": 240}},
         "scheduler-heartbeat": {
             "task": "rmd.scheduler_heartbeat",
             "schedule": crontab(minute="*"),

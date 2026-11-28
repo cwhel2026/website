@@ -14,23 +14,7 @@ async def evaluate_experiment(db: AsyncSession, experiment_id) -> dict:
     exp = await db.get(MarketingExperiment, experiment_id)
     if exp is None:
         return {"ok": False, "message": "Not found"}
-    sample = exp.enquiries + exp.quotations + exp.bookings
-    if sample < exp.min_sample_size:
-        return {
-            "ok": True,
-            "insufficient_data": True,
-            "message": f"Need {exp.min_sample_size} samples; have {sample}",
-        }
-    if exp.quotations == 0:
-        return {"ok": True, "insufficient_data": True, "message": "No quotation outcomes yet"}
-    rate_a = float(exp.revenue_gbp) if exp.variant_a else 0
-    rate_b = float(exp.enquiries) / max(exp.quotations, 1)
-    winner = "A" if rate_a >= rate_b else "B"
-    exp.winner_variant = winner
-    exp.conclusion = f"Provisional winner {winner} on {exp.metric_name} (sample {sample})"
-    exp.status = ExperimentStatus.COMPLETED
-    await db.flush()
-    return {"ok": True, "winner": winner, "conclusion": exp.conclusion}
+    return {"ok": True, "insufficient_data": True, "message": "Variant-level comparable outcomes are not recorded. No winner can be established."}
 
 
 async def list_experiments(db: AsyncSession) -> list[dict]:

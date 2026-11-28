@@ -1,6 +1,7 @@
 """Authorised assistant tools exposed to language-model providers."""
 
 from typing import Any, Awaitable, Callable
+from decimal import Decimal, InvalidOperation
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -149,6 +150,8 @@ OPENAI_TOOL_SPECS: list[dict[str, Any]] = [
 
 
 for name, description in [
+    ("marketing_experiments", "Recorded experiment history; historical conclusions require variant-level verification."),
+    ("open_business_tasks", "Open business tasks from the director queue."),
     ("pricing_profile", "Active company pricing rules and provisional labour and material cost assumptions."),
     ("marketing_budget_policy", "Current saved marketing budget limits, not live spending."),
     ("finance_summary", "Recorded revenue and expense summary; provisional accounting basis."),
@@ -158,8 +161,39 @@ for name, description in [
     OPENAI_TOOL_SPECS.append({"type": "function", "function": {"name": name, "description": description, "parameters": {"type": "object", "properties": {}, "additionalProperties": False}}})
 
 
-async def run_tool(db: AsyncSession, name: str) -> dict[str, Any]:
-    if name in {"marketing_pause_all", "marketing_director_proactive"}:
+OPENAI_TOOL_SPECS.append({"type": "function", "function": {"name": "coating_estimate", "description": "Calculate material purchase and consumption, contribution, margin and markup using explicit owner supplied inputs. Never guess missing values.", "parameters": {"type": "object", "properties": {k: {"type": "number"} for k in ("area", "coverage", "coats", "pack_litres", "pack_cost", "waste_percent", "revenue", "other_costs")}, "required": ["area", "coverage", "coats", "pack_litres", "pack_cost", "waste_percent", "revenue", "other_costs"], "additionalProperties": False}}})
+
+
+def coating_estimate(args):
+    from app.services.material_costing import estimate_coating
+    keys = {"area", "coverage", "coats", "pack_litres", "pack_cost", "waste_percent", "revenue", "other_costs"}
+    if not isinstance(args, dict) or set(args) != keys:
+        return {"error": "All eight explicit inputs required"}
+    try:
+        values = {k: Decimal(str(v)) for k, v in args.items()}
+        if any(not v.is_finite() or abs(v) > 10000000 for v in values.values()) or values["coats"] != values["coats"].to_integral_value():
+            raise ValueError()
+        values["coats"] = int(values["coats"])
+        result = estimate_coating(**values)
+        cost = result["estimated_consumed_cost_gbp"] + values["other_costs"]
+        contribution = result["estimated_contribution_gbp"]
+        result["margin_percent"] = contribution / values["revenue"] * 100 if values["revenue"] else None
+        result["markup_percent"] = contribution / cost * 100 if cost else None
+        return result
+    except (ValueError, InvalidOperation, ArithmeticError, TypeError):
+        return {"error": "Invalid coating inputs"}
+
+
+async def run_tool(db: AsyncSession, name: str, args: dict | None = None) -> dict[str, Any]:
+    if name == "marketing_experiments":
+        from app.services.marketing.experiments_engine import list_experiments
+        return {"experiments": (await list_experiments(db))[:30], "warning": "No verified variant-level winner data."}
+    if name == "open_business_tasks":
+        from app.services.business_director import list_open_tasks
+        return {"tasks": [{"id": str(t.id), "title": t.title, "agent": t.agent_slug, "status": t.status.value} for t in await list_open_tasks(db, 20)]}
+    if name == "coating_estimate":
+        return coating_estimate(args)
+    if name in {"marketing_pause_all", "marketing_director_proactive", "marketing_director_plan"}:
         return {"error": "Action requires explicit owner approval"}
     if name == "pricing_profile":
         from app.services.pricing_engine import get_active_pricing_profile, LABOUR_HOURS_PER_SQM, MATERIAL_COST_PER_SQM, DEFAULT_LABOUR_RATE
