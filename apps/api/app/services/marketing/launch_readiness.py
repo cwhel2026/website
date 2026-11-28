@@ -12,12 +12,12 @@ CHECKLIST_ITEMS = [
     ("business_registered", "Business registered with Companies House", False),
     ("domain_dns", "Domain and SSL live", False),
     ("privacy_policy", "Privacy policy published on website", True),
-    ("meta_business", "Meta Business Portfolio + Page + Instagram", False),
-    ("meta_ads_account", "Meta ad account created", False),
-    ("google_ads_account", "Google Ads account", False),
-    ("google_business_profile", "Google Business Profile", False),
+    ("meta_business", "Meta Business Portfolio + Page + Instagram", True),
+    ("meta_ads_account", "Meta ad account created", True),
+    ("google_ads_account", "Google Ads account", True),
+    ("google_business_profile", "Google Business Profile", True),
     ("business_email", "Business email / SMTP", False),
-    ("marketing_volume", "Marketing media volume mounted", False),
+    ("marketing_volume", "Marketing media volume mounted", True),
     ("live_spend_policy", "Owner reviewed budget policy (keep blocked until launch)", True),
 ]
 
@@ -59,12 +59,14 @@ def assess_launch_readiness() -> dict:
     ready_score = sum(1 for i in items if i["status"] in ("read_access_verified", "write_access_verified")) 
     return {
         "assessed_at": datetime.now(UTC).isoformat(),
-        "pre_launch": True,
+        "pre_launch": bool(blockers),
+        "launch_target": "as_soon_as_ready",
+        "paid_marketing_required_for_launch": False,
         "items": items,
         "external_blockers": blockers,
         "ready_score": ready_score,
         "ready_total": len(items),
         "can_use_offline_features": True,
-        "message": "Internal marketing (research drafts, content, prospects) works before social accounts exist.",
+        "message": "Organic customer launch and paid marketing are separate. Verify operational readiness before accepting work; paid advertising remains optional and approval-gated.",
         "integrations": centre["integrations"],
     }
