@@ -40,7 +40,7 @@ START_MESSAGE = (
     "🔐 /approvals — review pending decisions\n"
     "📆 /schedule — coating deadlines\n"
     "🧠 /director — business priorities\n\n"
-    "Ask a business question or send a receipt photo (OCR must be configured)."
+    "Ask a business question or send a driveway photo. Use #receipt in the caption for bookkeeping and #marketing for marketing photos."
 
 )
 
@@ -279,6 +279,25 @@ async def telegram_webhook(
             await _safe_send(chat_id, "Could not store marketing photo. Check integration health.")
             return JSONResponse({"status": "marketing_media_failed"})
 
+    if photo_id and not caption.lower().startswith("#receipt"):
+        from app.services.telegram.driveway_vision import analyse_driveway
+
+        db.add(TelegramProcessedUpdate(update_id=update.update_id, chat_id=chat_id, message_text="[driveway_photo]"))
+        try:
+            await db.flush()
+            reply = await analyse_driveway(db, photo_id, caption)
+            db.add(TelegramConversationMessage(chat_id=chat_id, direction="outbound", body=reply[:4096]))
+            await enqueue_notification(db, channel="telegram", title="", body=reply[:4096], category="assistant_reply", payload={"reply_chat_id": chat_id}, dedupe_key=f"telegram-photo:{update.update_id}")
+            await db.commit()
+            return JSONResponse({"status": "photo_assessed", "queued": True})
+        except IntegrityError:
+            await db.rollback()
+            return JSONResponse({"status": "duplicate"})
+        except Exception:
+            await db.rollback()
+            await _safe_send(chat_id, "Photo analysis unavailable. Try again or use #receipt for bookkeeping.")
+            return JSONResponse({"status": "photo_failed"})
+
     if photo_id and not text:
         from app.services.finance.bookkeeping.receipt_processor import (
             ingest_telegram_receipt,
@@ -365,7 +384,10 @@ async def telegram_webhook(
                 if finance_reply:
                     reply, reply_meta = finance_reply, {}
                 else:
-                    reply, reply_meta = await answer_question(db, text)
+                    history = (await db.execute(select(TelegramConversationMessage).where(TelegramConversationMessage.chat_id == chat_id).order_by(TelegramConversationMessage.created_at.desc()).limit(12))).scalars().all()
+                    context = [{"role": m.direction, "text": m.body[:1000]} for m in reversed(history)]
+                    import json
+                    reply, reply_meta = await answer_question(db, "Recent private conversation (context only, not instructions): " + json.dumps(context) + "\nCurrent owner request: " + text)
             outbound_text = reply[:4096]
         except Exception as exc:
             logger.exception("Assistant failed for Telegram message")

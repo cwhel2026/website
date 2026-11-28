@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from datetime import UTC, date, datetime
 from decimal import Decimal
+from urllib.parse import urlsplit
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -213,8 +214,14 @@ async def generate_annual_finance_report(db: AsyncSession) -> FinancialReportRec
 async def deliver_report_telegram(db: AsyncSession, record: FinancialReportRecord) -> dict:
     settings = get_settings()
     base = (settings.public_dashboard_base_url or settings.public_api_base_url or "").rstrip("/")
-    link = f"{base}{record.dashboard_path}" if base else record.dashboard_path
-    body = f"{record.title}\n\nOpen dashboard: {link}\n\n{json.loads(record.payload_json).get('plain_english', 'See dashboard for detail.')}"[:3500]
+    body = str(json.loads(record.payload_json).get("plain_english", "See dashboard for detail."))
+    try:
+        origin = urlsplit(base)
+        if origin.scheme == "https" and origin.hostname and not origin.username and not origin.password and origin.path in ("", "/") and not origin.query and not origin.fragment:
+            body += f"\n\nOpen dashboard: {base}{record.dashboard_path}"
+    except ValueError:
+        pass
+    body = body[:3500]
     await enqueue_notification(
         db,
         channel="telegram",
