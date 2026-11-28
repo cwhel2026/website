@@ -215,7 +215,7 @@ async def payment_candidates(
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[User, Depends(get_current_admin)],
 ) -> dict:
-    from app.models.finance import Invoice, InvoiceStatus
+    from app.models.finance import Invoice, InvoiceStatus, SyncSource
     from app.services.analytics_service import issued_business_invoices
 
     rows = await db.execute(
@@ -248,5 +248,6 @@ async def payment_candidates(
             "invoice_id": str(candidates[0].id) if len(candidates) == 1 else None,
             "invoice_number": candidates[0].invoice_number if len(candidates) == 1 else None,
             "requires_review": True,
+            "local_confirmation_allowed": len(candidates) == 1 and txn.source != SyncSource.FREEAGENT and not candidates[0].freeagent_id and not candidates[0].freeagent_url,
         })
     return {"transactions": results, "limit": 100, "basis": "Exact outstanding amount and invoice date only; suggestions are not verified payments."}
