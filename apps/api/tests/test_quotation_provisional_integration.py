@@ -20,6 +20,11 @@ def test_provisional_quote_returns_computed_price(monkeypatch):
 
     monkeypatch.setattr("app.services.quotation_workflow.travel_km_from_base", _fixed_travel)
 
+    async def _fixed_road(_db, _postcode):
+        return Decimal("32.18688"), Decimal("0.5")
+
+    monkeypatch.setattr("app.services.quotation_workflow.road_travel_from_base", _fixed_road)
+
     with TestClient(app) as client:
         res = client.post(
             "/api/v1/quotations/provisional",
@@ -39,7 +44,7 @@ def test_provisional_quote_returns_computed_price(monkeypatch):
         assert body["surface_supported"] is True
         assert body["vat_applied"] is False
         total = Decimal(body["total_gbp"])
-        assert total > 0
+        assert total == Decimal("490")
         assert total % Decimal("5") == 0
         assert "breakdown" not in body
         assert "subtotal_ex_vat_gbp" not in body
@@ -69,7 +74,7 @@ def test_provisional_quote_returns_computed_price(monkeypatch):
         assert standard.json()["vat_applied"] is False
         assert "breakdown" not in standard.json()
         assert Decimal(standard.json()["total_gbp"]) % Decimal("5") == 0
-        assert "One visit" in " ".join(item["title"] for item in standard.json()["visits"])
+        assert "Visit 2" in " ".join(item["title"] for item in standard.json()["visits"])
 
         blocked = client.post(
             "/api/v1/quotations/provisional",
@@ -81,5 +86,6 @@ def test_provisional_quote_returns_computed_price(monkeypatch):
                 "sections": [{"label": "Drive", "area_sqm": 40}],
             },
         )
-        assert blocked.status_code == 422
-        assert "not configured" in blocked.json()["detail"]
+        assert blocked.status_code == 200
+        assert blocked.json()["surface_supported"] is False
+        assert blocked.json()["total_gbp"] is None
