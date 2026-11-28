@@ -207,3 +207,24 @@ async def confirm_receipt_match(
         detail={"transaction_id": str(txn.id)})
     await db.commit()
     return {"status": "matched", "external_posted": False}
+
+
+@router.get("/receipts/match-review")
+async def receipt_match_review(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[User, Depends(get_current_admin)],
+) -> list[dict]:
+    rows = await db.execute(select(Receipt, BankTransaction).join(
+        BankTransaction, Receipt.matched_bank_transaction_id == BankTransaction.id
+    ).where(Receipt.processing_status == "needs_review",
+        BankTransaction.is_duplicate.is_(False),
+        BankTransaction.amount_gbp < 0
+    ).order_by(BankTransaction.transacted_at.desc()).limit(100))
+    return [{
+        "receipt_id": str(receipt.id), "transaction_id": str(txn.id),
+        "merchant": receipt.extracted_merchant, "receipt_total": str(receipt.extracted_total_gbp) if receipt.extracted_total_gbp is not None else None,
+        "receipt_date": receipt.extracted_date.isoformat() if receipt.extracted_date else None,
+        "bank_description": txn.description, "bank_amount": str(txn.amount_gbp),
+        "bank_date": txn.transacted_at.isoformat(),
+        "eligible": receipt.extracted_total_gbp == -txn.amount_gbp and receipt.extracted_date is not None and abs((receipt.extracted_date - txn.transacted_at).days) <= 7,
+    } for receipt, txn in rows.all()]
