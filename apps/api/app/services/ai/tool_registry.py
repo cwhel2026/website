@@ -188,7 +188,7 @@ OPENAI_TOOL_SPECS.append({"type":"function","function":{"name":"validate_ad_allo
 
 
 async def run_tool(db: AsyncSession, name: str, args: dict | None = None, *, agent_slug=None, execution_context=None) -> dict[str, Any]:
-    if name == "booking_deposit_status":
+    if name in {"booking_deposit_status", "draft_booking_deposit"}:
         from app.config import get_settings
         from app.models.agents import AgentProfile
         from app.models.jobs import Job
@@ -207,6 +207,25 @@ async def run_tool(db: AsyncSession, name: str, args: dict | None = None, *, age
         job = await db.scalar(select(Job).where(Job.reference == reference))
         if not job:
             return {"error": "Job not found; ask owner for exact reference"}
+        if name == "draft_booking_deposit":
+            from app.services.payments.booking import draft_deposit
+            from app.services.audit import record_audit
+            try:
+                percentage = Decimal(str((args or {}).get("percentage", 10)))
+                if not percentage.is_finite() or not 0 < percentage <= 100 or percentage != percentage.quantize(Decimal("0.01")):
+                    raise ValueError("Invalid percentage")
+                async with db.begin_nested():
+                    deposit = await draft_deposit(db, job.id, percentage)
+                    await record_audit(db, actor_type="ai_employee", actor_id=agent_slug,
+                                       action="booking.deposit_draft", entity_id=deposit.id,
+                                       detail={"request_id": str(execution_context["request_id"])})
+                    result = {"job_reference": reference, "deposit_id": str(deposit.id),
+                              "invoice_id": str(deposit.invoice_id),
+                              "amount_gbp": str(Decimal(deposit.amount_pence) / 100),
+                              "status": deposit.status, "external_actions": False}
+                return result
+            except (ValueError, InvalidOperation):
+                return {"error": "Deposit cannot be drafted; verify accepted quotation and existing deposit"}
         deposit = await db.scalar(select(BookingDeposit).where(BookingDeposit.job_id == job.id))
         if not deposit:
             return {"job_reference": reference, "deposit_status": "not_created"}
@@ -287,3 +306,6 @@ OPENAI_TOOL_SPECS.append({"type":"function","function":{"name":"flexible_opportu
 
 
 OPENAI_TOOL_SPECS.append({"type": "function", "function": {"name": "booking_deposit_status", "description": "Read the saved deposit status for an exact existing job reference. Never invent a reference or claim sandbox payment is real.", "parameters": {"type": "object", "properties": {"job_reference": {"type": "string"}}, "required": ["job_reference"], "additionalProperties": False}}})
+
+
+OPENAI_TOOL_SPECS.append({"type": "function", "function": {"name": "draft_booking_deposit", "description": "Only when explicitly requested by the owner, prepare a local draft deposit invoice for an exact existing job reference. Default 10 percent unless owner specifies another percentage. Never sends a message, confirms an appointment or charges a customer.", "parameters": {"type": "object", "properties": {"job_reference": {"type": "string"}, "percentage": {"type": "number", "minimum": 0.01, "maximum": 100}}, "required": ["job_reference"], "additionalProperties": False}}})
