@@ -78,12 +78,28 @@ async def chat_with_openai(
     previous = (await db.scalars(select(AuditEvent).where(AuditEvent.action == "employee_decision_report", AuditEvent.actor_id == agent_slug).order_by(AuditEvent.created_at.desc()).limit(5))).all()
     if previous:
         messages.insert(2, {"role": "user", "content": "Previous recommendations, not verified outcomes: " + json.dumps([x.detail_json for x in previous], default=str)[:10000]})
+    if allow_consultation and agent_slug == "marketing" and re.search(r"\b(?:consult|ask|check with|speak to)\s+Arthur\b", question, re.I):
+        consulted = True
+        try:
+            from app.models.agents import AgentProfile
+            from app.services.audit import record_audit
+            profile = await db.scalar(select(AgentProfile).where(AgentProfile.slug == "finance"))
+            if not profile or profile.is_paused or profile.emergency_stop:
+                raise ValueError("Arthur unavailable")
+            async with db.begin_nested():
+                assessment, _, provider = await chat_with_openai(db, "Read-only affordability assessment for Olivia: " + question[:2000], agent_slug="finance", allow_consultation=False, cost_tracker=cost_tracker)
+                await record_audit(db, actor_type="ai_employee", actor_id=agent_slug, action="employee_consultation", entity_type="ai_employee", detail={"department": "finance", "assessment": assessment[:3500], "provider": provider})
+            consultation_succeeded = True
+            tool_data["consult_colleague"] = {"colleague": "Arthur", "assessment": assessment}
+        except Exception:
+            tool_data["consult_colleague"] = {"error": "Arthur unavailable; do not claim consultation succeeded"}
+        messages.insert(2, {"role": "user", "content": "Actual consultation result: " + json.dumps(tool_data["consult_colleague"], default=str)})
     model = settings.openai_model
     total_prompt = 0
     total_completion = 0
 
     async with httpx.AsyncClient(timeout=60.0) as client:
-        for _ in range(4):
+        for step in range(4):
             ok, msg = await check_spend_allowed(db)
             if not ok:
                 raise RuntimeError(msg)
@@ -106,6 +122,9 @@ async def chat_with_openai(
                     # A model-selected calculator call is not sufficient to certify free-form prose.
                     # Return only the checked allocation, never unchecked monetary recommendations.
                     checked = tool_data.get("validate_ad_allocation", {})
+                    if not checked.get("valid") and step < 2:
+                        messages.append({"role": "user", "content": "Your allocation was not validated. Call validate_ad_allocation using the current budget policy and recorded spend, then explain your geographical recommendation. If evidence is missing, provide a non-numerical recommendation and identify the missing evidence."})
+                        continue
                     if not checked.get("valid"):
                         reply = "I cannot verify a numerical advertising allocation yet. No spending is authorised. I need a validated allocation and current budget evidence."
                     else:
@@ -120,6 +139,8 @@ async def chat_with_openai(
                             reply = "Provisional allocation for review (not authorised spend):\n" + "\n".join(f"{row['territory']}: £{row['total_gbp']} over {row['days']} days" for row in actual["allocations"]) + f"\nCombined: £{actual['total_gbp']}. Recorded spend is provisional; verify platform billing, daily and channel limits before approval."
                         except (KeyError, ValueError, TypeError):
                             reply = "Current budget evidence does not support a verified allocation. No spending is authorised."
+                if consulted and "consult_colleague" in tool_data:
+                    reply += "\n\nArthur consultation: " + ("Completed; " + str(tool_data["consult_colleague"].get("assessment", ""))[:700] if consultation_succeeded else "Unavailable. Financial review not completed.")
                 from app.services.audit import record_audit
                 await record_audit(db, actor_type="ai_employee", actor_id=agent_slug, action="employee_decision_report", entity_type="ai_employee", detail={"question": question[:2000], "reply": reply[:3400], "evidence_tools": list(tool_data), "model": model, "estimated_cost_gbp": str(sum(cost_tracker)), "consulted": consultation_succeeded})
                 footer = f"\n\nAI: {model} | Est. cost £{sum(cost_tracker):.4f}" if root_call else ""
