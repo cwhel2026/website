@@ -82,7 +82,7 @@ def earliest_search_from(settings: SchedulingSettings, now: datetime | None = No
     now_utc = _aware_utc(now or datetime.now(UTC))
     local = now_utc.astimezone(LONDON)
     notice = timedelta(hours=int(getattr(settings, "min_notice_hours", 24) or 24))
-    cursor = local + notice
+    cursor = (now_utc + notice).astimezone(LONDON)
     work_start = settings.work_day_start or time(8, 0)
     work_end = settings.work_day_end or time(17, 30)
     launch = settings.earliest_work_date or LAUNCH_DATE
@@ -113,6 +113,8 @@ def slot_inside_working_hours(settings: SchedulingSettings, start: datetime, end
     work_start = settings.work_day_start or time(8, 0)
     work_end = settings.work_day_end or time(17, 30)
     launch = settings.earliest_work_date or LAUNCH_DATE
+    if end <= start:
+        return False
     if local_start.date() < launch or local_end.date() < launch:
         return False
     if local_start.weekday() >= 5 or local_end.weekday() >= 5:
@@ -159,7 +161,7 @@ async def propose_two_stage_slots(
     coat_slots: list[SlotProposal] = []
 
     cursor = search_from
-    horizon = search_from + timedelta(days=21)
+    horizon = min(search_from + timedelta(days=21), max((h.forecast_time for h in forecast), default=now) + timedelta(hours=1))
     already_prepared = bool(job and (job.preparation_completed_at or job.customer_washed_already))
     while not already_prepared and len(prep_slots) < max_prep_slots and cursor < horizon:
         start = cursor

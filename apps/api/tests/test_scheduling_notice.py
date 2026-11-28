@@ -44,3 +44,13 @@ def test_slot_at_noon_the_day_of_the_request_is_rejected_when_it_is_already_past
     search = earliest_search_from(settings, now)
     assert search > past.astimezone(UTC)
     assert not slot_inside_working_hours(settings, past, past + timedelta(hours=2)) or search > past.astimezone(UTC)
+
+
+def test_reversed_window_rejected():
+    start = datetime(2027, 3, 1, 10, tzinfo=LONDON)
+    assert not slot_inside_working_hours(_settings(), start, start - timedelta(hours=1))
+
+
+def test_notice_across_dst_is_elapsed_time():
+    now = datetime(2027, 3, 28, 8, tzinfo=UTC)
+    assert earliest_search_from(_settings(), now) >= now + timedelta(hours=24)
