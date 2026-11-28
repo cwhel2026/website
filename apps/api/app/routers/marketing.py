@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth import get_current_admin
+from app.auth import get_current_admin, get_current_admin_writer
 from app.database import get_db
 from app.rate_limit import limiter
 from app.models.approvals import ApprovalRequest, ApprovalStatus, ApprovalType
@@ -58,12 +58,12 @@ router = APIRouter(prefix="/marketing", tags=["marketing"])
 
 
 class CampaignIn(BaseModel):
-    name: str
+    name: str = Field(min_length=1, max_length=200)
     platform: AdPlatform
     territory_id: UUID | None = None
     service_slug: str | None = None
-    daily_budget_gbp: Decimal = Decimal("0")
-    monthly_budget_gbp: Decimal = Decimal("100")
+    daily_budget_gbp: Decimal = Field(default=Decimal("0"), ge=0, max_digits=12, decimal_places=2)
+    monthly_budget_gbp: Decimal = Field(default=Decimal("100"), ge=0, max_digits=12, decimal_places=2)
     headline: str | None = None
     body_text: str | None = None
     simulation_only: bool = True
@@ -191,10 +191,13 @@ def _policy_dict(policy: MarketingBudgetPolicy) -> dict:
 async def patch_marketing_budget(
     body: BudgetPolicyUpdate,
     db: Annotated[AsyncSession, Depends(get_db)],
-    user: Annotated[User, Depends(get_current_admin)],
+    user: Annotated[User, Depends(get_current_admin_writer)],
 ) -> dict:
     policy = await get_or_create_budget_policy(db)
+    await db.refresh(policy, with_for_update=True)
     for field, value in body.model_dump(exclude_unset=True).items():
+        if value is None or (isinstance(value, Decimal) and (not value.is_finite() or value < 0)) or (field == "outreach_daily_cap" and value < 0):
+            raise HTTPException(422, "Invalid budget policy value")
         setattr(policy, field, value)
     await record_audit(
         db, actor_type="user", actor_id=str(user.id), action="marketing.budget_update", entity_id=policy.id
@@ -239,7 +242,7 @@ class ProspectSearchIn(BaseModel):
 async def commercial_prospect_search(
     body: ProspectSearchIn,
     db: Annotated[AsyncSession, Depends(get_db)],
-    user: Annotated[User, Depends(get_current_admin)],
+    user: Annotated[User, Depends(get_current_admin_writer)],
 ) -> dict:
     result = await search_companies_house(db, query=body.query, limit=body.limit)
     await record_audit(
@@ -285,7 +288,7 @@ async def list_commercial_prospects(
 async def outreach_draft(
     prospect_id: UUID,
     db: Annotated[AsyncSession, Depends(get_db)],
-    user: Annotated[User, Depends(get_current_admin)],
+    user: Annotated[User, Depends(get_current_admin_writer)],
 ) -> dict:
     prospect = await db.get(CommercialProspect, prospect_id)
     if prospect is None:
@@ -341,7 +344,7 @@ async def list_research_findings(
 async def create_research_finding(
     body: ResearchFindingIn,
     db: Annotated[AsyncSession, Depends(get_db)],
-    user: Annotated[User, Depends(get_current_admin)],
+    user: Annotated[User, Depends(get_current_admin_writer)],
 ) -> dict:
     row = MarketingResearchFinding(
         topic=body.topic,
@@ -402,7 +405,7 @@ async def list_campaigns(
 async def create_campaign(
     body: CampaignIn,
     db: Annotated[AsyncSession, Depends(get_db)],
-    user: Annotated[User, Depends(get_current_admin)],
+    user: Annotated[User, Depends(get_current_admin_writer)],
 ) -> RegionalCampaign:
     gate = await validate_campaign_spend(
         db,
@@ -428,11 +431,13 @@ async def create_campaign(
 async def request_launch(
     campaign_id: UUID,
     db: Annotated[AsyncSession, Depends(get_db)],
-    user: Annotated[User, Depends(get_current_admin)],
+    user: Annotated[User, Depends(get_current_admin_writer)],
 ) -> dict:
-    campaign = await db.get(RegionalCampaign, campaign_id)
+    campaign = await db.get(RegionalCampaign, campaign_id, with_for_update=True)
     if campaign is None:
         raise HTTPException(404, "Campaign not found")
+    if campaign.status not in (CampaignStatus.DRAFT, CampaignStatus.PROPOSED):
+        raise HTTPException(409, "Only draft or proposed campaigns can request launch")
     ok, msg = await check_budget_headroom(db, campaign, campaign.daily_budget_gbp or Decimal("1"))
     if not ok:
         raise HTTPException(400, msg)
@@ -456,15 +461,17 @@ async def request_launch(
 async def launch_approved(
     campaign_id: UUID,
     db: Annotated[AsyncSession, Depends(get_db)],
-    user: Annotated[User, Depends(get_current_admin)],
+    user: Annotated[User, Depends(get_current_admin_writer)],
 ) -> dict:
-    campaign = await db.get(RegionalCampaign, campaign_id)
+    campaign = await db.get(RegionalCampaign, campaign_id, with_for_update=True)
     if campaign is None:
         raise HTTPException(404)
     if campaign.status != CampaignStatus.APPROVED:
         raise HTTPException(
             409, "Campaign must be approved in Approvals before launch (current status: %s)" % campaign.status.value
         )
+    if not campaign.simulation_only:
+        raise HTTPException(409, "Live launch requires verified provider execution and spend controls")
     result = launch_campaign(campaign, campaign.daily_budget_gbp or Decimal("0"))
     if not result.success:
         raise HTTPException(400, result.message)
@@ -508,7 +515,7 @@ async def list_leads(
 async def create_lead(
     body: LeadIn,
     db: Annotated[AsyncSession, Depends(get_db)],
-    user: Annotated[User, Depends(get_current_admin)],
+    user: Annotated[User, Depends(get_current_admin_writer)],
 ) -> dict:
     territory = None
     if body.postcode:
@@ -553,7 +560,7 @@ async def list_flyers(
 async def create_flyer(
     body: FlyerIn,
     db: Annotated[AsyncSession, Depends(get_db)],
-    user: Annotated[User, Depends(get_current_admin)],
+    user: Annotated[User, Depends(get_current_admin_writer)],
 ) -> dict:
     slug = secrets.token_hex(4)
     flyer = FlyerCampaign(
@@ -598,7 +605,7 @@ class TerritoryResearchIn(BaseModel):
 async def territory_research(
     body: TerritoryResearchIn,
     db: Annotated[AsyncSession, Depends(get_db)],
-    user: Annotated[User, Depends(get_current_admin)],
+    user: Annotated[User, Depends(get_current_admin_writer)],
 ) -> dict:
     result = await run_territory_research(
         db,
@@ -614,7 +621,7 @@ async def territory_research(
 @router.post("/emergency-pause")
 async def emergency_pause(
     db: Annotated[AsyncSession, Depends(get_db)],
-    user: Annotated[User, Depends(get_current_admin)],
+    user: Annotated[User, Depends(get_current_admin_writer)],
 ) -> dict:
     policy = await get_or_create_budget_policy(db)
     policy.emergency_pause_all = True
@@ -628,7 +635,7 @@ async def emergency_pause(
 async def send_outreach(
     message_id: UUID,
     db: Annotated[AsyncSession, Depends(get_db)],
-    user: Annotated[User, Depends(get_current_admin)],
+    user: Annotated[User, Depends(get_current_admin_writer)],
 ) -> dict:
     msg = await db.get(OutreachMessage, message_id)
     if msg is None:
