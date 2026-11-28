@@ -26,7 +26,7 @@ async def test_workspace_transport():
             raw = base64.urlsafe_b64decode(payload["raw"])
             assert b"To: customer@example.com" in raw
             assert b"Booking confirmation" in raw
-        elif request.url.host == "www.googleapis.com":
+        elif request.url.path.startswith("/drive/"):
             assert payload["mimeType"] == "application/vnd.google-apps.folder"
         else:
             assert request.url.params["sendUpdates"] == "none"
