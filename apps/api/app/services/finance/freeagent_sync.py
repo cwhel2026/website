@@ -22,13 +22,13 @@ from app.services.finance.freeagent_adapter import (
 )
 
 
-def _parse_fa_date(value: str | None) -> date:
-    if not value:
-        return date.today()
+def _parse_fa_date(value: str | None) -> date | None:
+    if not isinstance(value, str) or not value:
+        return None
     try:
         return date.fromisoformat(value[:10])
     except ValueError:
-        return date.today()
+        return None
 
 
 async def _begin_sync_run(db: AsyncSession, kind: FinanceSyncKind, dedupe_key: str | None) -> FinanceSyncRun:
@@ -66,10 +66,10 @@ async def sync_bank_transactions_from_freeagent(db: AsyncSession) -> dict:
         accounts = await freeagent_client.fetch_bank_accounts(settings, token)
     except (httpx.HTTPError, ValueError) as exc:
         run.status = FinanceSyncStatus.FAILED
-        run.error_message = str(exc)
+        run.error_message = type(exc).__name__
         run.finished_at = datetime.now(UTC)
         await db.flush()
-        return {"fetched": 0, "imported": 0, "message": str(exc)}
+        return {"fetched": 0, "imported": 0, "message": "FreeAgent request failed; review connection and retry."}
 
     if not accounts:
         run.status = FinanceSyncStatus.SKIPPED
@@ -79,9 +79,9 @@ async def sync_bank_transactions_from_freeagent(db: AsyncSession) -> dict:
         return {"fetched": 0, "imported": 0, "message": "No bank accounts returned from FreeAgent"}
 
     existing_ids = await db.execute(
-        select(BankTransaction.external_id).where(BankTransaction.source == SyncSource.FREEAGENT)
+        select(BankTransaction).where(BankTransaction.source == SyncSource.FREEAGENT)
     )
-    known = {x for x in existing_ids.scalars().all() if x}
+    known = {x.external_id: x for x in existing_ids.scalars().all() if x.external_id}
 
     fetched = 0
     imported = 0
@@ -91,6 +91,7 @@ async def sync_bank_transactions_from_freeagent(db: AsyncSession) -> dict:
     for account in accounts:
         account_url = account.get("url") or ""
         if not account_url:
+            incomplete = True
             continue
         page = 1
         while page <= 20:
@@ -105,8 +106,8 @@ async def sync_bank_transactions_from_freeagent(db: AsyncSession) -> dict:
             for item in txns:
                 fa_url = str(item.get("url") or "")
                 ext_id = fa_url.rsplit("/", 1)[-1] if fa_url else None
-                if not ext_id or ext_id in known:
-                    skipped += 1
+                if not ext_id:
+                    incomplete = True
                     continue
                 amount = item.get("amount")
                 description = str(item.get("description") or item.get("long_description") or "Bank line")
@@ -119,17 +120,29 @@ async def sync_bank_transactions_from_freeagent(db: AsyncSession) -> dict:
                     incomplete = True
                     continue
                 explanation = item.get("bank_transaction_explanation") or item.get("explanation")
+                transaction_date = _parse_fa_date(item.get("dated_on"))
+                if transaction_date is None:
+                    incomplete = True
+                    continue
+                if ext_id in known:
+                    previous = known[ext_id]
+                    if previous.amount_gbp != amount_dec or previous.transacted_at != transaction_date:
+                        incomplete = True
+                    elif explanation:
+                        previous.freeagent_explanation_url = str(explanation)[:255]
+                    skipped += 1
+                    continue
                 txn = BankTransaction(
                     external_id=ext_id,
                     freeagent_url=fa_url[:255] if fa_url else None,
                     freeagent_explanation_url=str(explanation)[:255] if explanation else None,
                     description=description[:255],
                     amount_gbp=amount_dec,
-                    transacted_at=_parse_fa_date(item.get("dated_on")),
+                    transacted_at=transaction_date,
                     source=SyncSource.FREEAGENT,
                 )
                 db.add(txn)
-                known.add(ext_id)
+                known[ext_id] = txn
                 imported += 1
             if total is not None and page * 50 >= total:
                 break
