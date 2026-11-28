@@ -14,7 +14,12 @@ type FreeAgentInfo = {
   last_sync_at?: string | null;
 };
 
+type PaymentCandidate = { transaction_id: string; description: string; amount_gbp: string; date: string; status: "unique_candidate" | "ambiguous" | "unmatched"; invoice_number: string | null };
+type CandidateReport = { transactions: PaymentCandidate[]; basis: string; limit: number };
+
 export default function FinancePage() {
+  const [candidates, setCandidates] = useState<CandidateReport | null>(null);
+  const [candidateError, setCandidateError] = useState(false);
   const [reconciliation, setReconciliation] = useState<Record<string, number | string> | null>(null);
   const [reconciliationError, setReconciliationError] = useState(false);
   const [status, setStatus] = useState<{ freeagent: FreeAgentInfo; mettle_feed: string } | null>(
@@ -29,6 +34,10 @@ export default function FinancePage() {
   const load = useCallback(() => {
     const token = getToken();
     if (!token) return;
+    setCandidateError(false);
+    setCandidates(null);
+    apiGet<CandidateReport>("/api/v1/finance/insights/reconciliation/payment-candidates", token)
+      .then(setCandidates).catch(withLoadError(() => { setCandidates(null); setCandidateError(true); }));
     setReconciliationError(false);
     apiGet<Record<string, number | string>>("/api/v1/finance/insights/reconciliation", token).then(setReconciliation).catch(withLoadError(() => { setReconciliation(null); setReconciliationError(true); }));
     apiGet<{ freeagent: FreeAgentInfo; mettle_feed: string }>("/api/v1/finance/status", token)
@@ -152,6 +161,21 @@ export default function FinancePage() {
               <div key={key} className="rounded-xl bg-slate-50 p-3"><p className="text-xs text-slate-600">{label}</p><p className="mt-2 text-2xl font-semibold tabular-nums">{reconciliation[key] ?? "Unknown"}</p></div>
             ))}
           </div><p className="mt-3 text-xs text-slate-500">{reconciliation.basis}</p>
+        </>}
+      </section>
+      <section className="mt-6 rounded-xl border border-slate-200 bg-white p-4">
+        <h2 className="font-semibold">Incoming payment review</h2>
+        <p className="mt-1 text-xs text-slate-600">Suggested matches only. No invoices or bank records are changed here.</p>
+        {candidateError ? <p role="alert" className="mt-3 text-sm text-red-700">Could not load payment suggestions. Use Refresh above to retry.</p> : !candidates ? <p className="mt-3 text-sm">Loading payment suggestions…</p> : <>
+          {candidates.transactions.length === 0 ? <p className="mt-3 text-sm text-slate-600">No eligible incoming payments found in imported records.</p> : <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            {candidates.transactions.map((item) => <article key={item.transaction_id} className="min-w-0 rounded-lg border p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2"><strong>{gbp(Number(item.amount_gbp))}</strong><span className="rounded bg-slate-100 px-2 py-1 text-xs">{item.status === "unique_candidate" ? "Suggested match" : item.status === "ambiguous" ? "Multiple possible invoices" : "Unmatched"}</span></div>
+              <p className="mt-2 break-words text-sm">{item.description}</p>
+              <p className="text-xs text-slate-600">{item.date}</p>
+              {item.invoice_number && <p className="mt-2 text-sm">Possible invoice: {item.invoice_number}</p>}
+            </article>)}
+          </div>}
+          <p className="mt-3 text-xs text-slate-500">{candidates.basis} Showing up to {candidates.limit} transactions.</p>
         </>}
       </section>
       <section className="mt-6">
