@@ -128,8 +128,14 @@ async def approve_review_item(
     if item.is_personal_expenditure or item.possible_duplicate:
         raise ValueError("Resolve personal or duplicate classification before approving an expense")
     cat = category or item.suggested_category or ExpenseCategory.OTHER
+    if not item.bank_transaction_id:
+        raise ValueError("Receipt-only review requires a verified accounting route before approval")
     if item.bank_transaction_id:
         txn = await db.get(BankTransaction, item.bank_transaction_id, with_for_update=True)
+        if txn is None or txn.amount_gbp >= 0 or txn.matched_invoice_id:
+            raise ValueError("Only outgoing bank transactions can be approved as expenses")
+        if item.receipt_required and not item.receipt_id:
+            raise ValueError("Attach and verify the required receipt before approving")
         if txn and (txn.is_duplicate or txn.is_reconciled or txn.freeagent_explanation_url):
             raise ValueError("Transaction requires reconciliation, not a new expense")
         if txn and txn.amount_gbp < 0 and not txn.matched_expense_id:
