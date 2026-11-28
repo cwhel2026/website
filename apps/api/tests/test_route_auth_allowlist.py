@@ -44,6 +44,10 @@ PUBLIC_ROUTES = {
     ("POST", "/api/v1/finance/bookkeeping/receipts/telegram"),
     # OAuth redirect target, validated by the single-use state value
     ("GET", "/api/v1/finance/freeagent/callback"),
+    # GoCardless verifies raw-body HMAC; disabled without sandbox configuration.
+    ("POST", "/api/v1/booking-payments/gocardless/webhook"),
+    # Google OAuth uses expiring single-use state, PKCE and verified mailbox identity.
+    ("GET", "/api/v1/integrations/google/callback"),
     # Probes
     ("GET", "/health"),
     ("GET", "/ready"),

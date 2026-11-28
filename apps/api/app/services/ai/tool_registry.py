@@ -188,6 +188,89 @@ OPENAI_TOOL_SPECS.append({"type":"function","function":{"name":"validate_ad_allo
 
 
 async def run_tool(db: AsyncSession, name: str, args: dict | None = None, *, agent_slug=None, execution_context=None) -> dict[str, Any]:
+    if name in {"booking_deposit_status", "draft_booking_deposit", "find_customer_bookings", "reserve_booking_visit"}:
+        from app.config import get_settings
+        from app.models.agents import AgentProfile
+        from app.models.jobs import Job
+        from app.models.booking_payment import BookingDeposit
+        from sqlalchemy import select
+        if (not execution_context or execution_context.get("request_id") is None
+                or agent_slug not in {"personal_assistant", "finance"}
+                or execution_context.get("chat_id") not in get_settings().telegram_alert_chat_ids):
+            return {"error": "Trusted authorised owner context required"}
+        profile = await db.scalar(select(AgentProfile).where(AgentProfile.slug == agent_slug))
+        if not profile or profile.is_paused or profile.emergency_stop or get_settings().global_emergency_stop:
+            return {"error": "Employee unavailable"}
+        if name == "find_customer_bookings":
+            from app.models.crm import Customer, CustomerProperty
+            from sqlalchemy import func
+            customer_name = (args or {}).get("customer_name")
+            if not isinstance(customer_name, str) or not 2 <= len(customer_name.strip()) <= 200:
+                return {"error": "Customer name required"}
+            rows = (await db.execute(select(Job, Customer, CustomerProperty.postcode)
+                .join(Customer, Customer.id == Job.customer_id)
+                .outerjoin(CustomerProperty, CustomerProperty.id == Job.property_id)
+                .where(Customer.is_test.is_(False),
+                       func.lower(Customer.full_name) == customer_name.strip().lower())
+                .order_by(Job.created_at.desc()).limit(11))).all()
+            return {"matches": [{"job_reference": job.reference, "customer_name": customer.full_name,
+                                 "postcode": postcode, "job_status": job.status.value}
+                                for job, customer, postcode in rows[:10]],
+                    "truncated": len(rows) > 10,
+                    "instruction": "Ask owner to select exact job if multiple matches; never guess"}
+        reference = (args or {}).get("job_reference")
+        if not isinstance(reference, str) or not 1 <= len(reference) <= 24:
+            return {"error": "Exact job reference required"}
+        job = await db.scalar(select(Job).where(Job.reference == reference))
+        if not job:
+            return {"error": "Job not found; ask owner for exact reference"}
+        if name == "reserve_booking_visit":
+            from datetime import datetime
+            from app.services.payments.provisional import reserve_provisional_visit
+            from app.services.audit import record_audit
+            if agent_slug != "personal_assistant":
+                return {"error": "Only the personal assistant may reserve visits"}
+            try:
+                start = datetime.fromisoformat((args or {})["start"])
+                end = datetime.fromisoformat((args or {})["end"])
+                async with db.begin_nested():
+                    visit = await reserve_provisional_visit(db, job.id, start, end)
+                    await record_audit(db, actor_type="ai_employee", actor_id=agent_slug,
+                        action="booking.visit_provisional", entity_type="appointment",
+                        entity_id=visit.id, detail={"request_id": str(execution_context["request_id"])})
+                    result = {"job_reference": reference, "appointment_id": str(visit.id),
+                              "start": visit.scheduled_start.isoformat(), "end": visit.scheduled_end.isoformat(),
+                              "status": "provisional", "external_actions": False,
+                              "warning": "Travel and weather not verified; not a confirmed booking"}
+                return result
+            except (ValueError, KeyError, TypeError):
+                return {"error": "Cannot reserve visit; verify dates, job eligibility and availability"}
+        if name == "draft_booking_deposit":
+            from app.services.payments.booking import draft_deposit
+            from app.services.audit import record_audit
+            try:
+                percentage = Decimal(str((args or {}).get("percentage", 10)))
+                if not percentage.is_finite() or not 0 < percentage <= 100 or percentage != percentage.quantize(Decimal("0.01")):
+                    raise ValueError("Invalid percentage")
+                async with db.begin_nested():
+                    deposit = await draft_deposit(db, job.id, percentage)
+                    await record_audit(db, actor_type="ai_employee", actor_id=agent_slug,
+                                       action="booking.deposit_draft", entity_id=deposit.id,
+                                       detail={"request_id": str(execution_context["request_id"])})
+                    result = {"job_reference": reference, "deposit_id": str(deposit.id),
+                              "invoice_id": str(deposit.invoice_id),
+                              "amount_gbp": str(Decimal(deposit.amount_pence) / 100),
+                              "status": deposit.status, "external_actions": False}
+                return result
+            except (ValueError, InvalidOperation):
+                return {"error": "Deposit cannot be drafted; verify accepted quotation and existing deposit"}
+        deposit = await db.scalar(select(BookingDeposit).where(BookingDeposit.job_id == job.id))
+        if not deposit:
+            return {"job_reference": reference, "deposit_status": "not_created"}
+        return {"job_reference": reference, "deposit_status": deposit.status,
+                "amount_gbp": str(Decimal(deposit.amount_pence) / 100),
+                "payment_link_available": bool(deposit.payment_url),
+                "sandbox_only": True, "warning": "Provider status is not proof of invoice settlement"}
     if name == "flexible_opportunities":
         from app.services.flexible_planning import flexible_opportunities
         return await flexible_opportunities(db)
@@ -258,3 +341,15 @@ OPENAI_TOOL_SPECS.append({"type": "function", "function": {"name": "meta_deliver
 OPENAI_TOOL_SPECS.append({"type": "function", "function": {"name": "employee_work_status", "description": "Read recent saved employee work, progress, failures and completed campaign plans for the current owner. Use for follow-ups about previously requested work.", "parameters": {"type": "object", "properties": {}, "additionalProperties": False}}})
 
 OPENAI_TOOL_SPECS.append({"type":"function","function":{"name":"flexible_opportunities","description":"Find open flexible booking quotes within five straight-line miles of confirmed visits over the next 14 days, with conservative discount review. These are area leads, not verified available slots. Never promise dates or savings amounts from this tool alone.","parameters":{"type":"object","properties":{},"additionalProperties":False}}})
+
+
+OPENAI_TOOL_SPECS.append({"type": "function", "function": {"name": "booking_deposit_status", "description": "Read the saved deposit status for an exact existing job reference. Never invent a reference or claim sandbox payment is real.", "parameters": {"type": "object", "properties": {"job_reference": {"type": "string"}}, "required": ["job_reference"], "additionalProperties": False}}})
+
+
+OPENAI_TOOL_SPECS.append({"type": "function", "function": {"name": "draft_booking_deposit", "description": "Only when explicitly requested by the owner, prepare a local draft deposit invoice for an exact existing job reference. Default 10 percent unless owner specifies another percentage. Never sends a message, confirms an appointment or charges a customer.", "parameters": {"type": "object", "properties": {"job_reference": {"type": "string"}, "percentage": {"type": "number", "minimum": 0.01, "maximum": 100}}, "required": ["job_reference"], "additionalProperties": False}}})
+
+
+OPENAI_TOOL_SPECS.append({"type": "function", "function": {"name": "find_customer_bookings", "description": "Find existing non-test customer jobs by exact full name. Ask the owner to disambiguate multiple matches before drafting deposits.", "parameters": {"type": "object", "properties": {"customer_name": {"type": "string"}}, "required": ["customer_name"], "additionalProperties": False}}})
+
+
+OPENAI_TOOL_SPECS.append({"type": "function", "function": {"name": "reserve_booking_visit", "description": "Only on explicit owner instruction reserve a provisional visit for an existing job. Require exact start and end with Europe/London offset, never infer duration. Does not confirm booking, send messages or verify weather or travel.", "parameters": {"type": "object", "properties": {"job_reference": {"type": "string"}, "start": {"type": "string"}, "end": {"type": "string"}}, "required": ["job_reference", "start", "end"], "additionalProperties": False}}})

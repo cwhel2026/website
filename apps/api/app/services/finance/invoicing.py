@@ -6,6 +6,7 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.booking_payment import BookingDeposit
 from app.models.finance import Invoice, InvoiceLine, InvoiceStatus
 from app.models.quotation import Quotation
 
@@ -29,6 +30,30 @@ async def create_invoice_from_quotation(
         if len(invoices) != 1 or invoices[0].customer_id != customer_id or invoices[0].job_id != job_id:
             raise ValueError("Existing invoice requires owner review before creating another")
         return invoices[0]
+    net = quotation.subtotal_ex_vat_gbp
+    vat = quotation.vat_gbp
+    gross = quotation.total_inc_vat_gbp
+    if job_id:
+        deposit = await db.scalar(select(BookingDeposit).where(BookingDeposit.job_id == job_id))
+        if deposit:
+            deposit_invoice = await db.get(Invoice, deposit.invoice_id)
+            if (not deposit_invoice or deposit_invoice.customer_id != customer_id
+                    or deposit_invoice.job_id != job_id):
+                raise ValueError("Deposit invoice requires owner review")
+            if deposit_invoice.status == InvoiceStatus.PAID:
+                if (deposit_invoice.amount_paid_gbp != deposit_invoice.total_inc_vat_gbp
+                        or deposit_invoice.total_inc_vat_gbp * 100 != deposit.amount_pence
+                        or gross * 100 != deposit.total_pence):
+                    raise ValueError("Deposit amounts require owner review")
+                net -= deposit_invoice.subtotal_ex_vat_gbp
+                vat -= deposit_invoice.vat_gbp
+                gross -= deposit_invoice.total_inc_vat_gbp
+                if min(net, vat, gross) < 0 or net + vat != gross:
+                    raise ValueError("Invalid remaining invoice balance")
+                if gross == 0:
+                    raise ValueError("Job already fully paid; no balance invoice required")
+            elif deposit_invoice.status != InvoiceStatus.VOID:
+                raise ValueError("Settle or void the deposit invoice before creating a final invoice")
     today = date.today()
     inv = Invoice(
         invoice_number=f"INV-{date.today().strftime('%Y%m')}-{secrets.token_hex(6).upper()}",
@@ -38,9 +63,9 @@ async def create_invoice_from_quotation(
         status=InvoiceStatus.DRAFT,
         issue_date=today,
         due_date=today + timedelta(days=14),
-        subtotal_ex_vat_gbp=quotation.subtotal_ex_vat_gbp,
-        vat_gbp=quotation.vat_gbp,
-        total_inc_vat_gbp=quotation.total_inc_vat_gbp,
+        subtotal_ex_vat_gbp=net,
+        vat_gbp=vat,
+        total_inc_vat_gbp=gross,
         vat_charged=quotation.vat_charged,
         vat_rate_percent=quotation.vat_rate_percent,
     )
@@ -49,10 +74,10 @@ async def create_invoice_from_quotation(
     db.add(
         InvoiceLine(
             invoice_id=inv.id,
-            description="Exterior surface restoration (per quotation)",
+            description="Exterior surface restoration (remaining balance where applicable)",
             quantity=Decimal("1"),
-            unit_price_gbp=quotation.subtotal_ex_vat_gbp,
-            line_total_gbp=quotation.subtotal_ex_vat_gbp,
+            unit_price_gbp=net,
+            line_total_gbp=net,
         )
     )
     return inv

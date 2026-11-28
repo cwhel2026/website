@@ -15,7 +15,7 @@ from app.middleware.security_headers import SecurityHeadersMiddleware
 from app.rate_limit import limiter
 from app.security.startup import validate_production_settings
 from app.database import SessionLocal
-from app.routers import growth_fund, marketing_surfacecoat, ops
+from app.routers import growth_fund, marketing_surfacecoat, ops, workspace, booking_payments
 from app.routers import (
     approvals,
     assistant,
@@ -114,6 +114,37 @@ async def _telegram_outbox_pump() -> None:
             logger.exception("Telegram outbox pump failed")
 
 
+async def _booking_outbox_pump() -> None:
+    from sqlalchemy import select
+    from app.models.notifications import NotificationOutbox, OutboxStatus
+    from app.services.payments.workspace_delivery import deliver_booking_notification
+    from app.services.payments.polling import sweep_sandbox_deposits
+
+    while True:
+        await asyncio.sleep(90)
+        try:
+            if settings.global_emergency_stop:
+                continue
+            await sweep_sandbox_deposits(SessionLocal)
+            if not settings.workspace_booking_delivery_enabled:
+                continue
+            async with SessionLocal() as session:
+                ids = list(await session.scalars(select(NotificationOutbox.id).where(
+                    NotificationOutbox.category == "booking_confirmation",
+                    NotificationOutbox.channel.in_(("workspace_email", "workspace_calendar")),
+                    NotificationOutbox.status == OutboxStatus.PENDING,
+                ).order_by(NotificationOutbox.created_at).limit(20)))
+            for notification_id in ids:
+                try:
+                    await deliver_booking_notification(SessionLocal, notification_id)
+                except Exception:
+                    logger.warning("Booking notification delivery unavailable")
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.warning("Booking outbox pump unavailable")
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     validate_production_settings(settings)
@@ -126,7 +157,11 @@ async def lifespan(_: FastAPI):
         return
     bootstrap = asyncio.create_task(_bootstrap_data())
     pump = asyncio.create_task(_telegram_outbox_pump())
+    booking_pump = asyncio.create_task(_booking_outbox_pump())
     yield
+    booking_pump.cancel()
+    with contextlib.suppress(asyncio.CancelledError):
+        await booking_pump
     pump.cancel()
     bootstrap.cancel()
     with contextlib.suppress(asyncio.CancelledError):
@@ -197,4 +232,6 @@ app.include_router(inventory.router, prefix=prefix)
 app.include_router(analytics.router, prefix=prefix)
 app.include_router(business_director.router, prefix=prefix)
 app.include_router(ops.router, prefix=prefix)
+app.include_router(workspace.router, prefix=prefix)
+app.include_router(booking_payments.router, prefix=prefix)
 app.include_router(health.router)
