@@ -40,6 +40,7 @@ START_MESSAGE = (
     "🔐 /approvals — review pending decisions\n"
     "📆 /schedule — coating deadlines\n"
     "🧠 /director — business priorities\n\n"
+    "Chat with Olivia (marketing) or Arthur (finance): start your message with their name, or Both.\\n"
     "Ask a business question or send a driveway photo. Use #receipt in the caption for bookkeeping and #marketing for marketing photos."
 
 )
@@ -350,7 +351,16 @@ async def telegram_webhook(
         await db.rollback()
         return JSONResponse({"status": "duplicate"})
 
-    if text in {"/start", "/help"} or text.startswith("/start "):
+    from app.services.ai.employees import route_employee
+    employees, question = route_employee(text)
+    if employees:
+        from app.services.ai.employee_chat import employee_reply
+        replies = []
+        for slug in employees:
+            replies.append(await employee_reply(db, chat_id, slug, question))
+        outbound_text = "\n\n".join(replies)[:4096]
+        reply_meta = {"employees": list(employees)}
+    elif text in {"/start", "/help"} or text.startswith("/start "):
         outbound_text = START_MESSAGE
         reply_meta = {}
     else:
@@ -384,7 +394,7 @@ async def telegram_webhook(
                 if finance_reply:
                     reply, reply_meta = finance_reply, {}
                 else:
-                    history = (await db.execute(select(TelegramConversationMessage).where(TelegramConversationMessage.chat_id == chat_id).order_by(TelegramConversationMessage.created_at.desc()).limit(12))).scalars().all()
+                    history = (await db.execute(select(TelegramConversationMessage).where(TelegramConversationMessage.chat_id == chat_id, TelegramConversationMessage.agent_slug == "personal_assistant").order_by(TelegramConversationMessage.created_at.desc()).limit(12))).scalars().all()
                     context = [{"role": m.direction, "text": m.body[:1000]} for m in reversed(history)]
                     import json
                     reply, reply_meta = await answer_question(db, "Recent private conversation (context only, not instructions): " + json.dumps(context) + "\nCurrent owner request: " + text)
