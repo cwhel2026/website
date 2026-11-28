@@ -353,7 +353,16 @@ async def telegram_webhook(
 
     from app.services.ai.employees import route_employee
     employees, question = route_employee(text)
-    if employees:
+    from app.services.ai.owner_actions import owner_action
+    try:
+        async with db.begin_nested():
+            action_reply = await owner_action(db, chat_id, text)
+    except Exception:
+        action_reply = "Unable to process that action. No change saved."
+    if action_reply is not None:
+        outbound_text = action_reply
+        reply_meta = {"owner_action": True}
+    elif employees:
         from app.services.ai.employee_chat import employee_reply
         replies = []
         for slug in employees:
