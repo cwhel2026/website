@@ -28,6 +28,7 @@ type CompetitorRow = { competitor_name: string; confidence: number; source_name:
 type Profitability = { marketing_roi: number | null; job_contribution_gbp: number | null; optimise_for?: string };
 
 export default function MarketingHubPage() {
+  const [drafts, setDrafts] = useState<Array<{id:string;business_name:string;subject:string;body:string;status:string}> | null>(null);
   const [summary, setSummary] = useState<{prospect_stages: Record<string, number>; campaign_stages: Record<string, number>; outreach_pending: number} | null>(null);
   const [plan, setPlan] = useState<DailyPlan | null>(null);
   const [budget, setBudget] = useState<Budget | null>(null);
@@ -45,6 +46,7 @@ export default function MarketingHubPage() {
 
   const reload = () => {
     if (!token) return;
+    apiGet<Array<{id:string;business_name:string;subject:string;body:string;status:string}>>("/api/v1/marketing/outreach/review", token).then(setDrafts).catch(()=>setDrafts(null));
     apiGet<{prospect_stages: Record<string, number>; campaign_stages: Record<string, number>; outreach_pending: number}>("/api/v1/marketing/acquisition-summary", token).then(setSummary).catch(() => setSummary(null));
     apiGet<DailyPlan>("/api/v1/marketing/director/daily-plan", token).then(setPlan).catch(withLoadError(() => setPlan(null)));
     apiGet<Budget>("/api/v1/marketing/budget", token).then(setBudget).catch(withLoadError(() => setBudget(null)));
@@ -219,11 +221,16 @@ export default function MarketingHubPage() {
         </ul>
       </section>
 
+      <section className="rounded-xl border p-4">
+        <h2 className="font-semibold">Outreach review</h2>
+        {drafts === null ? <p>Drafts unavailable.</p> : drafts.length === 0 ? <p>No drafts awaiting review.</p> : drafts.map(d => <details key={d.id} className="mt-3 rounded border p-3"><summary>{d.business_name} · {d.status}</summary><p className="mt-2 font-medium">{d.subject}</p><p className="mt-2 whitespace-pre-wrap break-words text-sm">{d.body}</p></details>)}
+        <p className="mt-2 text-xs text-slate-500">Review only. External sending disabled.</p>
+      </section>
       <nav className="grid grid-cols-2 gap-2 text-sm">
-        <Link href="/dashboard/advertising" className="rounded border px-3 py-2 text-center">
+        <Link href="/dashboard/marketing/campaigns" className="rounded border px-3 py-2 text-center">
           Campaigns
         </Link>
-        <Link href="/dashboard/commercial-leads" className="rounded border px-3 py-2 text-center">
+        <Link href="/dashboard/marketing/leads" className="rounded border px-3 py-2 text-center">
           Legacy leads
         </Link>
         <Link href="/dashboard/marketing" className="rounded border px-3 py-2 text-center">
