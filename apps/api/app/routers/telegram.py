@@ -359,6 +359,9 @@ async def telegram_webhook(
             from app.services.ai.company_memory import memory_command
             action_reply = await memory_command(db, chat_id, text)
             if action_reply is None:
+                from app.services.ai.task_commands import task_command
+                action_reply = await task_command(db, chat_id, text)
+            if action_reply is None:
                 action_reply = await owner_action(db, chat_id, text)
     except Exception:
         action_reply = "Unable to process that action. No change saved."
