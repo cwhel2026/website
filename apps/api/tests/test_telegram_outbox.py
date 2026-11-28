@@ -58,7 +58,7 @@ async def test_partial_delivery_retries_only_failed_recipient(monkeypatch):
 
     item = _Item()
     db = SimpleNamespace(add=lambda *_: None, flush=AsyncMock(), refresh=AsyncMock())
-    monkeypatch.setattr(mod, "get_settings", lambda: SimpleNamespace(telegram_bot_token="test", telegram_alert_chat_ids=[1, 2]))
+    monkeypatch.setattr(mod, "get_settings", lambda: SimpleNamespace(telegram_bot_token="test", telegram_alert_chat_ids=[1, 2], telegram_admin_id_list=[1, 2]))
     send = AsyncMock(side_effect=[{"message_id": 1}, TelegramApiError("failure"), {"message_id": 2}])
     monkeypatch.setattr(mod, "send_message", send)
     assert not await mod.deliver_telegram_outbox_item(db, item)
